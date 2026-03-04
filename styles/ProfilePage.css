@@ -1,0 +1,76 @@
+.profile-page {
+  min-height: 100vh;
+  background: linear-gradient(to bottom, var(--color-background-light) 0%, var(--color-background) 20%);
+  padding: var(--spacing-2xl) 0;
+}
+
+.profile-page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+  animation: fadeIn 0.4s ease-out;
+}
+
+.profile-creator-setup-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+  border: 1px solid #7dd3fc;
+  border-radius: var(--border-radius-lg);
+}
+
+.profile-creator-setup-text {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  flex: 1;
+  min-width: 200px;
+}
+
+.profile-creator-setup-btn {
+  padding: var(--spacing-xs) var(--spacing-lg);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.profile-creator-setup-btn:hover {
+  opacity: 0.9;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-content {
+  padding: var(--spacing-xl) 0;
+  min-height: 400px;
+  animation: fadeInUp 0.5s ease-out 0.1s both;
+}

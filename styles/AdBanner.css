@@ -1,0 +1,59 @@
+.ad-banner-section {
+  width: 100%;
+  background: var(--color-background-light);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--spacing-md) 0;
+}
+
+.ad-banner-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ad-banner-item {
+  flex: 1;
+  min-width: 200px;
+  max-width: 380px;
+}
+
+.ad-banner-link,
+.ad-banner-placeholder {
+  display: block;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  transition: var(--transition);
+}
+
+.ad-banner-link:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.ad-banner-image {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  max-height: 120px;
+}
+
+.ad-banner-title {
+  display: block;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text);
+  text-align: center;
+}
+
+.ad-banner-link .ad-banner-title {
+  color: var(--color-primary);
+}

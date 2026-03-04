@@ -1,0 +1,44 @@
+.marketplace-content-section {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.marketplace-content-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.marketplace-content-section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .marketplace-content-section-title {
+    font-size: 2rem;
+  }
+}
+
+.marketplace-content-section-badge {
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: linear-gradient(135deg, rgba(0, 102, 204, 0.1), rgba(147, 51, 234, 0.1));
+  border: 1px solid var(--color-primary);
+  border-radius: var(--border-radius);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.marketplace-content-section-badge span {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}

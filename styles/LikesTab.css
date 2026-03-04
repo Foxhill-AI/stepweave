@@ -1,0 +1,52 @@
+.likes-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+  animation: fadeIn 0.4s ease-out;
+}
+
+.likes-tab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.likes-tab-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.likes-tab-count {
+  font-size: 0.9375rem;
+  color: var(--color-text-light);
+  font-weight: 500;
+}
+
+.likes-tab-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-xl);
+  padding: var(--spacing-sm) 0;
+}
+
+@media (max-width: 640px) {
+  .likes-tab-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+}
+
+.likes-tab-loading,
+.likes-tab-empty {
+  padding: var(--spacing-2xl);
+  text-align: center;
+  color: var(--color-text-light);
+}
+
+.likes-tab-loading p,
+.likes-tab-empty p {
+  margin: 0;
+}
