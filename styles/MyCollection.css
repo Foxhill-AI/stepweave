@@ -1,0 +1,219 @@
+.my-collection {
+  min-height: 100vh;
+  background: var(--color-background);
+  padding: var(--spacing-2xl) 0;
+}
+
+.collection-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+}
+
+/* Header Section */
+.collection-header {
+  margin-bottom: var(--spacing-2xl);
+  padding-bottom: var(--spacing-xl);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.collection-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.collection-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.collection-subtitle {
+  font-size: 1rem;
+  color: var(--color-text-light);
+  margin: 0;
+}
+
+.collection-loading {
+  padding: var(--spacing-2xl);
+  text-align: center;
+  color: var(--color-text-light);
+}
+
+.collection-loading p {
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .collection-title {
+    font-size: 2.5rem;
+  }
+
+  .collection-subtitle {
+    font-size: 1.125rem;
+  }
+}
+
+/* Masonry Grid Layout - Pinterest Style */
+.collection-masonry {
+  column-count: 1;
+  column-gap: var(--spacing-md);
+  column-fill: balance;
+}
+
+.collection-item-wrapper {
+  break-inside: avoid;
+  margin-bottom: var(--spacing-md);
+  display: inline-block;
+  width: 100%;
+  vertical-align: top;
+}
+
+.collection-item-wrapper .item-card {
+  height: auto;
+  min-height: 0;
+}
+
+.collection-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.collection-item-unsave,
+.collection-item-add-to-cart {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.875rem;
+  border-radius: var(--border-radius);
+  transition: var(--transition);
+}
+
+.collection-item-unsave {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-light);
+  cursor: pointer;
+}
+
+.collection-item-unsave:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.collection-item-add-to-cart {
+  background: var(--color-primary);
+  color: #fff;
+  text-decoration: none;
+  border: none;
+}
+
+.collection-item-add-to-cart:hover {
+  opacity: 0.9;
+  color: #fff;
+}
+
+/* Tablet: 2 columns */
+@media (min-width: 640px) {
+  .collection-masonry {
+    column-count: 2;
+    column-gap: var(--spacing-lg);
+  }
+
+  .collection-item-wrapper {
+    margin-bottom: var(--spacing-lg);
+  }
+}
+
+/* Desktop: 3 columns */
+@media (min-width: 1024px) {
+  .collection-masonry {
+    column-count: 3;
+    column-gap: var(--spacing-xl);
+  }
+
+  .collection-item-wrapper {
+    margin-bottom: var(--spacing-xl);
+  }
+}
+
+/* Large Desktop: 4 columns */
+@media (min-width: 1440px) {
+  .collection-masonry {
+    column-count: 4;
+  }
+}
+
+/* Empty State */
+.collection-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: var(--spacing-2xl) var(--spacing-md);
+}
+
+.collection-empty-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.collection-empty-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
+  color: var(--color-text-light);
+  opacity: 0.5;
+}
+
+.collection-empty-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.collection-empty-description {
+  font-size: 1rem;
+  color: var(--color-text-light);
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Item Card adjustments for masonry layout */
+.collection-item-wrapper .item-card-image-wrapper {
+  aspect-ratio: auto;
+  min-height: 200px;
+  max-height: 600px;
+}
+
+.collection-item-wrapper .item-card-image,
+.collection-item-wrapper .item-card-image-fallback {
+  height: auto;
+  min-height: 200px;
+  max-height: 600px;
+  object-fit: cover;
+}
+
+/* Smooth transitions when items are added/removed */
+.collection-item-wrapper {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

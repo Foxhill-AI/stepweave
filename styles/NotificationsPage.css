@@ -1,0 +1,242 @@
+.notifications-page-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.notifications-page {
+  flex: 1;
+  background: var(--color-background);
+  padding: var(--spacing-lg) 0;
+}
+
+.notifications-page-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-lg);
+}
+
+.notifications-page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg) 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--spacing-lg);
+  position: sticky;
+  top: 0;
+  background: var(--color-background);
+  z-index: 10;
+  padding-top: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+}
+
+.notifications-back-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: var(--border-radius);
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.notifications-back-button:hover {
+  background: var(--color-hover);
+}
+
+.notifications-page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+  flex: 1;
+}
+
+.notifications-mark-all-read-button {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--border-radius);
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.notifications-mark-all-read-button:hover {
+  background: rgba(0, 102, 204, 0.1);
+  border-color: var(--color-primary);
+}
+
+.notifications-page-content {
+  width: 100%;
+}
+
+.notifications-list-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.notification-item-page {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+  background: var(--color-background);
+}
+
+.notification-item-page:last-child {
+  border-bottom: none;
+}
+
+.notification-item-page:hover {
+  background: var(--color-background-light);
+}
+
+.notification-item-page.unread {
+  background: rgba(0, 102, 204, 0.03);
+}
+
+.notification-item-page.unread:hover {
+  background: rgba(0, 102, 204, 0.06);
+}
+
+.notification-icon-page {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background-light);
+  border-radius: 50%;
+  color: var(--color-primary);
+}
+
+.notification-item-page.unread .notification-icon-page {
+  background: rgba(0, 102, 204, 0.1);
+}
+
+.notification-content-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.notification-message-page {
+  font-size: 1rem;
+  color: var(--color-text);
+  margin: 0;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.notification-time-page {
+  font-size: 0.875rem;
+  color: var(--color-text-light);
+}
+
+.notification-dot-page {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  margin-top: var(--spacing-sm);
+}
+
+.notifications-empty-page {
+  padding: var(--spacing-2xl);
+  text-align: center;
+  color: var(--color-text-light);
+}
+
+.notifications-empty-page p {
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+/* Mobile styles */
+@media (max-width: 767px) {
+  .notifications-page {
+    padding: var(--spacing-md) 0;
+  }
+
+  .notifications-page-container {
+    padding: 0 var(--spacing-md);
+  }
+
+  .notifications-page-header {
+    padding: var(--spacing-md) 0;
+    margin-bottom: var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+
+  .notifications-back-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .notifications-page-title {
+    font-size: 1.25rem;
+  }
+
+  .notifications-mark-all-read-button {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 0.8125rem;
+    gap: var(--spacing-xs);
+  }
+
+  .notifications-mark-all-read-button svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .notification-item-page {
+    padding: var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+
+  .notification-icon-page {
+    width: 40px;
+    height: 40px;
+  }
+
+  .notification-icon-page svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .notification-message-page {
+    font-size: 0.9375rem;
+  }
+
+  .notification-time-page {
+    font-size: 0.8125rem;
+  }
+
+  .notification-dot-page {
+    width: 8px;
+    height: 8px;
+    margin-top: var(--spacing-xs);
+  }
+}
