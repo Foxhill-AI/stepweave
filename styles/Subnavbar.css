@@ -88,9 +88,10 @@
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius);
   padding: var(--spacing-sm);
+  padding-left: 0.5rem;
   padding-right: var(--spacing-xs);
   transition: var(--transition);
-  gap: var(--spacing-sm);
+  gap: 0.5rem;
 }
 
 .search-wrapper:focus-within {
@@ -112,7 +113,7 @@
   background: transparent;
   color: var(--color-text);
   font-size: 0.9375rem;
-  padding: var(--spacing-xs) 0 var(--spacing-xs) var(--spacing-xs);
+  padding: var(--spacing-sm) 0 var(--spacing-sm) 0.5rem;
 }
 
 .search-input::placeholder {
