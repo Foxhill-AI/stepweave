@@ -1748,7 +1748,218 @@ export const supabase =
     return total
   }
 
+  // ---------------------------------------------------------------------------
+  // Design drafts (Stepweave AI Design Tool)
+  // ---------------------------------------------------------------------------
+
+  export type DesignDraftStatus = 'draft' | 'finalized' | 'archived'
+  export type DesignDraftPatternSourceType =
+    | 'ai_generated'
+    | 'reference_transform'
+    | 'direct_upload'
+  export type LlmMessageRole = 'system' | 'user' | 'assistant' | 'tool'
+
+  /** Row from design_draft (snake_case as returned by Supabase). */
+  export type DesignDraftRow = {
+    id: number
+    user_account_id: number
+    name: string | null
+    base_model_provider: string
+    base_model_id: string
+    structural_color: string
+    fabric_color: string | null
+    design_state: Record<string, unknown>
+    preview_image_url: string | null
+    pattern_source_type: DesignDraftPatternSourceType
+    pattern_image_url: string | null
+    generation_variation_count: number
+    status: DesignDraftStatus
+    finalized_at: string | null
+    final_product_id: number | null
+    created_at: string
+    updated_at: string
+  }
+
+  /** Row from design_draft_ai_message. */
+  export type DesignDraftAiMessageRow = {
+    id: number
+    design_draft_id: number
+    message_index: number
+    role: LlmMessageRole
+    content: Record<string, unknown>
+    created_at: string
+  }
+
+  /** Payload to create a new design_draft. */
+  export type CreateDesignDraftPayload = {
+    base_model_id: string
+    base_model_provider?: string
+    structural_color?: 'white' | 'black'
+    pattern_source_type: DesignDraftPatternSourceType
+    pattern_image_url?: string | null
+    generation_variation_count?: number
+    design_state?: Record<string, unknown>
+    name?: string | null
+    fabric_color?: string | null
+  }
+
+  /** Payload to update an existing design_draft (partial). */
+  export type UpdateDesignDraftPayload = {
+    name?: string | null
+    structural_color?: 'white' | 'black'
+    fabric_color?: string | null
+    design_state?: Record<string, unknown>
+    preview_image_url?: string | null
+    pattern_image_url?: string | null
+    generation_variation_count?: number
+    status?: DesignDraftStatus
+    final_product_id?: number | null
+    finalized_at?: string | null
+  }
+
+  /** Single message to insert into design_draft_ai_message. */
+  export type DesignDraftAiMessageInsert = {
+    role: LlmMessageRole
+    content: Record<string, unknown>
+  }
+
+  /** Create a new design draft. RLS: design_draft_insert_own. */
+  export async function createDesignDraft(
+    userAccountId: number,
+    payload: CreateDesignDraftPayload
+  ): Promise<{ id: number } | null> {
+    const { data, error } = await supabase
+      .from('design_draft')
+      .insert({
+        user_account_id: userAccountId,
+        base_model_id: payload.base_model_id,
+        base_model_provider: payload.base_model_provider ?? 'printful',
+        structural_color: payload.structural_color ?? 'white',
+        pattern_source_type: payload.pattern_source_type,
+        pattern_image_url: payload.pattern_image_url ?? null,
+        generation_variation_count: payload.generation_variation_count ?? 3,
+        design_state: payload.design_state ?? {},
+        name: payload.name ?? null,
+        fabric_color: payload.fabric_color ?? null,
+      })
+      .select('id')
+      .single()
+    if (error) {
+      console.error('createDesignDraft:', error)
+      return null
+    }
+    return data ? { id: data.id as number } : null
+  }
+
+  /** List drafts for the current user. RLS: design_draft_select_own. */
+  export async function getDesignDraftsByUser(
+    userAccountId: number,
+    options?: { status?: DesignDraftStatus; limit?: number }
+  ): Promise<DesignDraftRow[]> {
+    let q = supabase
+      .from('design_draft')
+      .select('*')
+      .eq('user_account_id', userAccountId)
+      .order('updated_at', { ascending: false })
+    if (options?.status) q = q.eq('status', options.status)
+    if (options?.limit) q = q.limit(options.limit)
+    const { data, error } = await q
+    if (error) {
+      console.error('getDesignDraftsByUser:', error)
+      return []
+    }
+    return (data ?? []) as DesignDraftRow[]
+  }
+
+  /** Get a single draft by id. RLS: design_draft_select_own. */
+  export async function getDesignDraftById(
+    draftId: number
+  ): Promise<DesignDraftRow | null> {
+    const { data, error } = await supabase
+      .from('design_draft')
+      .select('*')
+      .eq('id', draftId)
+      .maybeSingle()
+    if (error) {
+      console.error('getDesignDraftById:', error)
+      return null
+    }
+    return data as DesignDraftRow | null
+  }
+
+  /** Update a design draft. RLS: design_draft_update_own. */
+  export async function updateDesignDraft(
+    draftId: number,
+    payload: UpdateDesignDraftPayload
+  ): Promise<boolean> {
+    const row: Record<string, unknown> = {}
+    if (payload.name !== undefined) row.name = payload.name
+    if (payload.structural_color !== undefined)
+      row.structural_color = payload.structural_color
+    if (payload.fabric_color !== undefined) row.fabric_color = payload.fabric_color
+    if (payload.design_state !== undefined) row.design_state = payload.design_state
+    if (payload.preview_image_url !== undefined)
+      row.preview_image_url = payload.preview_image_url
+    if (payload.pattern_image_url !== undefined)
+      row.pattern_image_url = payload.pattern_image_url
+    if (payload.generation_variation_count !== undefined)
+      row.generation_variation_count = payload.generation_variation_count
+    if (payload.status !== undefined) row.status = payload.status
+    if (payload.final_product_id !== undefined)
+      row.final_product_id = payload.final_product_id
+    if (payload.finalized_at !== undefined)
+      row.finalized_at = payload.finalized_at
+    if (Object.keys(row).length === 0) return true
+    const { error } = await supabase.from('design_draft').update(row).eq('id', draftId)
+    if (error) {
+      console.error('updateDesignDraft:', error)
+      return false
+    }
+    return true
+  }
+
+  /** Insert AI messages for a draft (e.g. LLM conversation history). RLS: design_draft_ai_message_insert_own. */
+  export async function insertDesignDraftAiMessages(
+    designDraftId: number,
+    messages: DesignDraftAiMessageInsert[]
+  ): Promise<boolean> {
+    if (messages.length === 0) return true
+    const rows = messages.map((msg, i) => ({
+      design_draft_id: designDraftId,
+      message_index: i,
+      role: msg.role,
+      content: msg.content,
+    }))
+    const { error } = await supabase
+      .from('design_draft_ai_message')
+      .insert(rows)
+    if (error) {
+      console.error('insertDesignDraftAiMessages:', error)
+      return false
+    }
+    return true
+  }
+
+  /** Get all AI messages for a draft, ordered by message_index. RLS: design_draft_ai_message_select_own. */
+  export async function getDesignDraftAiMessages(
+    designDraftId: number
+  ): Promise<DesignDraftAiMessageRow[]> {
+    const { data, error } = await supabase
+      .from('design_draft_ai_message')
+      .select('*')
+      .eq('design_draft_id', designDraftId)
+      .order('message_index', { ascending: true })
+    if (error) {
+      console.error('getDesignDraftAiMessages:', error)
+      return []
+    }
+    return (data ?? []) as DesignDraftAiMessageRow[]
+  }
+
+  // ---------------------------------------------------------------------------
   // Type definitions for database tables (Template Database Design)
+  // ---------------------------------------------------------------------------
+
 export type Database = {
     public: {
       Tables: {
