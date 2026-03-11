@@ -259,11 +259,11 @@ export default function SignUpModal({
         {/* Terms and Privacy */}
         <div className="terms-text">
           <p>
-            Click "Sign up" to agree to Template's{' '}
+            Click "Sign up" to agree to Step Weave&apos;s{' '}
             <a href="/terms" className="terms-link">
               Terms and Conditions
             </a>{' '}
-            and acknowledge that Template's{' '}
+            and acknowledge that Step Weave&apos;s{' '}
             <a href="/privacy" className="terms-link">
               Privacy Policy
             </a>{' '}

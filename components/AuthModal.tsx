@@ -522,7 +522,7 @@ export default function AuthModal({
         {!isLogin && (
           <div className="terms-text">
             <p>
-              By signing up you agree to Template&apos;s{' '}
+              By signing up you agree to Step Weave&apos;s{' '}
               <a href="/terms" className="terms-link">
                 Terms and Conditions
               </a>{' '}
