@@ -8,7 +8,7 @@ import Toast from '@/components/ui/Toast'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Responsive Web Template',
+  title: 'Step Weave',
   description: 'A clean, modern, content-driven platform template',
 }
 
