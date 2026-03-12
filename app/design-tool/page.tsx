@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Subnavbar from '@/components/Subnavbar'
 import Footer from '@/components/Footer'
-import DesignToolPage from '@/components/design-tool/DesignToolPage'
+import BaseModelSelection from '@/components/design-tool/BaseModelSelection'
 import { useAuth } from '@/components/AuthProvider'
 
 export default function DesignToolRoute() {
@@ -40,7 +40,7 @@ export default function DesignToolRoute() {
       <Navbar />
       <Subnavbar />
       <main className="design-tool-main" role="main">
-        <DesignToolPage />
+        <BaseModelSelection />
       </main>
       <Footer />
     </div>

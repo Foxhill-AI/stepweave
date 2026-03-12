@@ -1,33 +1,70 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Subnavbar from '@/components/Subnavbar'
 import Footer from '@/components/Footer'
-import EditProductPage from '@/components/design-tool/EditProductPage'
+import DesignToolPage from '@/components/design-tool/DesignToolPage'
 import { useAuth } from '@/components/AuthProvider'
+import { getDesignDraftById } from '@/lib/supabaseClient'
+import type { DesignDraftRow } from '@/lib/supabaseClient'
 
-export default function DesignToolEditRoute() {
+export default function DesignToolDraftRoute() {
   const router = useRouter()
   const params = useParams()
-  const { user, loading } = useAuth()
-  const productId = typeof params.id === 'string' ? params.id : undefined
+  const { user, loading: authLoading } = useAuth()
+  const draftIdParam = typeof params.id === 'string' ? params.id : undefined
+  const [draft, setDraft] = useState<DesignDraftRow | null>(null)
+  const [draftLoading, setDraftLoading] = useState(!!draftIdParam)
+  const [draftError, setDraftError] = useState(false)
 
   useEffect(() => {
-    if (loading) return
+    if (authLoading) return
     if (!user) {
       router.replace('/')
       return
     }
-  }, [user, loading, router])
+  }, [user, authLoading, router])
 
-  if (loading) {
+  useEffect(() => {
+    if (!draftIdParam) return
+    const id = Number(draftIdParam)
+    if (Number.isNaN(id)) {
+      setDraftError(true)
+      setDraftLoading(false)
+      return
+    }
+    let cancelled = false
+    getDesignDraftById(id)
+      .then((d) => {
+        if (cancelled) return
+        if (d) {
+          setDraft(d)
+          setDraftError(false)
+        } else {
+          setDraft(null)
+          setDraftError(true)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDraft(null)
+          setDraftError(true)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDraftLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [draftIdParam])
+
+  if (authLoading || draftLoading) {
     return (
       <div className="design-tool-page-wrapper">
         <Navbar />
         <main className="design-tool-main" role="main">
-          <p aria-live="polite">Loading…</p>
+          <p className="design-tool-loading" aria-live="polite">Loading…</p>
         </main>
       </div>
     )
@@ -37,13 +74,13 @@ export default function DesignToolEditRoute() {
     return null
   }
 
-  if (!productId) {
+  if (!draftIdParam || draftError || !draft) {
     return (
       <div className="design-tool-page-wrapper">
         <Navbar />
         <Subnavbar />
         <main className="design-tool-main" role="main">
-          <p>Invalid product.</p>
+          <p className="design-tool-loading">Draft not found. <a href="/design-tool">Start a new design</a>.</p>
         </main>
         <Footer />
       </div>
@@ -55,7 +92,7 @@ export default function DesignToolEditRoute() {
       <Navbar />
       <Subnavbar />
       <main className="design-tool-main" role="main">
-        <EditProductPage productId={productId} />
+        <DesignToolPage draftId={draft.id} draft={draft} />
       </main>
       <Footer />
     </div>
