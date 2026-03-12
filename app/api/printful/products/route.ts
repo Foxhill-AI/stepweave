@@ -32,13 +32,52 @@ export type PrintfulShoeProduct = {
   type_name: string
 }
 
-const SHOES_KEYWORDS = ['shoe', 'sneaker', 'footwear', 'canvas', 'slip-on', 'low-top', 'high-top']
+/** Only type_name/title containing these count as footwear. Do NOT use "canvas" (matches brand "Bella + Canvas" and posters). */
+const FOOTWEAR_KEYWORDS = ['shoe', 'shoes', 'sneaker', 'sneakers', 'footwear']
+
+/** Category titles that indicate footwear (for /categories filter). */
+const FOOTWEAR_CATEGORY_TITLES = ['footwear', 'shoes', 'sneakers', 'zapatos', 'calzado']
+
+/** type_name/title containing any of these → exclude (apparel, posters, etc.). */
+const EXCLUDED_PRODUCT_TERMS = [
+  't-shirt',
+  'hoodie',
+  'sweatshirt',
+  'tank top',
+  'canvas (in)',
+  'framed canvas',
+  'thin canvas',
+  'tee',
+  'raglan',
+  'one piece',
+  'pullover',
+  'cropped',
+  'muscle shirt',
+  'long sleeve',
+  'short sleeve',
+  'sweatpants',
+  'garment-dyed',
+  'oversized',
+  'v-neck',
+  'eco t-shirt',
+  'baby ',
+  'toddler ',
+  'youth ',
+]
 
 function isShoeProduct(p: PrintfulProduct): boolean {
-  const t = (p.type_name || p.type || '').toLowerCase()
+  const typeName = (p.type_name || p.type || '').toLowerCase()
   const title = (p.title || '').toLowerCase()
-  const combined = `${t} ${title}`
-  return SHOES_KEYWORDS.some((k) => combined.includes(k))
+  const combined = `${typeName} ${title}`
+
+  // Must explicitly contain a footwear word (no "canvas" alone – excludes Bella + Canvas and posters)
+  const hasFootwear = FOOTWEAR_KEYWORDS.some((k) => combined.includes(k))
+  if (!hasFootwear) return false
+
+  // Exclude apparel/posters by type_name/title
+  if (EXCLUDED_PRODUCT_TERMS.some((term) => combined.includes(term))) return false
+
+  return true
 }
 
 /**
@@ -73,8 +112,8 @@ export async function GET() {
         ? categoriesData.result
         : (categoriesData.result as { categories?: PrintfulCategory[] })?.categories ?? []
       const shoesCategories = list.filter((c) => {
-        const title = (c.title || '').toLowerCase()
-        return SHOES_KEYWORDS.some((k) => title.includes(k))
+        const catTitle = (c.title || '').toLowerCase()
+        return FOOTWEAR_CATEGORY_TITLES.some((k) => catTitle.includes(k))
       })
       categoryIds = shoesCategories.map((c) => c.id)
     }
