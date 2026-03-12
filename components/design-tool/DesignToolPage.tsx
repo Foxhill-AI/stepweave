@@ -7,21 +7,37 @@ import AIPromptPanel from './AIPromptPanel'
 import ManualEditorPlaceholder from './ManualEditorPlaceholder'
 import PreviewWorkspace from './PreviewWorkspace'
 import { useAuth } from '@/components/AuthProvider'
-import { getCategories, createProduct } from '@/lib/supabaseClient'
-import type { CategoryRow } from '@/lib/supabaseClient'
+import { getCategories, createProduct, updateDesignDraft } from '@/lib/supabaseClient'
+import type { CategoryRow, DesignDraftRow } from '@/lib/supabaseClient'
 import '../../styles/DesignTool.css'
 
-export default function DesignToolPage() {
+interface DesignToolPageProps {
+  /** When set, we are editing this design draft (from /design-tool/[id]). */
+  draftId?: number
+  draft?: DesignDraftRow
+}
+
+export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) {
   const router = useRouter()
   const { userAccount } = useAuth()
   const [mode, setMode] = useState<DesignToolMode>('ai')
   const [name, setName] = useState('')
   const [price, setPrice] = useState<string>('')
   const [categoryId, setCategoryId] = useState<number | ''>('')
-  const [designData, setDesignData] = useState<Record<string, unknown>>({})
+  const [designData, setDesignData] = useState<Record<string, unknown>>(
+    draft?.design_state && typeof draft.design_state === 'object' ? (draft.design_state as Record<string, unknown>) : {}
+  )
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const [createError, setCreateError] = useState<string | null>(null)
   const [createLoading, setCreateLoading] = useState(false)
+
+  const isDraftEditor = Boolean(draftId)
+
+  useEffect(() => {
+    if (draft?.design_state && typeof draft.design_state === 'object') {
+      setDesignData(draft.design_state as Record<string, unknown>)
+    }
+  }, [draft?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -30,6 +46,24 @@ export default function DesignToolPage() {
     })
     return () => { cancelled = true }
   }, [])
+
+  const handleSaveDraft = useCallback(async () => {
+    if (!draftId) return
+    setCreateError(null)
+    setCreateLoading(true)
+    try {
+      const ok = await updateDesignDraft(draftId, { design_state: designData })
+      if (ok) {
+        setCreateError(null)
+      } else {
+        setCreateError('Failed to save draft. Please try again.')
+      }
+    } catch {
+      setCreateError('Something went wrong. Please try again.')
+    } finally {
+      setCreateLoading(false)
+    }
+  }, [draftId, designData])
 
   const handleCreate = useCallback(
     async (status: 'draft' | 'active') => {
@@ -85,72 +119,95 @@ export default function DesignToolPage() {
             {mode === 'ai' ? <AIPromptPanel /> : <ManualEditorPlaceholder />}
           </div>
           <div className="design-tool-product-form">
-            <h3 className="design-tool-form-title">Product details</h3>
-            <label htmlFor="design-tool-name" className="design-tool-label">
-              Name
-            </label>
-            <input
-              id="design-tool-name"
-              type="text"
-              className="design-tool-input"
-              placeholder="Product name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              aria-required
-            />
-            <label htmlFor="design-tool-price" className="design-tool-label">
-              Price ($)
-            </label>
-            <input
-              id="design-tool-price"
-              type="number"
-              min={0}
-              step={0.01}
-              className="design-tool-input"
-              placeholder="0.00"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              aria-required
-            />
-            <label htmlFor="design-tool-category" className="design-tool-label">
-              Category
-            </label>
-            <select
-              id="design-tool-category"
-              className="design-tool-select"
-              value={categoryId === '' ? '' : String(categoryId)}
-              onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
-            >
-              <option value="">No category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            {createError && (
-              <p className="design-tool-form-error" role="alert">
-                {createError}
-              </p>
+            {isDraftEditor ? (
+              <>
+                <h3 className="design-tool-form-title">Save your design</h3>
+                {createError && (
+                  <p className="design-tool-form-error" role="alert">
+                    {createError}
+                  </p>
+                )}
+                <div className="design-tool-form-actions">
+                  <button
+                    type="button"
+                    className="design-tool-btn design-tool-btn-draft"
+                    disabled={createLoading}
+                    onClick={handleSaveDraft}
+                  >
+                    {createLoading ? 'Saving…' : 'Save as Draft'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="design-tool-form-title">Product details</h3>
+                <label htmlFor="design-tool-name" className="design-tool-label">
+                  Name
+                </label>
+                <input
+                  id="design-tool-name"
+                  type="text"
+                  className="design-tool-input"
+                  placeholder="Product name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  aria-required
+                />
+                <label htmlFor="design-tool-price" className="design-tool-label">
+                  Price ($)
+                </label>
+                <input
+                  id="design-tool-price"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  className="design-tool-input"
+                  placeholder="0.00"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  aria-required
+                />
+                <label htmlFor="design-tool-category" className="design-tool-label">
+                  Category
+                </label>
+                <select
+                  id="design-tool-category"
+                  className="design-tool-select"
+                  value={categoryId === '' ? '' : String(categoryId)}
+                  onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
+                >
+                  <option value="">No category</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                {createError && (
+                  <p className="design-tool-form-error" role="alert">
+                    {createError}
+                  </p>
+                )}
+                <div className="design-tool-form-actions">
+                  <button
+                    type="button"
+                    className="design-tool-btn design-tool-btn-draft"
+                    disabled={createLoading}
+                    onClick={() => handleCreate('draft')}
+                  >
+                    {createLoading ? 'Saving…' : 'Save as Draft'}
+                  </button>
+                  <button
+                    type="button"
+                    className="design-tool-btn design-tool-btn-publish"
+                    disabled={createLoading}
+                    onClick={() => handleCreate('active')}
+                  >
+                    {createLoading ? 'Publishing…' : 'Publish'}
+                  </button>
+                </div>
+              </>
             )}
-            <div className="design-tool-form-actions">
-              <button
-                type="button"
-                className="design-tool-btn design-tool-btn-draft"
-                disabled={createLoading}
-                onClick={() => handleCreate('draft')}
-              >
-                {createLoading ? 'Saving…' : 'Save as Draft'}
-              </button>
-              <button
-                type="button"
-                className="design-tool-btn design-tool-btn-publish"
-                disabled={createLoading}
-                onClick={() => handleCreate('active')}
-              >
-                {createLoading ? 'Publishing…' : 'Publish'}
-              </button>
-            </div>
           </div>
         </section>
         <section
