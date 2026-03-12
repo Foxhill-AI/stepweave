@@ -182,12 +182,12 @@ function NavbarInner(_props?: NavbarProps) {
         </div>
         
         <div className="navbar-actions">
+          <Link href="/design-tool" className="navbar-button-design-tool">
+            <Palette size={18} aria-hidden />
+            <span>Design Tool</span>
+          </Link>
           {isLoggedIn ? (
             <>
-              <Link href="/design-tool" className="navbar-button-design-tool">
-                <Palette size={18} aria-hidden />
-                <span>Design Tool</span>
-              </Link>
               <div className="navbar-notifications-wrapper">
                 {/* Desktop: Dropdown */}
                 <button
@@ -343,15 +343,15 @@ function NavbarInner(_props?: NavbarProps) {
           >
             Pricing
           </Link>
+          <Link
+            href="/design-tool"
+            className={`navbar-mobile-link navbar-mobile-button ${isActive('/design-tool') ? 'navbar-mobile-link-active' : ''}`}
+            onClick={toggleMobileMenu}
+          >
+            Design Tool
+          </Link>
           {isLoggedIn ? (
             <>
-              <Link
-                href="/design-tool"
-                className={`navbar-mobile-link navbar-mobile-button ${isActive('/design-tool') ? 'navbar-mobile-link-active' : ''}`}
-                onClick={toggleMobileMenu}
-              >
-                Design Tool
-              </Link>
               <Link
                 href="/profile"
                 className={`navbar-mobile-link ${isActive('/profile') ? 'navbar-mobile-link-active' : ''}`}

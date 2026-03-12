@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
-import { getCurrentUserAccount, createDesignDraft } from '@/lib/supabaseClient'
+import { createDesignDraft } from '@/lib/supabaseClient'
 import type { PrintfulShoeProduct } from '@/app/api/printful/products/route'
 import '../../styles/DesignTool.css'
 
@@ -44,8 +44,15 @@ export default function BaseModelSelection() {
   }, [])
 
   const handleContinue = async () => {
-    if (!selectedModelId || !userAccount?.id) return
+    if (!selectedModelId) return
+
+    if (!userAccount?.id) {
+      router.push('/?openAuth=1')
+      return
+    }
+
     setContinueLoading(true)
+    setError(null)
     try {
       const result = await createDesignDraft(userAccount.id, {
         base_model_id: selectedModelId,
