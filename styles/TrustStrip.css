@@ -1,0 +1,30 @@
+.trust-strip {
+  background: var(--color-background-light);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--spacing-md) 0;
+}
+
+.trust-strip-container {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-lg) var(--spacing-2xl);
+}
+
+.trust-strip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.trust-strip-item svg {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
