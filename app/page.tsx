@@ -7,6 +7,7 @@ import Footer from '@/components/Footer'
 import HeroSection, { type HeroSectionData } from '@/components/HeroSection'
 import ContentSection from '@/components/ContentSection'
 import AdBanner from '@/components/AdBanner'
+import TrustStrip from '@/components/TrustStrip'
 import { productToHomeItem, type HomeItem } from '@/lib/productsForHome'
 import './homepage.css'
 
@@ -93,6 +94,8 @@ export default function HomePage() {
         {!loading && heroSections.length > 0 && (
           <HeroSection sections={heroSections} />
         )}
+
+        <TrustStrip />
 
         <AdBanner />
 
