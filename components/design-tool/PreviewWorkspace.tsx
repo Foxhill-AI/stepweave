@@ -2,34 +2,53 @@
 
 import { useState, useRef } from 'react'
 import { Upload, Palette, X } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
 import type { DesignToolMode } from './ModeTabs'
 
 const ACCEPT_IMAGES = 'image/*'
 const MAX_SIZE_MB = 10
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
+const BUCKET = 'design-patterns'
 
 interface PreviewWorkspaceProps {
   mode: DesignToolMode
-  /** Called when user selects/drops an image (data URL). Manual mode only. */
+  /** When set with authUserId, uploads go to Storage and we call onPatternUploaded(path). */
+  draftId?: number
+  /** Supabase Auth user id (UUID) for Storage path. Required for Storage upload. */
+  authUserId?: string | null
+  /** Called when user selects/drops an image (data URL). Manual mode only. Used when not uploading to Storage. */
   onImageSelect?: (imageUrl: string) => void
-  /** Current image URL for preview (e.g. from design_data). Manual mode only. */
+  /** Called after successful upload to Storage with the stored path. Manual mode only. */
+  onPatternUploaded?: (path: string) => void
+  /** Current image URL for preview (e.g. signed URL or data URL). Manual mode only. */
   imageUrl?: string | null
   /** Called when user clears the image. Manual mode only. */
   onImageClear?: () => void
 }
 
+function getExtension(filename: string): string {
+  const i = filename.lastIndexOf('.')
+  return i >= 0 ? filename.slice(i) : '.png'
+}
+
 export default function PreviewWorkspace({
   mode,
+  draftId,
+  authUserId,
   onImageSelect,
+  onPatternUploaded,
   imageUrl,
   onImageClear,
 }: PreviewWorkspaceProps) {
   const [activeView, setActiveView] = useState<'Front' | 'Back' | 'Right side' | 'Left side'>('Front')
   const [isDragging, setIsDragging] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFile = (file: File | null) => {
+  const useStorageUpload = Boolean(draftId && authUserId && onPatternUploaded)
+
+  const handleFile = async (file: File | null) => {
     setUploadError(null)
     if (!file) return
     if (!file.type.startsWith('image/')) {
@@ -40,6 +59,28 @@ export default function PreviewWorkspace({
       setUploadError(`Image must be under ${MAX_SIZE_MB} MB.`)
       return
     }
+
+    if (useStorageUpload) {
+      setUploading(true)
+      try {
+        const ext = getExtension(file.name)
+        const path = `${authUserId}/${draftId}/${Date.now()}${ext}`
+        const { error } = await supabase.storage
+          .from(BUCKET)
+          .upload(path, file, { contentType: file.type || 'image/png', upsert: false })
+        if (error) {
+          setUploadError(error.message || 'Upload failed.')
+          return
+        }
+        onPatternUploaded?.(path)
+      } catch {
+        setUploadError('Upload failed. Please try again.')
+      } finally {
+        setUploading(false)
+      }
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = () => {
       const dataUrl = reader.result as string
@@ -119,21 +160,29 @@ export default function PreviewWorkspace({
           className="preview-canvas-file-input"
           aria-hidden
         />
-        {imageUrl ? (
+        {imageUrl || uploading ? (
           <div className="preview-canvas-preview">
-            <img
-              src={imageUrl}
-              alt="Your design"
-              className="preview-canvas-preview-img"
-            />
+            {imageUrl && (
+              <img
+                src={imageUrl}
+                alt="Your design"
+                className="preview-canvas-preview-img"
+              />
+            )}
+            {uploading && (
+              <p className="preview-canvas-uploading" role="status">
+                Uploading…
+              </p>
+            )}
             <div className="preview-canvas-preview-actions">
               <button
                 type="button"
                 className="preview-canvas-preview-btn preview-canvas-preview-btn-change"
+                disabled={uploading}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload size={16} aria-hidden />
-                Change image
+                {uploading ? 'Uploading…' : 'Change image'}
               </button>
               <button
                 type="button"
