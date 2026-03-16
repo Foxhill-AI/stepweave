@@ -19,7 +19,7 @@ interface DesignToolPageProps {
 
 export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) {
   const router = useRouter()
-  const { userAccount } = useAuth()
+  const { user, userAccount } = useAuth()
   const [mode, setMode] = useState<DesignToolMode>('ai')
   const [name, setName] = useState('')
   const [price, setPrice] = useState<string>('')
@@ -30,8 +30,16 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const [createError, setCreateError] = useState<string | null>(null)
   const [createLoading, setCreateLoading] = useState(false)
+  /** Local copy of draft so we can update pattern_image_url after upload without refetch. */
+  const [localDraft, setLocalDraft] = useState<DesignDraftRow | null>(draft ?? null)
+  /** Resolved signed URL for draft pattern image (when using Storage). */
+  const [patternImageSignedUrl, setPatternImageSignedUrl] = useState<string | null>(null)
 
   const isDraftEditor = Boolean(draftId)
+
+  useEffect(() => {
+    setLocalDraft(draft ?? null)
+  }, [draft])
 
   useEffect(() => {
     if (draft?.design_state && typeof draft.design_state === 'object') {
@@ -46,6 +54,51 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     })
     return () => { cancelled = true }
   }, [])
+
+  // Fetch signed URL when draft has a pattern stored in Storage (private bucket).
+  useEffect(() => {
+    const path = localDraft?.pattern_image_url
+    if (!draftId || !path || typeof path !== 'string' || path.trim() === '') {
+      setPatternImageSignedUrl(null)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/design-drafts/${draftId}/pattern-image`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to load image'))))
+      .then((body: { url?: string }) => {
+        if (!cancelled && body.url) setPatternImageSignedUrl(body.url)
+      })
+      .catch(() => {
+        if (!cancelled) setPatternImageSignedUrl(null)
+      })
+    return () => { cancelled = true }
+  }, [draftId, localDraft?.pattern_image_url])
+
+  const handlePatternUploaded = useCallback(
+    async (path: string) => {
+      if (!draftId) return
+      const ok = await updateDesignDraft(draftId, {
+        pattern_image_url: path,
+        pattern_source_type: 'direct_upload',
+      })
+      if (ok)
+        setLocalDraft((prev) =>
+          prev ? { ...prev, pattern_image_url: path, pattern_source_type: 'direct_upload' } : null
+        )
+    },
+    [draftId]
+  )
+
+  const handlePatternClear = useCallback(async () => {
+    if (!draftId) return
+    await updateDesignDraft(draftId, { pattern_image_url: null })
+    setLocalDraft((prev) => (prev ? { ...prev, pattern_image_url: null } : null))
+    setDesignData((prev) => {
+      const next = { ...prev }
+      delete next.imageUrl
+      return next
+    })
+  }, [draftId])
 
   const handleSaveDraft = useCallback(async () => {
     if (!draftId) return
@@ -217,13 +270,28 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         >
           <PreviewWorkspace
             mode={mode}
+            draftId={draftId}
+            authUserId={user?.id ?? null}
             onImageSelect={(url) => setDesignData((prev) => ({ ...prev, imageUrl: url }))}
-            imageUrl={typeof designData.imageUrl === 'string' ? designData.imageUrl : null}
-            onImageClear={() => setDesignData((prev) => {
-              const next = { ...prev }
-              delete next.imageUrl
-              return next
-            })}
+            onPatternUploaded={handlePatternUploaded}
+            onImageClear={() => {
+              if (localDraft?.pattern_image_url) {
+                handlePatternClear()
+              } else {
+                setDesignData((prev) => {
+                  const next = { ...prev }
+                  delete next.imageUrl
+                  return next
+                })
+              }
+            }}
+            imageUrl={
+              localDraft?.pattern_image_url
+                ? patternImageSignedUrl ?? undefined
+                : typeof designData.imageUrl === 'string'
+                  ? designData.imageUrl
+                  : null
+            }
           />
         </section>
       </div>

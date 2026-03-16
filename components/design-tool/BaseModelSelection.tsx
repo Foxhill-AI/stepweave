@@ -7,6 +7,8 @@ import { createDesignDraft } from '@/lib/supabaseClient'
 import type { PrintfulShoeProduct } from '@/app/api/printful/products/route'
 import '../../styles/DesignTool.css'
 
+const PENDING_SELECTION_KEY = 'design-tool-pending-selection'
+
 export default function BaseModelSelection() {
   const router = useRouter()
   const { userAccount } = useAuth()
@@ -43,11 +45,38 @@ export default function BaseModelSelection() {
     return () => { cancelled = true }
   }, [])
 
+  useEffect(() => {
+    if (loading || products.length === 0) return
+    try {
+      const raw = typeof window !== 'undefined' ? sessionStorage.getItem(PENDING_SELECTION_KEY) : null
+      if (!raw) return
+      const parsed = JSON.parse(raw) as { modelId?: string; structuralColor?: 'white' | 'black' }
+      const modelId = parsed?.modelId
+      const color = parsed?.structuralColor
+      if (modelId && products.some((p) => p.id === modelId)) {
+        setSelectedModelId(modelId)
+        if (color === 'white' || color === 'black') setStructuralColor(color)
+      }
+    } catch {
+      // ignore invalid stored data
+    } finally {
+      if (typeof window !== 'undefined') sessionStorage.removeItem(PENDING_SELECTION_KEY)
+    }
+  }, [loading, products])
+
   const handleContinue = async () => {
     if (!selectedModelId) return
 
     if (!userAccount?.id) {
-      router.push('/?openAuth=1')
+      try {
+        sessionStorage.setItem(
+          PENDING_SELECTION_KEY,
+          JSON.stringify({ modelId: selectedModelId, structuralColor })
+        )
+      } catch {
+        // ignore storage errors
+      }
+      router.push('/design-tool?openAuth=1')
       return
     }
 

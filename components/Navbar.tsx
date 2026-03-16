@@ -125,12 +125,18 @@ function NavbarInner(_props?: NavbarProps) {
     const openAuth = searchParams.get('openAuth')
     if (openAuth === '1') {
       openAuthModal('login')
-      router.replace('/', { scroll: false })
+      const next = new URLSearchParams(searchParams.toString())
+      next.delete('openAuth')
+      const q = next.toString()
+      router.replace(pathname + (q ? `?${q}` : ''), { scroll: false })
     } else if (openAuth === 'signup') {
       openAuthModal('signup')
-      router.replace('/', { scroll: false })
+      const next = new URLSearchParams(searchParams.toString())
+      next.delete('openAuth')
+      const q = next.toString()
+      router.replace(pathname + (q ? `?${q}` : ''), { scroll: false })
     }
-  }, [searchParams])
+  }, [searchParams, pathname, router])
 
   return (
     <nav className="navbar" role="navigation" aria-label="Main navigation">

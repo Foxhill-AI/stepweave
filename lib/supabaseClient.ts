@@ -1811,6 +1811,7 @@ export const supabase =
     design_state?: Record<string, unknown>
     preview_image_url?: string | null
     pattern_image_url?: string | null
+    pattern_source_type?: DesignDraftPatternSourceType
     generation_variation_count?: number
     status?: DesignDraftStatus
     final_product_id?: number | null
@@ -1902,6 +1903,8 @@ export const supabase =
       row.preview_image_url = payload.preview_image_url
     if (payload.pattern_image_url !== undefined)
       row.pattern_image_url = payload.pattern_image_url
+    if (payload.pattern_source_type !== undefined)
+      row.pattern_source_type = payload.pattern_source_type
     if (payload.generation_variation_count !== undefined)
       row.generation_variation_count = payload.generation_variation_count
     if (payload.status !== undefined) row.status = payload.status

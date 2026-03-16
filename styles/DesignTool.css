@@ -804,6 +804,12 @@
   box-shadow: var(--shadow-md);
 }
 
+.preview-canvas-uploading {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #666);
+  margin: 0;
+}
+
 .preview-canvas-preview-actions {
   display: flex;
   gap: var(--spacing-md);
@@ -831,6 +837,11 @@
 
 .preview-canvas-preview-btn-change:hover {
   filter: brightness(1.05);
+}
+
+.preview-canvas-preview-btn-change:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .preview-canvas-preview-btn-remove {
