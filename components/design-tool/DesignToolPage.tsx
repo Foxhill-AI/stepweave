@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import ModeTabs, { type DesignToolMode } from './ModeTabs'
 import AIPromptPanel from './AIPromptPanel'
 import ManualEditorPlaceholder from './ManualEditorPlaceholder'
-import PreviewWorkspace from './PreviewWorkspace'
+import PreviewWorkspace, { type PlacementTab } from './PreviewWorkspace'
 import { useAuth } from '@/components/AuthProvider'
 import { getCategories, createProduct, updateDesignDraft } from '@/lib/supabaseClient'
 import type { CategoryRow, DesignDraftRow } from '@/lib/supabaseClient'
@@ -34,6 +34,17 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [localDraft, setLocalDraft] = useState<DesignDraftRow | null>(draft ?? null)
   /** Resolved signed URL for draft pattern image (when using Storage). */
   const [patternImageSignedUrl, setPatternImageSignedUrl] = useState<string | null>(null)
+  /** Mockup URL per Printful placement (same variant). */
+  const [placementMockups, setPlacementMockups] = useState<PlacementTab[]>([])
+  const [catalogFallbackUrl, setCatalogFallbackUrl] = useState<string>('')
+  const [variantOptions, setVariantOptions] = useState<
+    Array<{ id: number; name: string; color: string; size: string; image: string }>
+  >([])
+  const [printfulVariantId, setPrintfulVariantId] = useState<number | null>(null)
+  /** Name of the currently selected shoe model (e.g. "Men's Athletic Shoes"). */
+  const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
+  /** True while Mockup Generator is producing per-placement reference images. */
+  const [mockupImagesLoading, setMockupImagesLoading] = useState(false)
 
   const isDraftEditor = Boolean(draftId)
 
@@ -73,6 +84,124 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       })
     return () => { cancelled = true }
   }, [draftId, localDraft?.pattern_image_url])
+
+  // Load product variants, resolve variant_id, generate Printful mockups per placement (same variant).
+  useEffect(() => {
+    const baseModelId = localDraft?.base_model_id
+    if (!baseModelId || typeof baseModelId !== 'string' || baseModelId.trim() === '') {
+      setPlacementMockups([])
+      setCatalogFallbackUrl('')
+      setVariantOptions([])
+      setPrintfulVariantId(null)
+      setSelectedModelName(null)
+      setMockupImagesLoading(false)
+      return
+    }
+    let cancelled = false
+    setMockupImagesLoading(true)
+    setPlacementMockups([])
+
+    const pid = baseModelId.trim()
+    const storedVid = designData.printful_variant_id
+    const parsedStored =
+      typeof storedVid === 'number'
+        ? storedVid
+        : typeof storedVid === 'string' && /^\d+$/.test(storedVid)
+          ? parseInt(storedVid, 10)
+          : NaN
+
+    fetch(`/api/printful/products/${encodeURIComponent(pid)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('product'))))
+      .then(
+        (productBody: {
+          name?: string
+          image?: string
+          variants?: Array<{
+            id: number
+            name: string
+            color: string
+            size: string
+            image: string
+          }>
+        }) => {
+          if (cancelled) return Promise.reject(new Error('cancel'))
+          setSelectedModelName(productBody.name ?? null)
+          const variants = productBody.variants ?? []
+          setVariantOptions(variants)
+
+          let vid: number | null = null
+          if (Number.isFinite(parsedStored) && variants.some((v) => v.id === parsedStored)) {
+            vid = parsedStored
+          } else {
+            const want =
+              (localDraft?.structural_color ?? 'white').toLowerCase() === 'black'
+                ? 'black'
+                : 'white'
+            const match = variants.find((v) => (v.color ?? '').toLowerCase() === want)
+            vid = match?.id ?? variants[0]?.id ?? null
+          }
+          if (vid == null) {
+            setCatalogFallbackUrl((productBody.image ?? '').trim())
+            return Promise.reject(new Error('no variant'))
+          }
+          setPrintfulVariantId(vid)
+          const vrow = variants.find((v) => v.id === vid)
+          setCatalogFallbackUrl(
+            ((vrow?.image || productBody.image) ?? '').trim()
+          )
+
+          return fetch(
+            `/api/printful/products/${encodeURIComponent(pid)}/mockup-images?variant_id=${vid}`
+          )
+        }
+      )
+      .then((mockRes) => {
+        if (cancelled) return
+        if (!mockRes || !mockRes.ok) return Promise.reject(new Error('mockup'))
+        return mockRes.json()
+      })
+      .then((body: { placements?: PlacementTab[] }) => {
+        if (cancelled || !body?.placements) return
+        const withUrl = body.placements.filter((p) => p.mockup_url)
+        setPlacementMockups(withUrl)
+      })
+      .catch(() => {
+        if (!cancelled) setPlacementMockups([])
+      })
+      .finally(() => {
+        if (!cancelled) setMockupImagesLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    localDraft?.base_model_id,
+    localDraft?.structural_color,
+    designData.printful_variant_id,
+  ])
+
+  const handlePrintfulVariantChange = useCallback(
+    async (nextId: number) => {
+      setPrintfulVariantId(nextId)
+      const nextState = {
+        ...(typeof designData === 'object' && designData !== null ? designData : {}),
+        printful_variant_id: nextId,
+      }
+      setDesignData(nextState)
+      if (draftId) {
+        const merged = {
+          ...((localDraft?.design_state &&
+            typeof localDraft.design_state === 'object' &&
+            localDraft.design_state) as Record<string, unknown>),
+          printful_variant_id: nextId,
+        }
+        await updateDesignDraft(draftId, { design_state: merged })
+        setLocalDraft((prev) => (prev ? { ...prev, design_state: merged } : null))
+      }
+    },
+    [draftId, designData, localDraft?.design_state]
+  )
 
   const handlePatternUploaded = useCallback(
     async (path: string) => {
@@ -117,6 +246,43 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       setCreateLoading(false)
     }
   }, [draftId, designData])
+
+  const handleCreateProductFromDraft = useCallback(async () => {
+    if (!draftId) return
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      setCreateError('Please enter a product name.')
+      return
+    }
+    const priceNum = parseFloat(price)
+    if (Number.isNaN(priceNum) || priceNum < 0) {
+      setCreateError('Please enter a valid price (0 or greater).')
+      return
+    }
+    setCreateError(null)
+    setCreateLoading(true)
+    try {
+      const res = await fetch(`/api/design-drafts/${draftId}/create-product`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: trimmedName,
+          price: priceNum,
+          categoryId: categoryId !== '' ? (categoryId as number) : undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.productId) {
+        router.push('/profile')
+      } else {
+        setCreateError((data.error as string) || 'Failed to create product. Please try again.')
+      }
+    } catch {
+      setCreateError('Something went wrong. Please try again.')
+    } finally {
+      setCreateLoading(false)
+    }
+  }, [draftId, name, price, categoryId, router])
 
   const handleCreate = useCallback(
     async (status: 'draft' | 'active') => {
@@ -169,12 +335,85 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         >
           <ModeTabs mode={mode} onModeChange={setMode} />
           <div className="design-tool-panel-content">
-            {mode === 'ai' ? <AIPromptPanel /> : <ManualEditorPlaceholder />}
+            {mode === 'ai' ? (
+              <AIPromptPanel />
+            ) : (
+              <>
+                {isDraftEditor && variantOptions.length > 0 && (
+                  <div className="design-tool-variant-row">
+                    <label htmlFor="design-tool-printful-variant" className="design-tool-label">
+                      Shoe color &amp; size (Printful variant)
+                    </label>
+                    <select
+                      id="design-tool-printful-variant"
+                      className="design-tool-select"
+                      value={printfulVariantId ?? ''}
+                      onChange={(e) => {
+                        const id = Number(e.target.value)
+                        if (Number.isFinite(id)) void handlePrintfulVariantChange(id)
+                      }}
+                    >
+                      {variantOptions.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="design-tool-variant-hint">
+                      Mockups use this variant for all placements. Changing it reloads reference images.
+                    </p>
+                  </div>
+                )}
+                <ManualEditorPlaceholder />
+              </>
+            )}
           </div>
           <div className="design-tool-product-form">
             {isDraftEditor ? (
               <>
-                <h3 className="design-tool-form-title">Save your design</h3>
+                <h3 className="design-tool-form-title">Save &amp; create product</h3>
+                <label htmlFor="design-tool-draft-name" className="design-tool-label">
+                  Product name
+                </label>
+                <input
+                  id="design-tool-draft-name"
+                  type="text"
+                  className="design-tool-input"
+                  placeholder="Product name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  aria-required
+                />
+                <label htmlFor="design-tool-draft-price" className="design-tool-label">
+                  Price ($)
+                </label>
+                <input
+                  id="design-tool-draft-price"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  className="design-tool-input"
+                  placeholder="0.00"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  aria-required
+                />
+                <label htmlFor="design-tool-draft-category" className="design-tool-label">
+                  Category
+                </label>
+                <select
+                  id="design-tool-draft-category"
+                  className="design-tool-select"
+                  value={categoryId === '' ? '' : String(categoryId)}
+                  onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
+                >
+                  <option value="">No category</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
                 {createError && (
                   <p className="design-tool-form-error" role="alert">
                     {createError}
@@ -188,6 +427,14 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                     onClick={handleSaveDraft}
                   >
                     {createLoading ? 'Saving…' : 'Save as Draft'}
+                  </button>
+                  <button
+                    type="button"
+                    className="design-tool-btn design-tool-btn-publish"
+                    disabled={createLoading}
+                    onClick={handleCreateProductFromDraft}
+                  >
+                    {createLoading ? 'Creating…' : 'Create product'}
                   </button>
                 </div>
               </>
@@ -272,6 +519,10 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             mode={mode}
             draftId={draftId}
             authUserId={user?.id ?? null}
+            placementMockups={placementMockups.length > 0 ? placementMockups : null}
+            catalogFallbackUrl={catalogFallbackUrl || null}
+            selectedModelName={selectedModelName}
+            mockupImagesLoading={mockupImagesLoading}
             onImageSelect={(url) => setDesignData((prev) => ({ ...prev, imageUrl: url }))}
             onPatternUploaded={handlePatternUploaded}
             onImageClear={() => {

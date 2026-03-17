@@ -172,6 +172,19 @@
   overflow: hidden;
 }
 
+.design-tool-variant-row {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.design-tool-variant-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-light);
+  margin: var(--spacing-xs) 0 0;
+  line-height: 1.4;
+}
+
 /* Edit product page heading */
 .design-tool-edit-heading {
   font-size: 1.25rem;
@@ -726,6 +739,64 @@
   border-bottom-color: var(--color-primary);
 }
 
+.preview-workspace-model-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #666);
+  margin: 0 0 var(--spacing-xs);
+  text-align: center;
+}
+
+.preview-workspace-model-label strong {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Product reference: always-visible shoe model view (per selected side) */
+.preview-reference-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.preview-reference-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-light);
+  margin-bottom: var(--spacing-sm);
+}
+
+.preview-reference-loading {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #666);
+  margin: 0 0 var(--spacing-sm);
+}
+
+.preview-reference-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 180px;
+  max-height: 240px;
+  background: var(--color-background-light);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.preview-reference-img {
+  max-width: 100%;
+  max-height: 220px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
 .preview-canvas {
   flex: 1;
   display: flex;
@@ -744,6 +815,17 @@
   height: 0;
   opacity: 0;
   pointer-events: none;
+}
+
+.preview-canvas-layers {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 280px;
+  gap: var(--spacing-md);
 }
 
 .preview-canvas-dropzone {
@@ -783,6 +865,12 @@
 
 .preview-canvas-dropzone-icon {
   flex-shrink: 0;
+}
+
+.preview-canvas-layers .preview-canvas-preview,
+.preview-canvas-layers .preview-canvas-dropzone {
+  position: relative;
+  z-index: 1;
 }
 
 .preview-canvas-preview {

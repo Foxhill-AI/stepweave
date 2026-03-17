@@ -83,11 +83,32 @@ export default function BaseModelSelection() {
     setContinueLoading(true)
     setError(null)
     try {
+      let designState: Record<string, unknown> = {}
+      try {
+        const pr = await fetch(`/api/printful/products/${encodeURIComponent(selectedModelId)}`)
+        if (pr.ok) {
+          const body = (await pr.json()) as {
+            variants?: Array<{ id: number; color?: string }>
+          }
+          const vars = body.variants ?? []
+          const want =
+            structuralColor === 'white' ? 'white' : 'black'
+          const match = vars.find(
+            (v) => (v.color ?? '').toLowerCase() === want
+          )
+          const vid = match?.id ?? vars[0]?.id
+          if (vid != null) designState = { printful_variant_id: vid }
+        }
+      } catch {
+        // continue without variant id; mockup API will use first variant
+      }
+
       const result = await createDesignDraft(userAccount.id, {
         base_model_id: selectedModelId,
         base_model_provider: 'printful',
         structural_color: structuralColor,
         pattern_source_type: 'ai_generated',
+        design_state: designState,
       })
       if (result?.id) {
         router.push(`/design-tool/${result.id}`)
