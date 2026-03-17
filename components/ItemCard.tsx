@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Heart, Eye, Download, Star } from 'lucide-react'
+import ProductImage from './ProductImage'
 import '../styles/ItemCard.css'
 
 interface ItemCardProps {
@@ -7,6 +8,8 @@ interface ItemCardProps {
   title: string
   category: string
   image?: string
+  productId?: number
+  designData?: { imageUrl?: string; source?: string } | null
   views?: number
   likes?: number
   downloads?: number
@@ -23,6 +26,8 @@ export default function ItemCard({
   title,
   category,
   image,
+  productId,
+  designData,
   views = 0,
   likes = 0,
   downloads = 0,
@@ -32,6 +37,7 @@ export default function ItemCard({
   badge,
   layout = 'grid',
 }: ItemCardProps) {
+  const useProductImage = productId != null && designData?.source === 'design_draft'
   const renderStars = (rating: number) => {
     const fullStars = Math.floor(rating)
     const hasHalfStar = rating % 1 >= 0.5
@@ -60,7 +66,20 @@ export default function ItemCard({
       <Link href={`/item/${id}`} className="item-card-link">
         <div className="item-card-image-wrapper">
           <div className="item-card-image-placeholder">
-            {image ? (
+            {useProductImage ? (
+              <ProductImage
+                productId={productId}
+                designData={designData!}
+                alt={title}
+                className="item-card-image"
+                loading="lazy"
+                fallback={
+                  <div className="item-card-image-fallback">
+                    <span>{title.charAt(0).toUpperCase()}</span>
+                  </div>
+                }
+              />
+            ) : image ? (
               <img
                 src={image}
                 alt={title}

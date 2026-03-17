@@ -7,11 +7,14 @@ import { getActiveProducts, type ProductListingRow } from '@/lib/supabaseClient'
 import '../styles/DigitalStore.css'
 
 function productToStoreItem(p: ProductListingRow): StoreItem {
+  const designData = p.design_data as { imageUrl?: string; source?: string } | null
   return {
     id: String(p.id),
+    productId: p.id as number,
+    designData,
     title: p.name,
     author: p.user_account?.username ?? 'Unknown',
-    image: (p.design_data as { imageUrl?: string } | null)?.imageUrl,
+    image: designData?.imageUrl,
     likes: 0,
     downloads: 0,
     promotionalText: undefined,
@@ -35,6 +38,8 @@ interface FeaturedItem {
 
 interface StoreItem {
   id: string
+  productId?: number
+  designData?: { imageUrl?: string; source?: string } | null
   title: string
   author: string
   image?: string

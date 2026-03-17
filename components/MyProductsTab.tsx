@@ -17,6 +17,8 @@ import '../styles/MyProductsTab.css'
 
 interface Product {
   id: string
+  productId?: number
+  designData?: { imageUrl?: string; source?: string } | null
   name: string
   price?: string
   status: 'draft' | 'active' | 'archived'
@@ -33,9 +35,11 @@ interface Product {
 
 function mapRowToProduct(row: ProductListingRow): Product {
   const firstCategory = row.product_category?.[0]?.category?.name
-  const designData = row.design_data as { imageUrl?: string } | null
+  const designData = row.design_data as { imageUrl?: string; source?: string } | null
   return {
     id: String(row.id),
+    productId: row.id as number,
+    designData,
     name: row.name,
     price: `$${Number(row.price).toFixed(2)}`,
     status: row.status as 'draft' | 'active' | 'archived',
@@ -227,6 +231,8 @@ export default function MyProductsTab() {
                 title={product.name}
                 category={product.category || 'Uncategorized'}
                 image={product.image}
+                productId={product.productId}
+                designData={product.designData}
                 views={product.views}
                 likes={product.likes}
                 downloads={product.downloads}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Upload, Palette, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import type { DesignToolMode } from './ModeTabs'
@@ -10,19 +10,26 @@ const MAX_SIZE_MB = 10
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 const BUCKET = 'design-patterns'
 
+/** One placement from Printful mockups (dynamic tabs). */
+export type PlacementTab = {
+  placement: string
+  label: string
+  mockup_url: string
+}
+
 interface PreviewWorkspaceProps {
   mode: DesignToolMode
-  /** When set with authUserId, uploads go to Storage and we call onPatternUploaded(path). */
+  /** Dynamic mockup per placement (same variant). When set, tabs follow these. */
+  placementMockups?: PlacementTab[] | null
+  /** Catalog image when mockups are loading or failed. */
+  catalogFallbackUrl?: string | null
+  selectedModelName?: string | null
+  mockupImagesLoading?: boolean
   draftId?: number
-  /** Supabase Auth user id (UUID) for Storage path. Required for Storage upload. */
   authUserId?: string | null
-  /** Called when user selects/drops an image (data URL). Manual mode only. Used when not uploading to Storage. */
   onImageSelect?: (imageUrl: string) => void
-  /** Called after successful upload to Storage with the stored path. Manual mode only. */
   onPatternUploaded?: (path: string) => void
-  /** Current image URL for preview (e.g. signed URL or data URL). Manual mode only. */
   imageUrl?: string | null
-  /** Called when user clears the image. Manual mode only. */
   onImageClear?: () => void
 }
 
@@ -33,6 +40,10 @@ function getExtension(filename: string): string {
 
 export default function PreviewWorkspace({
   mode,
+  placementMockups,
+  catalogFallbackUrl,
+  selectedModelName,
+  mockupImagesLoading,
   draftId,
   authUserId,
   onImageSelect,
@@ -40,11 +51,23 @@ export default function PreviewWorkspace({
   imageUrl,
   onImageClear,
 }: PreviewWorkspaceProps) {
-  const [activeView, setActiveView] = useState<'Front' | 'Back' | 'Right side' | 'Left side'>('Front')
+  const tabs = placementMockups?.length ? placementMockups : null
+  const [activePlacement, setActivePlacement] = useState<string>('')
   const [isDragging, setIsDragging] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!tabs?.length) {
+      setActivePlacement('')
+      return
+    }
+    const keys = tabs.map((t) => t.placement)
+    if (!keys.includes(activePlacement)) {
+      setActivePlacement(keys[0])
+    }
+  }, [tabs, activePlacement])
 
   const useStorageUpload = Boolean(draftId && authUserId && onPatternUploaded)
 
@@ -135,22 +158,56 @@ export default function PreviewWorkspace({
     )
   }
 
+  const activeTab = tabs?.find((t) => t.placement === activePlacement)
+  const referenceUrl = activeTab?.mockup_url || catalogFallbackUrl || ''
+  const activeLabel = activeTab?.label ?? 'Product'
+
   return (
     <div className="preview-workspace preview-workspace--manual">
-      <div className="preview-view-tabs" role="tablist" aria-label="Product view">
-        {(['Front', 'Back', 'Right side', 'Left side'] as const).map((view) => (
-          <button
-            key={view}
-            type="button"
-            role="tab"
-            aria-selected={activeView === view}
-            className={`preview-view-tab ${activeView === view ? 'preview-view-tab--active' : ''}`}
-            onClick={() => setActiveView(view)}
-          >
-            {view}
-          </button>
-        ))}
-      </div>
+      {tabs && tabs.length > 0 && (
+        <div className="preview-view-tabs" role="tablist" aria-label="Print placements">
+          {tabs.map((t) => (
+            <button
+              key={t.placement}
+              type="button"
+              role="tab"
+              aria-selected={activePlacement === t.placement}
+              className={`preview-view-tab ${activePlacement === t.placement ? 'preview-view-tab--active' : ''}`}
+              onClick={() => setActivePlacement(t.placement)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {selectedModelName && (
+        <p className="preview-workspace-model-label" aria-live="polite">
+          Showing: <strong>{selectedModelName}</strong>
+          {tabs?.length ? ` – ${activeLabel}` : ' – reference'}
+        </p>
+      )}
+      {(referenceUrl || mockupImagesLoading) && (
+        <div
+          className="preview-reference-section"
+          aria-label={`Product reference: ${activeLabel}`}
+        >
+          <span className="preview-reference-label">Product reference</span>
+          {mockupImagesLoading && (
+            <p className="preview-reference-loading" role="status">
+              Generating mockups from Printful…
+            </p>
+          )}
+          {referenceUrl && (
+            <div className="preview-reference-box">
+              <img
+                src={referenceUrl}
+                alt={selectedModelName ? `${selectedModelName} – ${activeLabel}` : activeLabel}
+                className="preview-reference-img"
+              />
+            </div>
+          )}
+        </div>
+      )}
       <div className="preview-canvas">
         <input
           ref={fileInputRef}
@@ -160,63 +217,67 @@ export default function PreviewWorkspace({
           className="preview-canvas-file-input"
           aria-hidden
         />
-        {imageUrl || uploading ? (
-          <div className="preview-canvas-preview">
-            {imageUrl && (
-              <img
-                src={imageUrl}
-                alt="Your design"
-                className="preview-canvas-preview-img"
-              />
-            )}
-            {uploading && (
-              <p className="preview-canvas-uploading" role="status">
-                Uploading…
-              </p>
-            )}
-            <div className="preview-canvas-preview-actions">
-              <button
-                type="button"
-                className="preview-canvas-preview-btn preview-canvas-preview-btn-change"
-                disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload size={16} aria-hidden />
-                {uploading ? 'Uploading…' : 'Change image'}
-              </button>
-              <button
-                type="button"
-                className="preview-canvas-preview-btn preview-canvas-preview-btn-remove"
-                onClick={onImageClear}
-                aria-label="Remove image"
-              >
-                <X size={16} aria-hidden />
-                Remove
-              </button>
+        <div className="preview-canvas-layers">
+          {imageUrl || uploading ? (
+            <div className="preview-canvas-preview">
+              {imageUrl && (
+                <img
+                  src={imageUrl}
+                  alt="Your design"
+                  className="preview-canvas-preview-img"
+                />
+              )}
+              {uploading && (
+                <p className="preview-canvas-uploading" role="status">
+                  Uploading…
+                </p>
+              )}
+              <div className="preview-canvas-preview-actions">
+                <button
+                  type="button"
+                  className="preview-canvas-preview-btn preview-canvas-preview-btn-change"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload size={16} aria-hidden />
+                  {uploading ? 'Uploading…' : 'Change image'}
+                </button>
+                <button
+                  type="button"
+                  className="preview-canvas-preview-btn preview-canvas-preview-btn-remove"
+                  onClick={onImageClear}
+                  aria-label="Remove image"
+                >
+                  <X size={16} aria-hidden />
+                  Remove
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div
-            className={`preview-canvas-dropzone ${isDragging ? 'preview-canvas-dropzone--dragging' : ''}`}
-            role="button"
-            tabIndex={0}
-            aria-label="Upload or drop your design here"
-            onClick={handleDropzoneClick}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                handleDropzoneClick()
-              }
-            }}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-          >
-            <Upload size={28} className="preview-canvas-dropzone-icon" aria-hidden />
-            <span>Upload or drop your design here</span>
-            <span className="preview-canvas-dropzone-hint">Images only (JPG, PNG, WebP), max {MAX_SIZE_MB} MB</span>
-          </div>
-        )}
+          ) : (
+            <div
+              className={`preview-canvas-dropzone ${isDragging ? 'preview-canvas-dropzone--dragging' : ''}`}
+              role="button"
+              tabIndex={0}
+              aria-label="Upload or drop your design here"
+              onClick={handleDropzoneClick}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  handleDropzoneClick()
+                }
+              }}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
+              <Upload size={28} className="preview-canvas-dropzone-icon" aria-hidden />
+              <span>Upload or drop your design here</span>
+              <span className="preview-canvas-dropzone-hint">
+                Images only (JPG, PNG, WebP), max {MAX_SIZE_MB} MB
+              </span>
+            </div>
+          )}
+        </div>
         {uploadError && (
           <p className="preview-canvas-error" role="alert">
             {uploadError}

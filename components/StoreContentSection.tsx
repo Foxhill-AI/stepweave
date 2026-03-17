@@ -5,6 +5,8 @@ import '../styles/DigitalStore.css'
 
 interface StoreItem {
   id: string
+  productId?: number
+  designData?: { imageUrl?: string; source?: string } | null
   title: string
   author: string
   image?: string
@@ -42,6 +44,8 @@ export default function StoreContentSection({
             title={item.title}
             author={item.author}
             image={item.image}
+            productId={item.productId}
+            designData={item.designData}
             likes={item.likes}
             downloads={item.downloads}
             promotionalText={item.promotionalText}

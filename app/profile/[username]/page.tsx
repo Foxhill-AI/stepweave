@@ -27,9 +27,11 @@ type ProfileStats = { followers: number; following: number; products: number; li
 function mapProductToItem(row: ProductListingRow) {
   const category = row.product_category?.[0]?.category
   const categoryLabel = category?.name ?? category?.slug ?? ''
-  const designData = row.design_data as { imageUrl?: string } | null
+  const designData = row.design_data as { imageUrl?: string; source?: string } | null
   return {
     id: String(row.id),
+    productId: row.id as number,
+    designData,
     title: row.name,
     category: categoryLabel,
     image: designData?.imageUrl,

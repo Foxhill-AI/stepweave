@@ -8,6 +8,8 @@ export interface LikedProduct {
   title: string
   category: string
   image?: string
+  productId?: number
+  designData?: { imageUrl?: string; source?: string } | null
   views?: number
   likes?: number
   downloads?: number

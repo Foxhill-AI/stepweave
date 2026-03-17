@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Heart, Download, UserPlus, FileDown } from 'lucide-react'
+import ProductImage from './ProductImage'
 import '../styles/StoreItemCard.css'
 
 interface StoreItemCardProps {
@@ -7,6 +8,8 @@ interface StoreItemCardProps {
   title: string
   author: string
   image?: string
+  productId?: number
+  designData?: { imageUrl?: string; source?: string } | null
   likes?: number
   downloads?: number
   promotionalText?: string
@@ -17,16 +20,32 @@ export default function StoreItemCard({
   title,
   author,
   image,
+  productId,
+  designData,
   likes = 0,
   downloads = 0,
   promotionalText,
 }: StoreItemCardProps) {
+  const useProductImage = productId != null && designData?.source === 'design_draft'
   return (
     <article className="store-item-card" aria-label={`Item: ${title}`}>
       <Link href={`/item/${id}`} className="store-item-card-link">
         <div className="store-item-image-wrapper">
           <div className="store-item-image-placeholder">
-            {image ? (
+            {useProductImage ? (
+              <ProductImage
+                productId={productId}
+                designData={designData}
+                alt={title}
+                className="store-item-image"
+                loading="lazy"
+                fallback={
+                  <div className="store-item-image-fallback">
+                    <span>{title.charAt(0).toUpperCase()}</span>
+                  </div>
+                }
+              />
+            ) : image ? (
               <img
                 src={image}
                 alt={title}

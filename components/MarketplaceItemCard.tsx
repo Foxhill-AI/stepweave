@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Heart, ShoppingCart, Package, Truck } from 'lucide-react'
+import ProductImage from './ProductImage'
 import '../styles/MarketplaceItemCard.css'
 
 interface MarketplaceItemCardProps {
@@ -7,6 +8,8 @@ interface MarketplaceItemCardProps {
   title: string
   author: string
   image?: string
+  productId?: number
+  designData?: { imageUrl?: string; source?: string } | null
   likes?: number
   price: string
   shippingInfo?: string
@@ -22,6 +25,8 @@ export default function MarketplaceItemCard({
   title,
   author,
   image,
+  productId,
+  designData,
   likes = 0,
   price,
   shippingInfo = 'Free shipping',
@@ -31,12 +36,26 @@ export default function MarketplaceItemCard({
   unitPrice,
   onAddToCart,
 }: MarketplaceItemCardProps) {
+  const useProductImage = productId != null && designData?.source === 'design_draft'
   return (
     <article className="marketplace-item-card" aria-label={`Product: ${title}`}>
       <Link href={`/item/${id}`} className="marketplace-item-card-link">
         <div className="marketplace-item-image-wrapper">
           <div className="marketplace-item-image-placeholder">
-            {image ? (
+            {useProductImage ? (
+              <ProductImage
+                productId={productId}
+                designData={designData}
+                alt={title}
+                className="marketplace-item-image"
+                loading="lazy"
+                fallback={
+                  <div className="marketplace-item-image-fallback">
+                    <span>{title.charAt(0).toUpperCase()}</span>
+                  </div>
+                }
+              />
+            ) : image ? (
               <img
                 src={image}
                 alt={title}

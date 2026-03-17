@@ -11,11 +11,12 @@ import {
   removeCartItem,
   type CartItemRow,
 } from '@/lib/supabaseClient'
+import ProductImage from './ProductImage'
 import '../styles/CartPage.css'
 
 function mapCartItemRowToItem(row: CartItemRow): CartItem {
   const product = row.product_variant?.product
-  const designData = product?.design_data as { imageUrl?: string } | null
+  const designData = product?.design_data as { imageUrl?: string; source?: string } | null
   const attrLabels = (row.product_variant?.product_variant_attribute_option ?? [])
     .map((pva) => pva.attribute_option?.label)
     .filter(Boolean) as string[]
@@ -27,6 +28,8 @@ function mapCartItemRowToItem(row: CartItemRow): CartItem {
         : ''
   return {
     id: String(row.id),
+    productId: product?.id != null ? (product.id as number) : undefined,
+    designData: designData ?? undefined,
     title: product?.name ?? 'Product',
     author: product?.user_account?.username ?? 'Unknown',
     image: designData?.imageUrl ?? '',
@@ -40,6 +43,8 @@ function mapCartItemRowToItem(row: CartItemRow): CartItem {
 
 interface CartItem {
   id: string
+  productId?: number
+  designData?: { imageUrl?: string; source?: string } | null
   title: string
   author: string
   image: string
@@ -194,7 +199,19 @@ function CartItemCard({
   return (
     <div className="cart-item-card">
       <div className="cart-item-image-wrapper">
-        {item.image ? (
+        {item.productId != null && item.designData?.source === 'design_draft' ? (
+          <ProductImage
+            productId={item.productId}
+            designData={item.designData}
+            alt={item.title}
+            className="cart-item-image"
+            fallback={
+              <div className="cart-item-image-placeholder">
+                <span>{item.title.charAt(0).toUpperCase()}</span>
+              </div>
+            }
+          />
+        ) : item.image ? (
           <img src={item.image} alt={item.title} className="cart-item-image" />
         ) : (
           <div className="cart-item-image-placeholder">

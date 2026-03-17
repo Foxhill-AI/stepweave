@@ -189,12 +189,14 @@ function buildVariantsFromProduct(p: ProductDetailRow): ProductVariantOption[] {
 function mapProductToProps(
   p: ProductDetailRow,
   stats: { likes: number; views: number },
-  relatedItems: { id: string; title: string; category: string; image?: string; author?: string; price?: string }[]
+  relatedItems: { id: string; title: string; category: string; image?: string; author?: string; price?: string }[],
+  resolvedDesignImageUrl?: string | null
 ) {
   const firstCategory = p.product_category?.[0]?.category?.name
   const firstCategorySlug = p.product_category?.[0]?.category?.slug ?? ''
   const designData = p.design_data as {
     imageUrl?: string
+    source?: string
     images?: Array<{ url: string; alt?: string }>
     description?: string
   } | null
@@ -203,9 +205,10 @@ function mapProductToProps(
     ? Number(p.product_variant[0].price_override)
     : basePrice
   const price = firstVariantPrice
+  const firstImageUrl = resolvedDesignImageUrl ?? designData?.imageUrl ?? ''
   const images = designData?.images?.length
     ? designData.images.map((img) => ({ url: img.url, alt: img.alt ?? p.name }))
-    : [{ url: designData?.imageUrl ?? '', alt: p.name }]
+    : [{ url: firstImageUrl, alt: p.name }]
   const creatorProfile = p.user_public_profile ?? p.user_account
   const creatorName = creatorProfile?.username ?? 'Unknown'
   return {
@@ -243,6 +246,7 @@ export default function ProductPage() {
   const [product, setProduct] = useState<ProductDetailRow | null>(null)
   const [stats, setStats] = useState({ likes: 0, views: 0 })
   const [relatedItems, setRelatedItems] = useState<ReturnType<typeof productToHomeItem>[]>([])
+  const [resolvedDesignImageUrl, setResolvedDesignImageUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [addToCartError, setAddToCartError] = useState<string | null>(null)
   const [isLiked, setIsLiked] = useState(false)
@@ -302,6 +306,25 @@ export default function ProductPage() {
     return () => { cancelled = true }
   }, [userAccount?.id, product?.id])
 
+  useEffect(() => {
+    const designData = product?.design_data as { source?: string } | null
+    if (!product?.id || designData?.source !== 'design_draft') {
+      setResolvedDesignImageUrl(null)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/products/${product.id}/design-image`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Not found'))))
+      .then((body: { url?: string }) => {
+        if (!cancelled && body.url) setResolvedDesignImageUrl(body.url)
+        else if (!cancelled) setResolvedDesignImageUrl(null)
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedDesignImageUrl(null)
+      })
+    return () => { cancelled = true }
+  }, [product?.id, (product?.design_data as { source?: string } | null)?.source])
+
   const handleLikeToggle = async () => {
     if (!userAccount?.id || !product?.id) return
     const next = !isLiked
@@ -356,7 +379,7 @@ export default function ProductPage() {
         )}
         {!loading && product && (
           <Product
-            {...mapProductToProps(product, stats, relatedItems)}
+            {...mapProductToProps(product, stats, relatedItems, resolvedDesignImageUrl)}
             isLiked={isLiked}
             onLikeToggle={userAccount?.id ? handleLikeToggle : undefined}
             isSaved={isSaved}
