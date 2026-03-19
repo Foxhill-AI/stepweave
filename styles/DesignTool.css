@@ -776,6 +776,13 @@
   margin: 0 0 var(--spacing-sm);
 }
 
+.preview-reference-catalog-note {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #666);
+  margin: 0 0 var(--spacing-sm);
+  line-height: 1.4;
+}
+
 .preview-reference-box {
   display: flex;
   align-items: center;

@@ -2,13 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const PRINTFUL_BASE = 'https://api.printful.com'
 
-const DEFAULT_PLACEHOLDER_IMAGE_URL = 'https://via.placeholder.com/1500/FFFFFF/FFFFFF?text=+'
+const DEFAULT_PLACEHOLDER_IMAGE_URL = 'https://files.cdn.printful.com/upload/product-catalog-img/b7/b7427e7543b29d4f52a8bd5e4d80c946_l'
 
 const POLL_INTERVAL_MS = 3000
 const FIRST_WAIT_MS = 12000
 const PER_TASK_MAX_MS = 75000
-/** Min delay between create-task calls to reduce 429 (Printful ~2–10/min) */
-const BETWEEN_CREATE_TASK_MS = 52000
 const MAX_429_RETRIES = 8
 
 type PrintfulPrintfilesResult = {
@@ -59,17 +57,6 @@ function parse429WaitMs(responseText: string): number {
   return 65000
 }
 
-/** Placements like label_inside must be sent with at least one "main" placement (Printful API). */
-function isAdditionalPlacement(placement: string): boolean {
-  const p = placement.toLowerCase()
-  return (
-    p === 'label_inside' ||
-    p.includes('inside') ||
-    p.includes('inner_label') ||
-    p.includes('neck_label')
-  )
-}
-
 async function createTaskAndPoll(
   productId: string,
   variantId: number,
@@ -81,6 +68,12 @@ async function createTaskAndPoll(
 > {
   let createRes: Response | null = null
   let bodyText = ''
+
+console.log('[PAYLOAD FINAL]', JSON.stringify({
+  variant_ids: [variantId],
+  format: 'png',
+  files,
+}, null, 2))
 
   for (let r = 0; r < MAX_429_RETRIES; r++) {
     createRes = await fetch(`${PRINTFUL_BASE}/mockup-generator/create-task/${productId}`, {
@@ -134,6 +127,8 @@ async function createTaskAndPoll(
     const taskData = (await taskRes.json()) as {
       result?: {
         status?: string
+        error?: string
+        error_code?: number
         mockups?: Array<{ placement: string; mockup_url?: string }>
       }
     }
@@ -144,8 +139,10 @@ async function createTaskAndPoll(
       return { ok: true, mockups: result.mockups ?? [] }
     }
     if (status === 'failed' || status === 'error') {
-      console.warn('[mockup-images] task failed', {
+      console.error('[mockup-images] task failed detail:', {
         taskKey,
+        error: result.error,
+        error_code: result.error_code,
         placements: files.map((f) => f.placement),
       })
       return { ok: false, reason: 'task failed' }
@@ -166,10 +163,6 @@ function mergeMockups(
   }
 }
 
-/**
- * GET /api/printful/products/[id]/mockup-images?variant_id=…
- * 1) Full batch. 2) Optional retry after cooldown. 3) Primaries-only, then anchor+each additional.
- */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -267,6 +260,9 @@ export async function GET(
       )
     }
 
+    // Build printfile dimension map — use raw width/height (confirmed working with curl)
+    // printfile 260 → 2250×2250 (shoe_quarters_*, shoe_tongue_*)
+    // printfile 263 → 1050×600  (label_inside)
     const printfileById = new Map<number, { width: number; height: number }>()
     for (const pf of printfilesResult.printfiles ?? []) {
       if (typeof pf.printfile_id === 'number' && pf.width && pf.height) {
@@ -293,86 +289,35 @@ export async function GET(
       }
     }
 
+    // All placements must go in a single task — Printful requires the full set together.
+    // Sending label_inside alone returns 400 "Product must use additional placements".
     const allFiles = placementKeys.map(buildFile)
     const urlByPlacement = new Map<string, string>()
 
-    const primaryKeys = placementKeys.filter((p) => !isAdditionalPlacement(p))
-    const additionalKeys = placementKeys.filter((p) => isAdditionalPlacement(p))
-    const anchorForAdditional = (add: string): string | null => {
-      const p = primaryKeys.find((k) => k !== add) ?? placementKeys.find((k) => k !== add)
-      return p ?? null
+    const placementsPayload = (): PlacementMockup[] =>
+      placementKeys.map((placement) => ({
+        placement,
+        label: availablePlacements[placement] ?? placement,
+        mockup_url: urlByPlacement.get(placement) ?? '',
+      }))
+
+    console.log('[mockup-images] sending batch', placementKeys)
+
+    const batch = await createTaskAndPoll(productId, variantId, allFiles, headers)
+    if (batch.ok) {
+      mergeMockups(urlByPlacement, batch.mockups)
+    } else {
+      console.warn('[mockup-images] batch failed:', batch.reason)
     }
 
-    // 1) Full batch
-    let batch = await createTaskAndPoll(productId, variantId, allFiles, headers)
-    if (batch.ok) mergeMockups(urlByPlacement, batch.mockups)
-
-    // 2) One retry after cooldown (transient Printful errors)
-    if (!placementKeys.every((p) => urlByPlacement.get(p))) {
-      await sleep(BETWEEN_CREATE_TASK_MS)
-      batch = await createTaskAndPoll(productId, variantId, allFiles, headers)
-      if (batch.ok) mergeMockups(urlByPlacement, batch.mockups)
-    }
-
-    // 3) Primaries only (e.g. shoe_left + shoe_right) — avoids some full-batch failures
-    if (
-      primaryKeys.length >= 1 &&
-      additionalKeys.length >= 1 &&
-      !primaryKeys.every((p) => urlByPlacement.get(p))
-    ) {
-      await sleep(BETWEEN_CREATE_TASK_MS)
-      const primaryFiles = primaryKeys.map(buildFile)
-      const prim = await createTaskAndPoll(productId, variantId, primaryFiles, headers)
-      if (prim.ok) mergeMockups(urlByPlacement, prim.mockups)
-    }
-
-    // 4) Each missing additional: main placement + additional (Printful rejects additional alone)
-    for (const add of additionalKeys) {
-      if (urlByPlacement.get(add)) continue
-      const main = anchorForAdditional(add)
-      if (!main) continue
-      await sleep(BETWEEN_CREATE_TASK_MS)
-      const paired = await createTaskAndPoll(
-        productId,
-        variantId,
-        [buildFile(main), buildFile(add)],
-        headers
-      )
-      if (paired.ok) mergeMockups(urlByPlacement, paired.mockups)
-      else console.warn('[mockup-images] anchor+additional failed', add, paired)
-    }
-
-    // 5) Any primary still missing: single-placement attempt
-    for (const p of primaryKeys) {
-      if (urlByPlacement.get(p)) continue
-      await sleep(BETWEEN_CREATE_TASK_MS)
-      const one = await createTaskAndPoll(productId, variantId, [buildFile(p)], headers)
-      if (one.ok) mergeMockups(urlByPlacement, one.mockups)
-    }
-
-    const placements: PlacementMockup[] = placementKeys.map((placement) => ({
-      placement,
-      label: availablePlacements[placement] ?? placement,
-      mockup_url: urlByPlacement.get(placement) ?? '',
-    }))
-
+    const placements = placementsPayload()
     const anyUrl = placements.some((p) => p.mockup_url)
-    if (!anyUrl) {
-      return NextResponse.json(
-        {
-          error: 'Mockup generation failed for all placements',
-          product_id: productId,
-          variant_id: variantId,
-          placements,
-        },
-        { status: 502 }
-      )
-    }
 
     return NextResponse.json({
       product_id: productId,
       variant_id: variantId,
       placements,
+      mockup_generation_unavailable: !anyUrl,
     })
   } catch (e) {
     console.error('[mockup-images]', e)
