@@ -45,6 +45,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
   /** True while Mockup Generator is producing per-placement reference images. */
   const [mockupImagesLoading, setMockupImagesLoading] = useState(false)
+  /** Printful did not return mockup URLs; preview uses catalog images per tab. */
+  const [mockupCatalogOnly, setMockupCatalogOnly] = useState(false)
 
   const isDraftEditor = Boolean(draftId)
 
@@ -90,6 +92,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     const baseModelId = localDraft?.base_model_id
     if (!baseModelId || typeof baseModelId !== 'string' || baseModelId.trim() === '') {
       setPlacementMockups([])
+      setMockupCatalogOnly(false)
       setCatalogFallbackUrl('')
       setVariantOptions([])
       setPrintfulVariantId(null)
@@ -160,13 +163,23 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         if (!mockRes || !mockRes.ok) return Promise.reject(new Error('mockup'))
         return mockRes.json()
       })
-      .then((body: { placements?: PlacementTab[] }) => {
-        if (cancelled || !body?.placements) return
-        const withUrl = body.placements.filter((p) => p.mockup_url)
-        setPlacementMockups(withUrl)
-      })
+      .then(
+        (body: {
+          placements?: PlacementTab[]
+          mockup_generation_unavailable?: boolean
+        }) => {
+          if (cancelled || !body?.placements) return
+          setMockupCatalogOnly(Boolean(body.mockup_generation_unavailable))
+          setPlacementMockups(
+            body.placements.length ? body.placements : []
+          )
+        }
+      )
       .catch(() => {
-        if (!cancelled) setPlacementMockups([])
+        if (!cancelled) {
+          setPlacementMockups([])
+          setMockupCatalogOnly(false)
+        }
       })
       .finally(() => {
         if (!cancelled) setMockupImagesLoading(false)
@@ -521,6 +534,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             authUserId={user?.id ?? null}
             placementMockups={placementMockups.length > 0 ? placementMockups : null}
             catalogFallbackUrl={catalogFallbackUrl || null}
+            catalogOnlyReference={mockupCatalogOnly}
             selectedModelName={selectedModelName}
             mockupImagesLoading={mockupImagesLoading}
             onImageSelect={(url) => setDesignData((prev) => ({ ...prev, imageUrl: url }))}

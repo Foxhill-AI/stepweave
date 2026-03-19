@@ -23,6 +23,8 @@ interface PreviewWorkspaceProps {
   placementMockups?: PlacementTab[] | null
   /** Catalog image when mockups are loading or failed. */
   catalogFallbackUrl?: string | null
+  /** True when API returned placements but no mockup URLs (catalog used per tab). */
+  catalogOnlyReference?: boolean
   selectedModelName?: string | null
   mockupImagesLoading?: boolean
   draftId?: number
@@ -42,6 +44,7 @@ export default function PreviewWorkspace({
   mode,
   placementMockups,
   catalogFallbackUrl,
+  catalogOnlyReference,
   selectedModelName,
   mockupImagesLoading,
   draftId,
@@ -195,6 +198,11 @@ export default function PreviewWorkspace({
           {mockupImagesLoading && (
             <p className="preview-reference-loading" role="status">
               Generating mockups from Printful…
+            </p>
+          )}
+          {!mockupImagesLoading && catalogOnlyReference && referenceUrl && (
+            <p className="preview-reference-catalog-note" role="status">
+              Using catalog photos — Printful mockups are not available for this product in the API.
             </p>
           )}
           {referenceUrl && (
