@@ -1,27 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { PRINTFUL_BASE } from '@/lib/printful/mockupTask'
+import type { PrintfulPrintfilesResult } from '@/lib/printful/mockupTask'
 import {
-  createTaskAndPoll,
-  mergeMockups,
-  PRINTFUL_BASE,
-  type PrintfulPrintfilesResult,
-} from '@/lib/printful/mockupTask'
-import {
-  buildMockupFileEntries,
   buildPrintfileById,
   resolvePlacementKeys,
 } from '@/lib/printful/buildMockupFiles'
 
-const DEFAULT_PLACEHOLDER_IMAGE_URL = 'https://files.cdn.printful.com/upload/product-catalog-img/b7/b7427e7543b29d4f52a8bd5e4d80c946_l'
-
-export type PlacementMockup = {
+export type PlacementMeta = {
   placement: string
   label: string
-  mockup_url: string
+  area_width: number
+  area_height: number
 }
 
 /**
- * GET /api/printful/products/[id]/mockup-images?variant_id=
- * Catalog mockups using placeholder (or env) image — populates placement tabs when no user pattern yet.
+ * GET /api/printful/products/[id]/placements?variant_id=
+ * Print-area metadata for the placement editor (no mockup generation).
  */
 export async function GET(
   request: NextRequest,
@@ -45,12 +39,6 @@ export async function GET(
   const { searchParams } = new URL(request.url)
   const variantIdParam = searchParams.get('variant_id')
 
-  const placeholderUrl =
-    process.env.PRINTFUL_PLACEHOLDER_IMAGE_URL?.trim() ||
-    (process.env.NEXT_PUBLIC_SITE_URL
-      ? `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')}/api/printful/placeholder-image`
-      : DEFAULT_PLACEHOLDER_IMAGE_URL)
-
   const headers: HeadersInit = {
     Authorization: `Bearer ${apiKey.trim()}`,
     'Content-Type': 'application/json',
@@ -64,11 +52,9 @@ export async function GET(
     ])
 
     if (!productRes.ok) {
-      console.error('[mockup-images] product', productRes.status, await productRes.text())
       return NextResponse.json({ error: 'Failed to fetch product' }, { status: 502 })
     }
     if (!printfilesRes.ok) {
-      console.error('[mockup-images] printfiles', printfilesRes.status, await printfilesRes.text())
       return NextResponse.json({ error: 'Failed to fetch printfiles' }, { status: 502 })
     }
 
@@ -90,7 +76,7 @@ export async function GET(
     } else if (variants.length > 0) {
       variantId = variants[0].id
     } else {
-      return NextResponse.json({ error: 'No variants found for product' }, { status: 404 })
+      return NextResponse.json({ error: 'No variants found' }, { status: 404 })
     }
 
     if (!variantIds.has(variantId)) {
@@ -105,48 +91,29 @@ export async function GET(
       variantId
     )
     if (!variantMapping || placementKeys.length === 0) {
-      return NextResponse.json(
-        { error: 'No print placements for this variant', placements: [] },
-        { status: 200 }
-      )
+      return NextResponse.json({ product_id: productId, variant_id: variantId, placements: [] })
     }
 
     const printfileById = buildPrintfileById(printfilesResult)
-    const allFiles = buildMockupFileEntries({
-      placementKeys,
-      variantMapping,
-      printfileById,
-      imageUrl: placeholderUrl,
-      placementTransforms: {},
-    })
 
-    const urlByPlacement = new Map<string, string>()
-
-    const placementsPayload = (): PlacementMockup[] =>
-      placementKeys.map((placement) => ({
+    const placements: PlacementMeta[] = placementKeys.map((placement) => {
+      const pid = variantMapping.placements[placement]
+      const pf = printfileById.get(pid)
+      return {
         placement,
         label: availablePlacements[placement] ?? placement,
-        mockup_url: urlByPlacement.get(placement) ?? '',
-      }))
-
-    const batch = await createTaskAndPoll(productId, variantId, allFiles, headers)
-    if (batch.ok) {
-      mergeMockups(urlByPlacement, batch.mockups)
-    } else {
-      console.warn('[mockup-images] batch failed:', batch.reason)
-    }
-
-    const placements = placementsPayload()
-    const anyUrl = placements.some((p) => p.mockup_url)
+        area_width: pf?.width ?? 1800,
+        area_height: pf?.height ?? 1800,
+      }
+    })
 
     return NextResponse.json({
       product_id: productId,
       variant_id: variantId,
       placements,
-      mockup_generation_unavailable: !anyUrl,
     })
   } catch (e) {
-    console.error('[mockup-images]', e)
-    return NextResponse.json({ error: 'Unexpected error generating mockups' }, { status: 500 })
+    console.error('[placements]', e)
+    return NextResponse.json({ error: 'Unexpected error' }, { status: 500 })
   }
 }
