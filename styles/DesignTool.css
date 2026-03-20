@@ -439,6 +439,83 @@
   background: var(--color-hover);
 }
 
+.ai-prompt-draft-hint {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #666);
+  margin: 0 0 var(--spacing-md);
+  line-height: 1.45;
+}
+
+.ai-prompt-error {
+  font-size: 0.875rem;
+  color: #b42318;
+  margin: var(--spacing-sm) 0 0;
+}
+
+.ai-prompt-btn.primary:disabled,
+.ai-prompt-btn.secondary:disabled,
+.ai-prompt-attach-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ai-prompt-variants {
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.ai-prompt-variants-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0 0 var(--spacing-sm);
+  color: var(--color-text);
+}
+
+.ai-prompt-variants-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.ai-prompt-variant-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  background: var(--color-background);
+  cursor: pointer;
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.ai-prompt-variant-card:hover:not(:disabled) {
+  border-color: var(--color-primary);
+}
+
+.ai-prompt-variant-card:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.ai-prompt-variant-img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+
+.ai-prompt-variant-cta {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  text-align: center;
+  background: var(--color-background-light);
+  color: var(--color-primary);
+}
+
 /* Media uploader UI */
 .media-uploader {
   border: 2px dashed var(--color-border);

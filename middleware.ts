@@ -3,6 +3,16 @@ import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  // Never run Supabase on Next internals or static assets — avoids edge cases where
+  // the matcher regex misses a path and breaks chunk loading (stuck "Loading…" in client components).
+  if (
+    pathname.startsWith('/_next/') ||
+    pathname === '/favicon.ico'
+  ) {
+    return NextResponse.next()
+  }
+
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -33,5 +43,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    /*
+     * Exclude Next.js internals and common static files so JS chunks always load.
+     * See: https://nextjs.org/docs/app/building-your-application/routing/middleware#matcher
+     */
+    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+  ],
 }

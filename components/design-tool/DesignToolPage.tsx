@@ -216,6 +216,30 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     [draftId, designData, localDraft?.design_state]
   )
 
+  const handleAiPatternApplied = useCallback(
+    async (storagePath: string) => {
+      if (!draftId) return
+      const ok = await updateDesignDraft(draftId, {
+        pattern_image_url: storagePath,
+        pattern_source_type: 'ai_generated',
+      })
+      if (ok) {
+        setLocalDraft((prev) =>
+          prev
+            ? {
+                ...prev,
+                pattern_image_url: storagePath,
+                pattern_source_type: 'ai_generated',
+              }
+            : null
+        )
+      } else {
+        throw new Error('update failed')
+      }
+    },
+    [draftId]
+  )
+
   const handlePatternUploaded = useCallback(
     async (path: string) => {
       if (!draftId) return
@@ -349,7 +373,10 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
           <ModeTabs mode={mode} onModeChange={setMode} />
           <div className="design-tool-panel-content">
             {mode === 'ai' ? (
-              <AIPromptPanel />
+              <AIPromptPanel
+                draftId={draftId}
+                onPatternApplied={handleAiPatternApplied}
+              />
             ) : (
               <>
                 {isDraftEditor && variantOptions.length > 0 && (
