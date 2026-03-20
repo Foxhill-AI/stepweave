@@ -1,11 +1,17 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import ModeTabs, { type DesignToolMode } from './ModeTabs'
 import AIPromptPanel from './AIPromptPanel'
 import ManualEditorPlaceholder from './ManualEditorPlaceholder'
+import PlacementEditorPanel from './PlacementEditorPanel'
 import PreviewWorkspace, { type PlacementTab } from './PreviewWorkspace'
+import {
+  mergePrintfulPlacementsIntoDesignState,
+  parsePrintfulPlacements,
+  type PrintfulPlacementsState,
+} from '@/lib/designDraftState'
 import { useAuth } from '@/components/AuthProvider'
 import { getCategories, createProduct, updateDesignDraft } from '@/lib/supabaseClient'
 import type { CategoryRow, DesignDraftRow } from '@/lib/supabaseClient'
@@ -47,6 +53,12 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [mockupImagesLoading, setMockupImagesLoading] = useState(false)
   /** Printful did not return mockup URLs; preview uses catalog images per tab. */
   const [mockupCatalogOnly, setMockupCatalogOnly] = useState(false)
+  /** POST /preview-mockups (user pattern + design_state positions). */
+  const [printfulPreviewLoading, setPrintfulPreviewLoading] = useState(false)
+  const [placementSaveLoading, setPlacementSaveLoading] = useState(false)
+
+  const designDataRef = useRef(designData)
+  designDataRef.current = designData
 
   const isDraftEditor = Boolean(draftId)
 
@@ -197,24 +209,71 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const handlePrintfulVariantChange = useCallback(
     async (nextId: number) => {
       setPrintfulVariantId(nextId)
-      const nextState = {
-        ...(typeof designData === 'object' && designData !== null ? designData : {}),
+      const nextState: Record<string, unknown> = {
+        ...designDataRef.current,
         printful_variant_id: nextId,
       }
       setDesignData(nextState)
       if (draftId) {
-        const merged = {
-          ...((localDraft?.design_state &&
-            typeof localDraft.design_state === 'object' &&
-            localDraft.design_state) as Record<string, unknown>),
-          printful_variant_id: nextId,
-        }
-        await updateDesignDraft(draftId, { design_state: merged })
-        setLocalDraft((prev) => (prev ? { ...prev, design_state: merged } : null))
+        await updateDesignDraft(draftId, { design_state: nextState })
+        setLocalDraft((prev) => (prev ? { ...prev, design_state: nextState } : null))
       }
     },
-    [draftId, designData, localDraft?.design_state]
+    [draftId]
   )
+
+  const handlePlacementsStateChange = useCallback((next: PrintfulPlacementsState) => {
+    setDesignData((prev) =>
+      mergePrintfulPlacementsIntoDesignState(
+        { ...(typeof prev === 'object' && prev !== null ? prev : {}) },
+        next
+      )
+    )
+  }, [])
+
+  const handleSavePlacementLayout = useCallback(async () => {
+    if (!draftId) return
+    setPlacementSaveLoading(true)
+    try {
+      const state = designDataRef.current
+      const ok = await updateDesignDraft(draftId, { design_state: state })
+      if (ok) {
+        setLocalDraft((prev) => (prev ? { ...prev, design_state: state } : null))
+      }
+    } finally {
+      setPlacementSaveLoading(false)
+    }
+  }, [draftId])
+
+  const handleRefreshPrintfulPreview = useCallback(async () => {
+    if (!draftId) return
+    setPrintfulPreviewLoading(true)
+    setMockupCatalogOnly(false)
+    try {
+      await updateDesignDraft(draftId, { design_state: designDataRef.current })
+      setLocalDraft((prev) =>
+        prev ? { ...prev, design_state: designDataRef.current } : null
+      )
+      const res = await fetch(`/api/design-drafts/${draftId}/preview-mockups`, {
+        method: 'POST',
+      })
+      const body = (await res.json().catch(() => ({}))) as {
+        placements?: PlacementTab[]
+        mockup_generation_unavailable?: boolean
+        error?: string
+      }
+      if (!res.ok) {
+        console.warn('[preview-mockups]', body.error ?? res.status)
+        setPlacementMockups([])
+        setMockupCatalogOnly(true)
+        return
+      }
+      setMockupCatalogOnly(Boolean(body.mockup_generation_unavailable))
+      setPlacementMockups(body.placements?.length ? body.placements : [])
+    } finally {
+      setPrintfulPreviewLoading(false)
+    }
+  }, [draftId])
 
   const handleAiPatternApplied = useCallback(
     async (storagePath: string) => {
@@ -372,41 +431,60 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         >
           <ModeTabs mode={mode} onModeChange={setMode} />
           <div className="design-tool-panel-content">
+            {isDraftEditor && variantOptions.length > 0 && (
+              <div className="design-tool-variant-row">
+                <label htmlFor="design-tool-printful-variant" className="design-tool-label">
+                  Shoe color &amp; size (Printful variant)
+                </label>
+                <select
+                  id="design-tool-printful-variant"
+                  className="design-tool-select"
+                  value={printfulVariantId ?? ''}
+                  onChange={(e) => {
+                    const id = Number(e.target.value)
+                    if (Number.isFinite(id)) void handlePrintfulVariantChange(id)
+                  }}
+                >
+                  {variantOptions.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="design-tool-variant-hint">
+                  Used for print areas and mockups. Changing it reloads catalog preview; save layout
+                  if you adjusted placements.
+                </p>
+              </div>
+            )}
+
             {mode === 'ai' ? (
               <AIPromptPanel
                 draftId={draftId}
                 onPatternApplied={handleAiPatternApplied}
               />
             ) : (
-              <>
-                {isDraftEditor && variantOptions.length > 0 && (
-                  <div className="design-tool-variant-row">
-                    <label htmlFor="design-tool-printful-variant" className="design-tool-label">
-                      Shoe color &amp; size (Printful variant)
-                    </label>
-                    <select
-                      id="design-tool-printful-variant"
-                      className="design-tool-select"
-                      value={printfulVariantId ?? ''}
-                      onChange={(e) => {
-                        const id = Number(e.target.value)
-                        if (Number.isFinite(id)) void handlePrintfulVariantChange(id)
-                      }}
-                    >
-                      {variantOptions.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="design-tool-variant-hint">
-                      Mockups use this variant for all placements. Changing it reloads reference images.
-                    </p>
-                  </div>
-                )}
-                <ManualEditorPlaceholder />
-              </>
+              <ManualEditorPlaceholder />
             )}
+
+            {isDraftEditor &&
+              localDraft?.base_model_id &&
+              typeof localDraft.base_model_id === 'string' &&
+              printfulVariantId != null && (
+                <PlacementEditorPanel
+                  productId={localDraft.base_model_id.trim()}
+                  variantId={printfulVariantId}
+                  placementsState={parsePrintfulPlacements(designData)}
+                  onPlacementsStateChange={handlePlacementsStateChange}
+                  onSaveLayout={handleSavePlacementLayout}
+                  onRefreshPrintfulPreview={handleRefreshPrintfulPreview}
+                  hasPatternImage={Boolean(
+                    localDraft.pattern_image_url && String(localDraft.pattern_image_url).trim()
+                  )}
+                  saveLoading={placementSaveLoading}
+                  previewLoading={printfulPreviewLoading}
+                />
+              )}
           </div>
           <div className="design-tool-product-form">
             {isDraftEditor ? (
@@ -563,7 +641,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             catalogFallbackUrl={catalogFallbackUrl || null}
             catalogOnlyReference={mockupCatalogOnly}
             selectedModelName={selectedModelName}
-            mockupImagesLoading={mockupImagesLoading}
+            mockupImagesLoading={mockupImagesLoading || printfulPreviewLoading}
             onImageSelect={(url) => setDesignData((prev) => ({ ...prev, imageUrl: url }))}
             onPatternUploaded={handlePatternUploaded}
             onImageClear={() => {

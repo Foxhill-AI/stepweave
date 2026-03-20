@@ -281,6 +281,17 @@
   border-color: var(--color-primary);
 }
 
+.design-tool-btn-secondary {
+  background: var(--color-background-light);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.design-tool-btn-secondary:hover:not(:disabled) {
+  background: var(--color-hover);
+  border-color: var(--color-primary);
+}
+
 .design-tool-btn-publish {
   background: var(--color-primary);
   color: var(--color-text-white);
@@ -514,6 +525,79 @@
   text-align: center;
   background: var(--color-background-light);
   color: var(--color-primary);
+}
+
+/* Print placement editor (design_state.printful_placements) */
+.placement-editor-panel {
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.placement-editor-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 var(--spacing-xs);
+}
+
+.placement-editor-hint {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #666);
+  line-height: 1.45;
+  margin: 0 0 var(--spacing-md);
+}
+
+.placement-editor-hint code {
+  font-size: 0.75rem;
+}
+
+.placement-editor-status,
+.placement-editor-msg {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #666);
+  margin: var(--spacing-sm) 0;
+}
+
+.placement-editor-error {
+  font-size: 0.875rem;
+  color: #b42318;
+  margin: var(--spacing-sm) 0;
+}
+
+.placement-editor-warn {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #666);
+  margin-top: var(--spacing-sm);
+}
+
+.placement-editor-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin: var(--spacing-md) 0;
+}
+
+.placement-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.placement-editor-field label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.placement-editor-value {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #666);
+}
+
+.placement-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
 }
 
 /* Media uploader UI */
