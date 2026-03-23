@@ -45,11 +45,17 @@ export function parse429WaitMs(responseText: string): number {
   return 65000
 }
 
+/** Optional Printful create-task fields (e.g. silhouette templates). */
+export type CreateMockupTaskOptions = {
+  option_groups?: string[]
+}
+
 export async function createTaskAndPoll(
   productId: string,
   variantId: number,
   files: FileEntry[],
-  headers: HeadersInit
+  headers: HeadersInit,
+  options?: CreateMockupTaskOptions
 ): Promise<
   | { ok: true; mockups: Array<{ placement: string; mockup_url?: string }> }
   | { ok: false; reason: string; status?: number }
@@ -57,15 +63,20 @@ export async function createTaskAndPoll(
   let createRes: Response | null = null
   let bodyText = ''
 
+  const taskRequestBody: Record<string, unknown> = {
+    variant_ids: [variantId],
+    format: 'png',
+    files,
+  }
+  if (options?.option_groups?.length) {
+    taskRequestBody.option_groups = options.option_groups
+  }
+
   for (let r = 0; r < MAX_429_RETRIES; r++) {
     createRes = await fetch(`${PRINTFUL_BASE}/mockup-generator/create-task/${productId}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        variant_ids: [variantId],
-        format: 'png',
-        files,
-      }),
+      body: JSON.stringify(taskRequestBody),
     })
     bodyText = await createRes.text()
 
@@ -83,14 +94,14 @@ export async function createTaskAndPoll(
     return { ok: false, reason: 'create-task failed', status: createRes?.status }
   }
 
-  let createBody: { result?: { task_key?: string } }
+  let parsedCreate: { result?: { task_key?: string } }
   try {
-    createBody = JSON.parse(bodyText) as { result?: { task_key?: string } }
+    parsedCreate = JSON.parse(bodyText) as { result?: { task_key?: string } }
   } catch {
     return { ok: false, reason: 'invalid create response' }
   }
 
-  const taskKey = createBody.result?.task_key
+  const taskKey = parsedCreate.result?.task_key
   if (!taskKey) {
     return { ok: false, reason: 'no task_key' }
   }

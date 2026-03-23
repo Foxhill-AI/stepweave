@@ -600,6 +600,195 @@
   margin-top: var(--spacing-md);
 }
 
+/* Visual placement canvas (Printful-style preview) */
+.placement-canvas-root {
+  margin: var(--spacing-md) 0;
+}
+
+.placement-canvas-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #666);
+  line-height: 1.4;
+  margin: 0 0 var(--spacing-sm);
+}
+
+.placement-canvas-stage {
+  position: relative;
+  width: 100%;
+  max-width: min(420px, 100%);
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: var(--border-radius, 8px);
+  border: 2px solid var(--color-border, #ddd);
+  background: linear-gradient(135deg, #f0f0f0 25%, #e4e4e4 25%, #e4e4e4 50%, #f0f0f0 50%, #f0f0f0 75%, #e4e4e4 75%);
+  background-size: 16px 16px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.placement-canvas-stage--overlay {
+  max-width: 100%;
+  margin: 0;
+  border: 2px dashed rgba(255, 255, 255, 0.95);
+  background: rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.placement-canvas-root--embedded .placement-canvas-stage--overlay {
+  border-color: rgba(0, 102, 204, 0.9);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.placement-canvas-stage[data-disabled='true'] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.placement-canvas-art {
+  position: absolute;
+  box-sizing: border-box;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.placement-canvas-art:active {
+  cursor: grabbing;
+}
+
+.placement-canvas-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.placement-canvas-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-linear-gradient(
+    -45deg,
+    #d8d8d8,
+    #d8d8d8 8px,
+    #c8c8c8 8px,
+    #c8c8c8 16px
+  );
+  color: #555;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  padding: var(--spacing-xs);
+}
+
+.placement-canvas-art-outline {
+  position: absolute;
+  inset: 0;
+  border: 2px dashed rgba(0, 102, 204, 0.85);
+  border-radius: 2px;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+
+.placement-editor-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+@media (max-width: 480px) {
+  .placement-editor-field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Shoe template editor (Printful Template option_group + overlay canvas) */
+.shoe-design-editor {
+  margin: var(--spacing-md) 0;
+}
+
+.shoe-design-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+}
+
+.shoe-design-tab {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: var(--border-radius, 8px);
+  background: var(--color-background-light, #f7f7f7);
+  color: var(--color-text, #222);
+  cursor: pointer;
+  transition: var(--transition, 0.15s ease);
+}
+
+.shoe-design-tab:hover {
+  border-color: var(--color-primary, #06c);
+  color: var(--color-primary, #06c);
+}
+
+.shoe-design-tab--active {
+  border-color: var(--color-primary, #06c);
+  background: rgba(0, 102, 204, 0.08);
+  color: var(--color-primary, #06c);
+}
+
+.shoe-design-tab-dims {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.shoe-design-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #666);
+  line-height: 1.4;
+  margin: 0 0 var(--spacing-sm);
+}
+
+.shoe-design-composite {
+  position: relative;
+  width: 100%;
+  max-width: min(440px, 100%);
+  margin: 0 auto var(--spacing-md);
+}
+
+.shoe-design-template-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--border-radius, 8px);
+  border: 1px solid var(--color-border, #ddd);
+  background: #fafafa;
+}
+
+.shoe-design-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.shoe-design-overlay-inner {
+  pointer-events: auto;
+  width: min(82%, 300px);
+  max-width: 92%;
+}
+
 /* Media uploader UI */
 .media-uploader {
   border: 2px dashed var(--color-border);

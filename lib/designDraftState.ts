@@ -64,6 +64,38 @@ export function compactToPrintfulPosition(
   }
 }
 
+/**
+ * Keep artwork fully inside the print area (Printful position constraints).
+ */
+export function clampCompactTransformInArea(
+  areaWidth: number,
+  areaHeight: number,
+  t: PlacementCompactTransform
+): PlacementCompactTransform {
+  const s = Math.min(1, Math.max(0.05, t.s))
+  const w = areaWidth * s
+  const h = areaHeight * s
+  const maxDx = Math.max(0, (areaWidth - w) / 2)
+  const maxDy = Math.max(0, (areaHeight - h) / 2)
+  const dx = Math.min(maxDx, Math.max(-maxDx, t.dx))
+  const dy = Math.min(maxDy, Math.max(-maxDy, t.dy))
+  return { s, dx, dy }
+}
+
+/** Merge a patch then clamp so the box stays inside the print area. */
+export function mergeAndClampPlacement(
+  areaWidth: number,
+  areaHeight: number,
+  prev: PlacementCompactTransform,
+  patch: Partial<PlacementCompactTransform>
+): PlacementCompactTransform {
+  return clampCompactTransformInArea(areaWidth, areaHeight, {
+    s: patch.s ?? prev.s,
+    dx: patch.dx ?? prev.dx,
+    dy: patch.dy ?? prev.dy,
+  })
+}
+
 /** Merge placement transforms into full design_state object. */
 export function mergePrintfulPlacementsIntoDesignState(
   designState: Record<string, unknown>,
