@@ -222,14 +222,24 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     [draftId]
   )
 
-  const handlePlacementsStateChange = useCallback((next: PrintfulPlacementsState) => {
-    setDesignData((prev) =>
-      mergePrintfulPlacementsIntoDesignState(
-        { ...(typeof prev === 'object' && prev !== null ? prev : {}) },
-        next
-      )
-    )
-  }, [])
+  const handlePlacementsStateChange = useCallback(
+    (
+      nextOrUpdater:
+        | PrintfulPlacementsState
+        | ((prev: PrintfulPlacementsState) => PrintfulPlacementsState)
+    ) => {
+      setDesignData((prev) => {
+        const full = { ...(typeof prev === 'object' && prev !== null ? prev : {}) }
+        const currentPlacements = parsePrintfulPlacements(full)
+        const nextPlacements =
+          typeof nextOrUpdater === 'function'
+            ? nextOrUpdater(currentPlacements)
+            : nextOrUpdater
+        return mergePrintfulPlacementsIntoDesignState(full, nextPlacements)
+      })
+    },
+    []
+  )
 
   const handleSavePlacementLayout = useCallback(async () => {
     if (!draftId) return
@@ -481,6 +491,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   hasPatternImage={Boolean(
                     localDraft.pattern_image_url && String(localDraft.pattern_image_url).trim()
                   )}
+                  patternImageUrl={patternImageSignedUrl}
                   saveLoading={placementSaveLoading}
                   previewLoading={printfulPreviewLoading}
                 />

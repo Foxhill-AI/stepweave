@@ -1,22 +1,31 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { PlacementMeta } from '@/app/api/printful/products/[id]/placements/route'
 import type { PrintfulPlacementsState } from '@/lib/designDraftState'
-import { updatePlacementTransform } from '@/lib/designDraftState'
+import { mergeAndClampPlacement, updatePlacementTransform } from '@/lib/designDraftState'
+import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
+import PlacementCanvasPreview from './PlacementCanvasPreview'
+import ShoeDesignEditor from './ShoeDesignEditor'
 
 interface PlacementEditorPanelProps {
   productId: string
   variantId: number | null
   /** Current transforms from design_state */
   placementsState: PrintfulPlacementsState
-  /** Update React state (design_state) */
-  onPlacementsStateChange: (next: PrintfulPlacementsState) => void
+  /** Update React state (design_state); functional form avoids stale state while dragging */
+  onPlacementsStateChange: (
+    nextOrUpdater:
+      | PrintfulPlacementsState
+      | ((prev: PrintfulPlacementsState) => PrintfulPlacementsState)
+  ) => void
   /** Persist design_state to Supabase */
   onSaveLayout: () => Promise<void>
   /** Run Printful mockup job with pattern + transforms */
   onRefreshPrintfulPreview: () => Promise<void>
   hasPatternImage: boolean
+  /** Signed/public URL for live canvas (optional; placeholder if missing) */
+  patternImageUrl?: string | null
   saveLoading?: boolean
   previewLoading?: boolean
 }
@@ -29,12 +38,15 @@ export default function PlacementEditorPanel({
   onSaveLayout,
   onRefreshPrintfulPreview,
   hasPatternImage,
+  patternImageUrl = null,
   saveLoading = false,
   previewLoading = false,
 }: PlacementEditorPanelProps) {
   const [meta, setMeta] = useState<PlacementMeta[]>([])
   const [metaLoading, setMetaLoading] = useState(false)
   const [metaError, setMetaError] = useState<string | null>(null)
+  const [templateRows, setTemplateRows] = useState<PlacementTemplateRow[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
   const [activePlacement, setActivePlacement] = useState<string>('')
   const [localMsg, setLocalMsg] = useState<string | null>(null)
 
@@ -70,17 +82,77 @@ export default function PlacementEditorPanel({
     }
   }, [productId, variantId])
 
-  const current = meta.find((m) => m.placement === activePlacement)
-  const t = placementsState[activePlacement] ?? { s: 1, dx: 0, dy: 0 }
+  useEffect(() => {
+    if (!productId || !variantId) {
+      setTemplateRows([])
+      return
+    }
+    let cancelled = false
+    setTemplatesLoading(true)
+    fetch(
+      `/api/printful/products/${encodeURIComponent(productId)}/templates?variant_id=${variantId}`
+    )
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('templates'))))
+      .then((body: { placements?: PlacementTemplateRow[] }) => {
+        if (cancelled) return
+        setTemplateRows(body.placements ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setTemplateRows([])
+      })
+      .finally(() => {
+        if (!cancelled) setTemplatesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [productId, variantId])
 
+  const templateWithUrl = templateRows.filter((r) => r.template_url?.trim())
+  const useShoeTemplateUi = !templatesLoading && templateWithUrl.length > 0
+
+  const displayPlacement = useMemo(() => {
+    if (useShoeTemplateUi && templateWithUrl.length > 0) {
+      return templateWithUrl.some((r) => r.placement === activePlacement)
+        ? activePlacement
+        : templateWithUrl[0].placement
+    }
+    return activePlacement
+  }, [useShoeTemplateUi, templateWithUrl, activePlacement])
+
+  useEffect(() => {
+    if (useShoeTemplateUi && displayPlacement !== activePlacement) {
+      setActivePlacement(displayPlacement)
+    }
+  }, [useShoeTemplateUi, displayPlacement, activePlacement])
+
+  const editingPlacement = displayPlacement
+  const current = meta.find((m) => m.placement === activePlacement)
+  const currentTemplate = templateWithUrl.find((r) => r.placement === editingPlacement)
+  const t = placementsState[editingPlacement] ?? { s: 1, dx: 0, dy: 0 }
+
+  /** Clamp transforms to print area using either placement meta or template row dimensions. */
   const patchActive = useCallback(
     (patch: Partial<{ s: number; dx: number; dy: number }>) => {
-      if (!activePlacement) return
-      onPlacementsStateChange(
-        updatePlacementTransform(placementsState, activePlacement, patch)
-      )
+      if (!editingPlacement) return
+      const dims =
+        currentTemplate ??
+        meta.find((m) => m.placement === editingPlacement)
+      onPlacementsStateChange((prev) => {
+        if (!dims) {
+          return updatePlacementTransform(prev, editingPlacement, patch)
+        }
+        const prevT = prev[editingPlacement] ?? { s: 1, dx: 0, dy: 0 }
+        const merged = mergeAndClampPlacement(
+          dims.area_width,
+          dims.area_height,
+          prevT,
+          patch
+        )
+        return updatePlacementTransform(prev, editingPlacement, merged)
+      })
     },
-    [activePlacement, placementsState, onPlacementsStateChange]
+    [editingPlacement, onPlacementsStateChange, currentTemplate, meta]
   )
 
   const handleSave = async () => {
@@ -109,9 +181,9 @@ export default function PlacementEditorPanel({
     <div className="placement-editor-panel" aria-label="Print placement editor">
       <h3 className="placement-editor-title">Print placement (design_state)</h3>
       <p className="placement-editor-hint">
-        Adjust how your pattern fits each print area. Values are stored in{' '}
-        <code>design_state.printful_placements</code>. Use &quot;Product preview&quot; to render
-        mockups with your uploaded/generated pattern.
+        Adjust how your pattern fits each print area (visual editor + fine controls). Stored in{' '}
+        <code>design_state.printful_placements</code>. Use &quot;Update product preview&quot; to
+        render Printful mockups.
       </p>
 
       {metaLoading && <p className="placement-editor-status">Loading placements…</p>}
@@ -120,62 +192,96 @@ export default function PlacementEditorPanel({
           {metaError}
         </p>
       )}
+      {templatesLoading && (
+        <p className="placement-editor-status" role="status">
+          Loading Printful silhouette templates…
+        </p>
+      )}
 
       {!metaLoading && meta.length > 0 && (
         <>
-          <label className="design-tool-label" htmlFor="placement-editor-select">
-            Placement
-          </label>
-          <select
-            id="placement-editor-select"
-            className="design-tool-select"
-            value={activePlacement}
-            onChange={(e) => setActivePlacement(e.target.value)}
-          >
-            {meta.map((m) => (
-              <option key={m.placement} value={m.placement}>
-                {m.label} ({m.area_width}×{m.area_height}px)
-              </option>
-            ))}
-          </select>
+          {!useShoeTemplateUi && (
+            <>
+              <label className="design-tool-label" htmlFor="placement-editor-select">
+                Placement
+              </label>
+              <select
+                id="placement-editor-select"
+                className="design-tool-select"
+                value={activePlacement}
+                onChange={(e) => setActivePlacement(e.target.value)}
+              >
+                {meta.map((m) => (
+                  <option key={m.placement} value={m.placement}>
+                    {m.label} ({m.area_width}×{m.area_height}px)
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
-          {current && (
+          {useShoeTemplateUi && currentTemplate && (
+            <ShoeDesignEditor
+              templates={templateRows}
+              activePlacement={editingPlacement}
+              onActivePlacementChange={setActivePlacement}
+              transform={t}
+              patternImageUrl={patternImageUrl}
+              onPlacementChange={patchActive}
+            />
+          )}
+
+          {!useShoeTemplateUi && current && (
+            <PlacementCanvasPreview
+              areaWidth={current.area_width}
+              areaHeight={current.area_height}
+              s={t.s}
+              dx={t.dx}
+              dy={t.dy}
+              patternUrl={patternImageUrl}
+              onChange={patchActive}
+            />
+          )}
+
+          {(current || currentTemplate) && (
             <div className="placement-editor-controls">
-              <div className="placement-editor-field">
-                <label htmlFor="pe-scale">Scale in print area</label>
-                <input
-                  id="pe-scale"
-                  type="range"
-                  min={5}
-                  max={100}
-                  value={Math.round(t.s * 100)}
-                  onChange={(e) =>
-                    patchActive({ s: Math.max(0.05, Number(e.target.value) / 100) })
-                  }
-                />
-                <span className="placement-editor-value">{Math.round(t.s * 100)}%</span>
+                <div className="placement-editor-field">
+                  <label htmlFor="pe-scale">Scale in print area</label>
+                  <input
+                    id="pe-scale"
+                    type="range"
+                    min={5}
+                    max={100}
+                    value={Math.round(t.s * 100)}
+                    onChange={(e) =>
+                      patchActive({ s: Math.max(0.05, Number(e.target.value) / 100) })
+                    }
+                  />
+                  <span className="placement-editor-value">{Math.round(t.s * 100)}%</span>
+                </div>
+                <div className="placement-editor-field-row">
+                  <div className="placement-editor-field">
+                    <label htmlFor="pe-dx">Offset X (px)</label>
+                    <input
+                      id="pe-dx"
+                      type="number"
+                      className="design-tool-input"
+                      value={t.dx}
+                      onChange={(e) => patchActive({ dx: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="placement-editor-field">
+                    <label htmlFor="pe-dy">Offset Y (px)</label>
+                    <input
+                      id="pe-dy"
+                      type="number"
+                      className="design-tool-input"
+                      value={t.dy}
+                      onChange={(e) => patchActive({ dy: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="placement-editor-field">
-                <label htmlFor="pe-dx">Offset X (px)</label>
-                <input
-                  id="pe-dx"
-                  type="number"
-                  className="design-tool-input"
-                  value={t.dx}
-                  onChange={(e) => patchActive({ dx: Number(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="placement-editor-field">
-                <label htmlFor="pe-dy">Offset Y (px)</label>
-                <input
-                  id="pe-dy"
-                  type="number"
-                  className="design-tool-input"
-                  value={t.dy}
-                  onChange={(e) => patchActive({ dy: Number(e.target.value) || 0 })}
-                />
-              </div>
-            </div>
           )}
 
           <div className="placement-editor-actions">
