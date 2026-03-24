@@ -177,10 +177,19 @@ export async function POST(
 
   const batch = await createTaskAndPoll(productId, variantId, files, headers)
   const urlByPlacement = new Map<string, string>()
+  let mockupErrorReason: string | undefined
   if (batch.ok) {
     mergeMockups(urlByPlacement, batch.mockups)
   } else {
-    console.warn('[preview-mockups] batch failed:', batch.reason)
+    mockupErrorReason = batch.reason
+    console.error('[preview-mockups] Printful task failed —', {
+      reason: batch.reason,
+      status: 'status' in batch ? batch.status : undefined,
+      productId,
+      variantId,
+      placements: files.map((f) => f.placement),
+      files,
+    })
   }
 
   const placements: PreviewMockupPlacement[] = placementKeys.map((placement) => ({
@@ -196,5 +205,6 @@ export async function POST(
     variant_id: variantId,
     placements,
     mockup_generation_unavailable: !anyUrl,
+    ...(mockupErrorReason ? { mockup_error: mockupErrorReason } : {}),
   })
 }

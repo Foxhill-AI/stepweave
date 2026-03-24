@@ -270,6 +270,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       const body = (await res.json().catch(() => ({}))) as {
         placements?: PlacementTab[]
         mockup_generation_unavailable?: boolean
+        mockup_error?: string
         error?: string
       }
       if (!res.ok) {
@@ -277,6 +278,9 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         setPlacementMockups([])
         setMockupCatalogOnly(true)
         return
+      }
+      if (body.mockup_error) {
+        console.error('[preview-mockups] Printful task error:', body.mockup_error, body)
       }
       setMockupCatalogOnly(Boolean(body.mockup_generation_unavailable))
       setPlacementMockups(body.placements?.length ? body.placements : [])
