@@ -789,6 +789,13 @@
   max-width: 92%;
 }
 
+/* When Printful provides exact print_area bounds, fill the overlay precisely. */
+.shoe-design-overlay-inner--exact {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
 /* Media uploader UI */
 .media-uploader {
   border: 2px dashed var(--color-border);
@@ -1121,9 +1128,38 @@
 }
 
 .preview-reference-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) 0;
+  margin: 0 0 var(--spacing-sm);
+}
+
+.preview-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--color-border, #ddd);
+  border-top-color: var(--color-primary, #06c);
+  border-radius: 50%;
+  animation: preview-spin 0.8s linear infinite;
+}
+
+@keyframes preview-spin {
+  to { transform: rotate(360deg); }
+}
+
+.preview-loading-message {
   font-size: 0.875rem;
   color: var(--color-text-muted, #666);
-  margin: 0 0 var(--spacing-sm);
+  text-align: center;
+}
+
+.preview-loading-timeout-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-light, #999);
+  text-align: center;
+  line-height: 1.4;
 }
 
 .preview-reference-catalog-note {

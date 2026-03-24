@@ -57,6 +57,7 @@ export default function PreviewWorkspace({
   const tabs = placementMockups?.length ? placementMockups : null
   const [activePlacement, setActivePlacement] = useState<string>('')
   const [isDragging, setIsDragging] = useState(false)
+  const [loadingPhase, setLoadingPhase] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -71,6 +72,28 @@ export default function PreviewWorkspace({
       setActivePlacement(keys[0])
     }
   }, [tabs, activePlacement])
+
+  useEffect(() => {
+    if (!mockupImagesLoading) {
+      setLoadingPhase(0)
+      return
+    }
+    setLoadingPhase(0)
+    const t1 = setTimeout(() => setLoadingPhase(1), 10000)
+    const t2 = setTimeout(() => setLoadingPhase(2), 20000)
+    const t3 = setTimeout(() => setLoadingPhase(3), 30000)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
+    }
+  }, [mockupImagesLoading])
+
+  const LOADING_MESSAGES = [
+    'Working on your mockups…',
+    'Almost there…',
+    'Just a moment more…',
+  ]
 
   const useStorageUpload = Boolean(draftId && authUserId && onPatternUploaded)
 
@@ -196,9 +219,17 @@ export default function PreviewWorkspace({
         >
           <span className="preview-reference-label">Product reference</span>
           {mockupImagesLoading && (
-            <p className="preview-reference-loading" role="status">
-              Generating mockups from Printful…
-            </p>
+            <div className="preview-reference-loading" role="status">
+              <div className="preview-loading-spinner" aria-hidden />
+              <span className="preview-loading-message">
+                {LOADING_MESSAGES[Math.min(loadingPhase, LOADING_MESSAGES.length - 1)]}
+              </span>
+              {loadingPhase >= 3 && (
+                <span className="preview-loading-timeout-hint">
+                  Taking longer than expected — you can keep editing and refresh later.
+                </span>
+              )}
+            </div>
           )}
           {!mockupImagesLoading && catalogOnlyReference && referenceUrl && (
             <p className="preview-reference-catalog-note" role="status">
