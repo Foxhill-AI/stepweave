@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Upload, Palette, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import type { DesignToolMode } from './ModeTabs'
+import ShoeDesignEditor from './ShoeDesignEditor'
+import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
+import type { PrintfulPlacementsState, PlacementCompactTransform } from '@/lib/designDraftState'
 
 const ACCEPT_IMAGES = 'image/*'
 const MAX_SIZE_MB = 10
@@ -39,6 +42,18 @@ interface PreviewWorkspaceProps {
   onPatternUploaded?: (path: string) => void
   imageUrl?: string | null
   onImageClear?: () => void
+  /** Template rows from Printful for shoe canvas display. */
+  templateRows?: PlacementTemplateRow[]
+  templatesLoading?: boolean
+  /** Current placement transforms from design_state */
+  placementsState?: PrintfulPlacementsState
+  /** Controlled active placement for shoe editor */
+  activePlacement?: string
+  onActivePlacementChange?: (placement: string) => void
+  /** Called when user drags/scales in the shoe canvas */
+  onPlacementsStateChange?: (
+    nextOrUpdater: PrintfulPlacementsState | ((prev: PrintfulPlacementsState) => PrintfulPlacementsState)
+  ) => void
 }
 
 function getExtension(filename: string): string {
@@ -59,8 +74,15 @@ export default function PreviewWorkspace({
   onPatternUploaded,
   imageUrl,
   onImageClear,
+  templateRows,
+  templatesLoading: _templatesLoading,
+  placementsState,
+  activePlacement: externalActivePlacement,
+  onActivePlacementChange,
+  onPlacementsStateChange,
 }: PreviewWorkspaceProps) {
   const tabs = placementMockups?.length ? placementMockups : null
+  // Internal tab active placement (for mockup tabs), separate from shoe canvas placement
   const [activePlacement, setActivePlacement] = useState<string>('')
   // Index into the current placement's [main, ...extra_mockups] gallery (0 = main)
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0)
@@ -105,6 +127,29 @@ export default function PreviewWorkspace({
   ]
 
   const useStorageUpload = Boolean(draftId && authUserId && onPatternUploaded)
+
+  // Shoe canvas computations — use templateRows passed from parent
+  const templateWithUrl = templateRows?.filter((r) => r.template_url?.trim()) ?? []
+  const useShoeCanvas = templateWithUrl.length > 0
+  const activeShoeTemplate = templateWithUrl.find(r => r.placement === externalActivePlacement) ?? templateWithUrl[0]
+  const activeTransform: PlacementCompactTransform = (placementsState && externalActivePlacement && placementsState[externalActivePlacement])
+    ? placementsState[externalActivePlacement]
+    : { s: 1, dx: 0, dy: 0 }
+
+  const handleShoeChange = useCallback(
+    (patch: Partial<PlacementCompactTransform>) => {
+      if (!onPlacementsStateChange || !externalActivePlacement) return
+      onPlacementsStateChange((prev) => ({
+        ...prev,
+        [externalActivePlacement]: {
+          s: patch.s ?? (prev[externalActivePlacement]?.s ?? 1),
+          dx: patch.dx ?? (prev[externalActivePlacement]?.dx ?? 0),
+          dy: patch.dy ?? (prev[externalActivePlacement]?.dy ?? 0),
+        },
+      }))
+    },
+    [onPlacementsStateChange, externalActivePlacement]
+  )
 
   const handleFile = async (file: File | null) => {
     setUploadError(null)
@@ -209,6 +254,19 @@ export default function PreviewWorkspace({
 
   return (
     <div className="preview-workspace preview-workspace--manual">
+      {/* Shoe canvas: large interactive view rendered here when templates are available */}
+      {useShoeCanvas && (
+        <div className="preview-shoe-canvas-section">
+          <ShoeDesignEditor
+            templates={templateWithUrl}
+            activePlacement={externalActivePlacement ?? activeShoeTemplate?.placement ?? ''}
+            onActivePlacementChange={onActivePlacementChange ?? (() => {})}
+            transform={activeTransform}
+            patternImageUrl={imageUrl}
+            onPlacementChange={handleShoeChange}
+          />
+        </div>
+      )}
       {tabs && tabs.length > 0 && (
         <div className="preview-view-tabs" role="tablist" aria-label="Print placements">
           {tabs.map((t) => (

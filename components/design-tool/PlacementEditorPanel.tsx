@@ -28,6 +28,15 @@ interface PlacementEditorPanelProps {
   patternImageUrl?: string | null
   saveLoading?: boolean
   previewLoading?: boolean
+  /** When provided, use these template rows instead of fetching internally. */
+  externalTemplateRows?: PlacementTemplateRow[]
+  /** When provided, use this loading state instead of internal. */
+  externalTemplatesLoading?: boolean
+  /** When provided, use this as controlled active placement. */
+  externalActivePlacement?: string
+  onExternalActivePlacementChange?: (placement: string) => void
+  /** When true, the canvas (ShoeDesignEditor / PlacementCanvasPreview) is rendered elsewhere — skip it here. */
+  hideCanvas?: boolean
 }
 
 export default function PlacementEditorPanel({
@@ -41,19 +50,46 @@ export default function PlacementEditorPanel({
   patternImageUrl = null,
   saveLoading = false,
   previewLoading = false,
+  externalTemplateRows,
+  externalTemplatesLoading,
+  externalActivePlacement,
+  onExternalActivePlacementChange,
+  hideCanvas = false,
 }: PlacementEditorPanelProps) {
   const [meta, setMeta] = useState<PlacementMeta[]>([])
   const [metaLoading, setMetaLoading] = useState(false)
   const [metaError, setMetaError] = useState<string | null>(null)
+  // Internal template state — only used when externalTemplateRows is not provided
   const [templateRows, setTemplateRows] = useState<PlacementTemplateRow[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
-  const [activePlacement, setActivePlacement] = useState<string>('')
+  // Internal active placement — only used when externalActivePlacement is not provided
+  const [internalActivePlacement, setInternalActivePlacement] = useState<string>('')
   const [localMsg, setLocalMsg] = useState<string | null>(null)
+
+  // Effective values: prefer external when provided
+  const effectiveTemplateRows = externalTemplateRows ?? templateRows
+  const effectiveTemplatesLoading = externalTemplatesLoading ?? templatesLoading
+
+  // Controlled placement: use external when provided, otherwise internal
+  const isControlledPlacement = externalActivePlacement !== undefined
+  const activePlacement = isControlledPlacement ? externalActivePlacement : internalActivePlacement
+
+  // Write helper: routes to external callback or internal state setter
+  const setActivePlacement = useCallback(
+    (placement: string) => {
+      if (isControlledPlacement && onExternalActivePlacementChange) {
+        onExternalActivePlacementChange(placement)
+      } else {
+        setInternalActivePlacement(placement)
+      }
+    },
+    [isControlledPlacement, onExternalActivePlacementChange]
+  )
 
   useEffect(() => {
     if (!productId || !variantId) {
       setMeta([])
-      setActivePlacement('')
+      if (!isControlledPlacement) setInternalActivePlacement('')
       return
     }
     let cancelled = false
@@ -82,7 +118,9 @@ export default function PlacementEditorPanel({
     }
   }, [productId, variantId])
 
+  // Only fetch templates internally when externalTemplateRows is not provided
   useEffect(() => {
+    if (externalTemplateRows !== undefined) return
     if (!productId || !variantId) {
       setTemplateRows([])
       return
@@ -106,10 +144,10 @@ export default function PlacementEditorPanel({
     return () => {
       cancelled = true
     }
-  }, [productId, variantId])
+  }, [productId, variantId, externalTemplateRows])
 
-  const templateWithUrl = templateRows.filter((r) => r.template_url?.trim())
-  const useShoeTemplateUi = !templatesLoading && templateWithUrl.length > 0
+  const templateWithUrl = effectiveTemplateRows.filter((r) => r.template_url?.trim())
+  const useShoeTemplateUi = !effectiveTemplatesLoading && templateWithUrl.length > 0
 
   const displayPlacement = useMemo(() => {
     if (useShoeTemplateUi && templateWithUrl.length > 0) {
@@ -179,7 +217,7 @@ export default function PlacementEditorPanel({
 
   return (
     <div className="placement-editor-panel" aria-label="Print placement editor">
-      <h3 className="placement-editor-title">Print placement (design_state)</h3>
+      <h3 className="placement-editor-title">Print placement</h3>
       <p className="placement-editor-hint">
         Adjust how your pattern fits each print area (visual editor + fine controls). Stored in{' '}
         <code>design_state.printful_placements</code>. Use &quot;Update product preview&quot; to
@@ -192,7 +230,8 @@ export default function PlacementEditorPanel({
           {metaError}
         </p>
       )}
-      {templatesLoading && (
+      {/* Only show template loading message when not managed externally */}
+      {effectiveTemplatesLoading && externalTemplatesLoading === undefined && (
         <p className="placement-editor-status" role="status">
           Loading Printful silhouette templates…
         </p>
@@ -220,9 +259,10 @@ export default function PlacementEditorPanel({
             </>
           )}
 
-          {useShoeTemplateUi && currentTemplate && (
+          {/* Canvas rendering is skipped when hideCanvas=true (rendered elsewhere) */}
+          {!hideCanvas && useShoeTemplateUi && currentTemplate && (
             <ShoeDesignEditor
-              templates={templateRows}
+              templates={effectiveTemplateRows}
               activePlacement={editingPlacement}
               onActivePlacementChange={setActivePlacement}
               transform={t}
@@ -231,7 +271,7 @@ export default function PlacementEditorPanel({
             />
           )}
 
-          {!useShoeTemplateUi && current && (
+          {!hideCanvas && !useShoeTemplateUi && current && (
             <PlacementCanvasPreview
               areaWidth={current.area_width}
               areaHeight={current.area_height}
