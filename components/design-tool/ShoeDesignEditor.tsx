@@ -41,6 +41,28 @@ export default function ShoeDesignEditor({
     return null
   }
 
+  // Compute pixel-accurate overlay position from Printful layout template bounds.
+  // Falls back to centered CSS when the template metadata is not available.
+  const hasExactBounds =
+    current.template_width != null &&
+    current.template_height != null &&
+    current.print_area_left != null &&
+    current.print_area_top != null &&
+    current.print_area_width != null &&
+    current.print_area_height != null
+
+  const overlayStyle = hasExactBounds
+    ? {
+        // Reset CSS `inset: 0` so our explicit left/top/width/height take effect.
+        inset: 'auto' as const,
+        display: 'block' as const,
+        left: `${(current.print_area_left! / current.template_width!) * 100}%`,
+        top: `${(current.print_area_top! / current.template_height!) * 100}%`,
+        width: `${(current.print_area_width! / current.template_width!) * 100}%`,
+        height: `${(current.print_area_height! / current.template_height!) * 100}%`,
+      }
+    : undefined
+
   return (
     <div className="shoe-design-editor" aria-label="Shoe template design editor">
       <div className="shoe-design-tabs" role="tablist" aria-label="Print placements">
@@ -77,8 +99,8 @@ export default function ShoeDesignEditor({
           className="shoe-design-template-img"
           draggable={false}
         />
-        <div className="shoe-design-overlay">
-          <div className="shoe-design-overlay-inner">
+        <div className="shoe-design-overlay" style={overlayStyle}>
+          <div className={`shoe-design-overlay-inner${hasExactBounds ? ' shoe-design-overlay-inner--exact' : ''}`}>
             <PlacementCanvasPreview
               areaWidth={current.area_width}
               areaHeight={current.area_height}
