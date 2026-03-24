@@ -12,6 +12,7 @@ import {
   parsePrintfulPlacements,
   type PrintfulPlacementsState,
 } from '@/lib/designDraftState'
+import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import { useAuth } from '@/components/AuthProvider'
 import { getCategories, createProduct, updateDesignDraft } from '@/lib/supabaseClient'
 import type { CategoryRow, DesignDraftRow } from '@/lib/supabaseClient'
@@ -56,6 +57,10 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   /** POST /preview-mockups (user pattern + design_state positions). */
   const [printfulPreviewLoading, setPrintfulPreviewLoading] = useState(false)
   const [placementSaveLoading, setPlacementSaveLoading] = useState(false)
+  // Lifted template state — shared between PlacementEditorPanel (controls) and PreviewWorkspace (canvas)
+  const [templateRows, setTemplateRows] = useState<PlacementTemplateRow[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+  const [activePlacement, setActivePlacement] = useState<string>('')
 
   const designDataRef = useRef(designData)
   designDataRef.current = designData
@@ -205,6 +210,26 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     localDraft?.structural_color,
     designData.printful_variant_id,
   ])
+
+  // Fetch Printful placement templates lifted to page level so both panel and canvas share them
+  useEffect(() => {
+    const pid = typeof localDraft?.base_model_id === 'string' ? localDraft.base_model_id.trim() : ''
+    if (!pid || printfulVariantId == null) {
+      setTemplateRows([])
+      setActivePlacement('')
+      return
+    }
+    let cancelled = false
+    setTemplatesLoading(true)
+    fetch(`/api/printful/products/${encodeURIComponent(pid)}/templates?variant_id=${printfulVariantId}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('templates'))))
+      .then((body: { placements?: PlacementTemplateRow[] }) => {
+        if (!cancelled) setTemplateRows(body.placements ?? [])
+      })
+      .catch(() => { if (!cancelled) setTemplateRows([]) })
+      .finally(() => { if (!cancelled) setTemplatesLoading(false) })
+    return () => { cancelled = true }
+  }, [localDraft?.base_model_id, printfulVariantId])
 
   const handlePrintfulVariantChange = useCallback(
     async (nextId: number) => {
@@ -498,6 +523,11 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   patternImageUrl={patternImageSignedUrl}
                   saveLoading={placementSaveLoading}
                   previewLoading={printfulPreviewLoading}
+                  externalTemplateRows={templateRows}
+                  externalTemplatesLoading={templatesLoading}
+                  externalActivePlacement={activePlacement}
+                  onExternalActivePlacementChange={setActivePlacement}
+                  hideCanvas
                 />
               )}
           </div>
@@ -677,6 +707,12 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   ? designData.imageUrl
                   : null
             }
+            templateRows={templateRows}
+            templatesLoading={templatesLoading}
+            placementsState={parsePrintfulPlacements(designData)}
+            activePlacement={activePlacement}
+            onActivePlacementChange={setActivePlacement}
+            onPlacementsStateChange={handlePlacementsStateChange}
           />
         </section>
       </div>
