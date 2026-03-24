@@ -50,6 +50,17 @@ export type CreateMockupTaskOptions = {
   option_groups?: string[]
 }
 
+export type MockupExtra = {
+  title?: string
+  mockup_url?: string
+}
+
+export type MockupResult = {
+  placement: string
+  mockup_url?: string
+  extra_mockups?: MockupExtra[]
+}
+
 export async function createTaskAndPoll(
   productId: string,
   variantId: number,
@@ -57,7 +68,7 @@ export async function createTaskAndPoll(
   headers: HeadersInit,
   options?: CreateMockupTaskOptions
 ): Promise<
-  | { ok: true; mockups: Array<{ placement: string; mockup_url?: string }> }
+  | { ok: true; mockups: MockupResult[] }
   | { ok: false; reason: string; status?: number }
 > {
   let createRes: Response | null = null
@@ -122,7 +133,7 @@ export async function createTaskAndPoll(
         status?: string
         error?: string
         error_code?: number
-        mockups?: Array<{ placement: string; mockup_url?: string }>
+        mockups?: MockupResult[]
       }
     }
     const result = taskData.result ?? {}
@@ -148,7 +159,7 @@ export async function createTaskAndPoll(
 
 export function mergeMockups(
   urlByPlacement: Map<string, string>,
-  mockups: Array<{ placement: string; mockup_url?: string }>
+  mockups: MockupResult[]
 ) {
   for (const m of mockups) {
     const u = (m.mockup_url ?? '').trim()
