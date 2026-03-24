@@ -18,10 +18,16 @@ const BUCKET = 'design-patterns'
 /** Long enough for Printful to fetch the pattern image during mockup generation */
 const SIGNED_URL_FOR_PRINTFUL_SEC = 7200
 
+export type PreviewMockupExtra = {
+  title: string
+  mockup_url: string
+}
+
 export type PreviewMockupPlacement = {
   placement: string
   label: string
   mockup_url: string
+  extra_mockups?: PreviewMockupExtra[]
 }
 
 /**
@@ -177,9 +183,17 @@ export async function POST(
 
   const batch = await createTaskAndPoll(productId, variantId, files, headers)
   const urlByPlacement = new Map<string, string>()
+  const extrasByPlacement = new Map<string, PreviewMockupExtra[]>()
   let mockupErrorReason: string | undefined
+
   if (batch.ok) {
     mergeMockups(urlByPlacement, batch.mockups)
+    for (const m of batch.mockups) {
+      const extras: PreviewMockupExtra[] = (m.extra_mockups ?? [])
+        .filter((e) => e.mockup_url?.trim())
+        .map((e) => ({ title: e.title ?? '', mockup_url: e.mockup_url! }))
+      if (extras.length) extrasByPlacement.set(m.placement, extras)
+    }
   } else {
     mockupErrorReason = batch.reason
     console.error('[preview-mockups] Printful task failed —', {
@@ -192,11 +206,15 @@ export async function POST(
     })
   }
 
-  const placements: PreviewMockupPlacement[] = placementKeys.map((placement) => ({
-    placement,
-    label: availablePlacements[placement] ?? placement,
-    mockup_url: urlByPlacement.get(placement) ?? '',
-  }))
+  const placements: PreviewMockupPlacement[] = placementKeys.map((placement) => {
+    const extras = extrasByPlacement.get(placement)
+    return {
+      placement,
+      label: availablePlacements[placement] ?? placement,
+      mockup_url: urlByPlacement.get(placement) ?? '',
+      ...(extras ? { extra_mockups: extras } : {}),
+    }
+  })
 
   const anyUrl = placements.some((p) => p.mockup_url)
 

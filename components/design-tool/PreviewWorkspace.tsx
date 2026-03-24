@@ -10,11 +10,17 @@ const MAX_SIZE_MB = 10
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 const BUCKET = 'design-patterns'
 
+export type MockupExtraItem = {
+  title: string
+  mockup_url: string
+}
+
 /** One placement from Printful mockups (dynamic tabs). */
 export type PlacementTab = {
   placement: string
   label: string
   mockup_url: string
+  extra_mockups?: MockupExtraItem[]
 }
 
 interface PreviewWorkspaceProps {
@@ -56,6 +62,8 @@ export default function PreviewWorkspace({
 }: PreviewWorkspaceProps) {
   const tabs = placementMockups?.length ? placementMockups : null
   const [activePlacement, setActivePlacement] = useState<string>('')
+  // Index into the current placement's [main, ...extra_mockups] gallery (0 = main)
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [loadingPhase, setLoadingPhase] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -71,6 +79,7 @@ export default function PreviewWorkspace({
     if (!keys.includes(activePlacement)) {
       setActivePlacement(keys[0])
     }
+    setActiveGalleryIndex(0)
   }, [tabs, activePlacement])
 
   useEffect(() => {
@@ -185,8 +194,18 @@ export default function PreviewWorkspace({
   }
 
   const activeTab = tabs?.find((t) => t.placement === activePlacement)
-  const referenceUrl = activeTab?.mockup_url || catalogFallbackUrl || ''
   const activeLabel = activeTab?.label ?? 'Product'
+
+  // Build the full gallery for the active placement: [main, ...extras]
+  const galleryItems: Array<{ title: string; mockup_url: string }> = activeTab?.mockup_url
+    ? [
+        { title: activeLabel, mockup_url: activeTab.mockup_url },
+        ...(activeTab.extra_mockups ?? []),
+      ]
+    : []
+  const clampedIndex = Math.min(activeGalleryIndex, Math.max(0, galleryItems.length - 1))
+  const selectedMockupUrl = galleryItems[clampedIndex]?.mockup_url ?? ''
+  const referenceUrl = selectedMockupUrl || catalogFallbackUrl || ''
 
   return (
     <div className="preview-workspace preview-workspace--manual">
@@ -243,6 +262,24 @@ export default function PreviewWorkspace({
                 alt={selectedModelName ? `${selectedModelName} – ${activeLabel}` : activeLabel}
                 className="preview-reference-img"
               />
+            </div>
+          )}
+          {galleryItems.length > 1 && (
+            <div className="preview-mockup-gallery" role="list" aria-label="All mockup views">
+              {galleryItems.map((item, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  role="listitem"
+                  className={`preview-mockup-gallery-thumb${i === clampedIndex ? ' preview-mockup-gallery-thumb--active' : ''}`}
+                  onClick={() => setActiveGalleryIndex(i)}
+                  title={item.title || `View ${i + 1}`}
+                  aria-pressed={i === clampedIndex}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={item.mockup_url} alt={item.title || `View ${i + 1}`} />
+                </button>
+              ))}
             </div>
           )}
         </div>
