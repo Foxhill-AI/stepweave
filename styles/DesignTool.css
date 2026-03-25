@@ -1686,3 +1686,182 @@
   color: var(--color-text-light);
   margin: 0;
 }
+
+/* ─── PreviewWorkspace: upload hero ─────────────────────────────────────── */
+
+.preview-upload-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-2xl) var(--spacing-xl);
+  margin: var(--spacing-lg);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--border-radius);
+  background: var(--color-background-light);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+  min-height: 220px;
+  user-select: none;
+}
+
+.preview-upload-hero:hover,
+.preview-upload-hero:focus-visible {
+  border-color: var(--color-primary);
+  background: #f0f7ff;
+  outline: none;
+}
+
+.preview-upload-hero--dragging {
+  border-color: var(--color-primary);
+  background: #e8f2ff;
+}
+
+.preview-upload-hero-icon {
+  color: var(--color-primary);
+  opacity: 0.8;
+  margin-bottom: var(--spacing-xs);
+}
+
+.preview-upload-hero-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.preview-upload-hero-hint {
+  font-size: 0.875rem;
+  color: var(--color-text-light);
+  margin: 0;
+  max-width: 260px;
+  line-height: 1.4;
+}
+
+.preview-upload-hero-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-light);
+  opacity: 0.75;
+  margin-top: var(--spacing-xs);
+}
+
+/* ─── PreviewWorkspace: compact image bar ───────────────────────────────── */
+
+.preview-image-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin: var(--spacing-md) var(--spacing-lg) 0;
+  background: var(--color-background-light);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+}
+
+.preview-image-bar-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.preview-image-bar-label {
+  flex: 1;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-image-bar-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+.preview-image-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px var(--spacing-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  background: transparent;
+  border: 1px solid var(--color-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.preview-image-bar-btn:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.preview-image-bar-btn--remove {
+  color: #c0392b;
+  border-color: #c0392b;
+}
+
+.preview-image-bar-btn--remove:hover {
+  background: #c0392b;
+  color: #fff;
+}
+
+/* ─── PreviewWorkspace: view toggle (Template ↔ Preview) ────────────────── */
+
+.preview-view-toggle {
+  display: flex;
+  margin: var(--spacing-md) var(--spacing-lg) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  background: var(--color-background-light);
+}
+
+.preview-view-toggle-btn {
+  flex: 1;
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-light);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1.4;
+}
+
+.preview-view-toggle-btn + .preview-view-toggle-btn {
+  border-left: 1px solid var(--color-border);
+}
+
+.preview-view-toggle-btn:hover {
+  background: #e8f2ff;
+  color: var(--color-primary);
+}
+
+.preview-view-toggle-btn--active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.preview-view-toggle-btn--active:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+/* ─── Spacing: left panel placement editor in manual mode ───────────────── */
+
+.design-tool-left--manual .placement-editor-panel {
+  margin-top: 0;
+  border-top: none;
+}

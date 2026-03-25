@@ -90,6 +90,8 @@ export default function PreviewWorkspace({
   const [loadingPhase, setLoadingPhase] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  // 'canvas' = shoe template editor, 'mockups' = generated mockup images
+  const [viewMode, setViewMode] = useState<'canvas' | 'mockups'>('canvas')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -103,6 +105,14 @@ export default function PreviewWorkspace({
     }
     setActiveGalleryIndex(0)
   }, [tabs, activePlacement])
+
+  // Auto-switch to mockups view when real mockup URLs arrive after generation
+  useEffect(() => {
+    const hasRealMockups = placementMockups?.some((t) => t.mockup_url?.trim())
+    if (hasRealMockups && !mockupImagesLoading) {
+      setViewMode('mockups')
+    }
+  }, [placementMockups, mockupImagesLoading])
 
   useEffect(() => {
     if (!mockupImagesLoading) {
@@ -218,11 +228,6 @@ export default function PreviewWorkspace({
     setIsDragging(false)
   }
 
-  const handleDropzoneClick = () => {
-    if (imageUrl) return
-    fileInputRef.current?.click()
-  }
-
   if (mode === 'ai') {
     return (
       <div className="preview-workspace preview-workspace--ai">
@@ -241,7 +246,6 @@ export default function PreviewWorkspace({
   const activeTab = tabs?.find((t) => t.placement === activePlacement)
   const activeLabel = activeTab?.label ?? 'Product'
 
-  // Build the full gallery for the active placement: [main, ...extras]
   const galleryItems: Array<{ title: string; mockup_url: string }> = activeTab?.mockup_url
     ? [
         { title: activeLabel, mockup_url: activeTab.mockup_url },
@@ -252,10 +256,136 @@ export default function PreviewWorkspace({
   const selectedMockupUrl = galleryItems[clampedIndex]?.mockup_url ?? ''
   const referenceUrl = selectedMockupUrl || catalogFallbackUrl || ''
 
+  const hasImage = Boolean(imageUrl?.trim())
+  const hasMockups = Boolean(tabs?.some((t) => t.mockup_url?.trim())) || Boolean(catalogFallbackUrl?.trim())
+  const showToggle = useShoeCanvas && hasMockups
+
   return (
     <div className="preview-workspace preview-workspace--manual">
-      {/* Shoe canvas: large interactive view rendered here when templates are available */}
-      {useShoeCanvas && (
+      {/* Hidden file input — always rendered */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ACCEPT_IMAGES}
+        onChange={handleInputChange}
+        className="preview-canvas-file-input"
+        aria-hidden
+      />
+
+      {/* STEP 1: No image — full upload hero */}
+      {!hasImage && !uploading && (
+        <div
+          className={`preview-upload-hero${isDragging ? ' preview-upload-hero--dragging' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-label="Upload or drop your design here"
+          onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              fileInputRef.current?.click()
+            }
+          }}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+        >
+          <div className="preview-upload-hero-icon" aria-hidden>
+            <Upload size={32} strokeWidth={1.5} />
+          </div>
+          <h3 className="preview-upload-hero-title">Add your design</h3>
+          <p className="preview-upload-hero-hint">
+            Upload an image to see it applied to the product template
+          </p>
+          <span className="preview-upload-hero-meta">
+            JPG, PNG, WebP · max {MAX_SIZE_MB} MB
+          </span>
+        </div>
+      )}
+
+      {/* Uploading state */}
+      {uploading && (
+        <div className="preview-upload-hero">
+          <div className="preview-loading-spinner" style={{ marginBottom: '0.75rem' }} aria-hidden />
+          <p className="preview-loading-message">Uploading your design…</p>
+        </div>
+      )}
+
+      {/* STEP 2+: Has image — compact bar */}
+      {hasImage && (
+        <div className="preview-image-bar">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageUrl!} alt="" className="preview-image-bar-thumb" />
+          <span className="preview-image-bar-label">Pattern applied</span>
+          <div className="preview-image-bar-actions">
+            <button
+              type="button"
+              className="preview-image-bar-btn"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={13} aria-hidden /> Change
+            </button>
+            <button
+              type="button"
+              className="preview-image-bar-btn preview-image-bar-btn--remove"
+              onClick={onImageClear}
+              aria-label="Remove image"
+            >
+              <X size={13} aria-hidden /> Remove
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Model label */}
+      {selectedModelName && hasImage && (
+        <p className="preview-workspace-model-label" aria-live="polite">
+          <strong>{selectedModelName}</strong>
+          {activeLabel && activeLabel !== 'Product' ? ` · ${activeLabel}` : ''}
+        </p>
+      )}
+
+      {/* View toggle: Template ↔ Preview */}
+      {showToggle && hasImage && (
+        <div className="preview-view-toggle" role="tablist" aria-label="View mode">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewMode === 'canvas'}
+            className={`preview-view-toggle-btn${viewMode === 'canvas' ? ' preview-view-toggle-btn--active' : ''}`}
+            onClick={() => setViewMode('canvas')}
+          >
+            Template
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewMode === 'mockups'}
+            className={`preview-view-toggle-btn${viewMode === 'mockups' ? ' preview-view-toggle-btn--active' : ''}`}
+            onClick={() => setViewMode('mockups')}
+          >
+            Preview
+          </button>
+        </div>
+      )}
+
+      {/* Mockup generation spinner */}
+      {mockupImagesLoading && (
+        <div className="preview-reference-loading" role="status">
+          <div className="preview-loading-spinner" aria-hidden />
+          <span className="preview-loading-message">
+            {LOADING_MESSAGES[Math.min(loadingPhase, LOADING_MESSAGES.length - 1)]}
+          </span>
+          {loadingPhase >= 3 && (
+            <span className="preview-loading-timeout-hint">
+              Taking longer than expected — you can keep editing and refresh later.
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* CANVAS VIEW: ShoeDesignEditor */}
+      {hasImage && useShoeCanvas && (viewMode === 'canvas' || !hasMockups) && !mockupImagesLoading && (
         <div className="preview-shoe-canvas-section">
           <ShoeDesignEditor
             templates={templateWithUrl}
@@ -267,157 +397,73 @@ export default function PreviewWorkspace({
           />
         </div>
       )}
-      {tabs && tabs.length > 0 && (
-        <div className="preview-view-tabs" role="tablist" aria-label="Print placements">
-          {tabs.map((t) => (
-            <button
-              key={t.placement}
-              type="button"
-              role="tab"
-              aria-selected={activePlacement === t.placement}
-              className={`preview-view-tab ${activePlacement === t.placement ? 'preview-view-tab--active' : ''}`}
-              onClick={() => setActivePlacement(t.placement)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-      {selectedModelName && (
-        <p className="preview-workspace-model-label" aria-live="polite">
-          Showing: <strong>{selectedModelName}</strong>
-          {tabs?.length ? ` – ${activeLabel}` : ' – reference'}
-        </p>
-      )}
-      {(referenceUrl || mockupImagesLoading) && (
-        <div
-          className="preview-reference-section"
-          aria-label={`Product reference: ${activeLabel}`}
-        >
-          <span className="preview-reference-label">Product reference</span>
-          {mockupImagesLoading && (
-            <div className="preview-reference-loading" role="status">
-              <div className="preview-loading-spinner" aria-hidden />
-              <span className="preview-loading-message">
-                {LOADING_MESSAGES[Math.min(loadingPhase, LOADING_MESSAGES.length - 1)]}
-              </span>
-              {loadingPhase >= 3 && (
-                <span className="preview-loading-timeout-hint">
-                  Taking longer than expected — you can keep editing and refresh later.
-                </span>
-              )}
-            </div>
-          )}
-          {!mockupImagesLoading && catalogOnlyReference && referenceUrl && (
-            <p className="preview-reference-catalog-note" role="status">
-              Using catalog photos — Printful mockups are not available for this product in the API.
-            </p>
-          )}
-          {referenceUrl && (
-            <div className="preview-reference-box">
-              <img
-                src={referenceUrl}
-                alt={selectedModelName ? `${selectedModelName} – ${activeLabel}` : activeLabel}
-                className="preview-reference-img"
-              />
-            </div>
-          )}
-          {galleryItems.length > 1 && (
-            <div className="preview-mockup-gallery" role="list" aria-label="All mockup views">
-              {galleryItems.map((item, i) => (
+
+      {/* MOCKUPS VIEW: placement tabs + reference image + gallery */}
+      {(viewMode === 'mockups' || !useShoeCanvas) && !mockupImagesLoading && (referenceUrl || (tabs && tabs.length > 0)) && (
+        <>
+          {tabs && tabs.length > 0 && (
+            <div className="preview-view-tabs" role="tablist" aria-label="Print placements">
+              {tabs.map((t) => (
                 <button
-                  key={i}
+                  key={t.placement}
                   type="button"
-                  role="listitem"
-                  className={`preview-mockup-gallery-thumb${i === clampedIndex ? ' preview-mockup-gallery-thumb--active' : ''}`}
-                  onClick={() => setActiveGalleryIndex(i)}
-                  title={item.title || `View ${i + 1}`}
-                  aria-pressed={i === clampedIndex}
+                  role="tab"
+                  aria-selected={activePlacement === t.placement}
+                  className={`preview-view-tab ${activePlacement === t.placement ? 'preview-view-tab--active' : ''}`}
+                  onClick={() => setActivePlacement(t.placement)}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.mockup_url} alt={item.title || `View ${i + 1}`} />
+                  {t.label}
                 </button>
               ))}
             </div>
           )}
-        </div>
-      )}
-      <div className="preview-canvas">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPT_IMAGES}
-          onChange={handleInputChange}
-          className="preview-canvas-file-input"
-          aria-hidden
-        />
-        <div className="preview-canvas-layers">
-          {imageUrl || uploading ? (
-            <div className="preview-canvas-preview">
-              {imageUrl && (
-                <img
-                  src={imageUrl}
-                  alt="Your design"
-                  className="preview-canvas-preview-img"
-                />
-              )}
-              {uploading && (
-                <p className="preview-canvas-uploading" role="status">
-                  Uploading…
+          {referenceUrl && (
+            <div
+              className="preview-reference-section"
+              aria-label={`Product mockup: ${activeLabel}`}
+            >
+              <span className="preview-reference-label">Product mockup</span>
+              {catalogOnlyReference && (
+                <p className="preview-reference-catalog-note" role="status">
+                  Using catalog photos — Printful mockups are not available for this product.
                 </p>
               )}
-              <div className="preview-canvas-preview-actions">
-                <button
-                  type="button"
-                  className="preview-canvas-preview-btn preview-canvas-preview-btn-change"
-                  disabled={uploading}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload size={16} aria-hidden />
-                  {uploading ? 'Uploading…' : 'Change image'}
-                </button>
-                <button
-                  type="button"
-                  className="preview-canvas-preview-btn preview-canvas-preview-btn-remove"
-                  onClick={onImageClear}
-                  aria-label="Remove image"
-                >
-                  <X size={16} aria-hidden />
-                  Remove
-                </button>
+              <div className="preview-reference-box">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={referenceUrl}
+                  alt={selectedModelName ? `${selectedModelName} – ${activeLabel}` : activeLabel}
+                  className="preview-reference-img"
+                />
               </div>
-            </div>
-          ) : (
-            <div
-              className={`preview-canvas-dropzone ${isDragging ? 'preview-canvas-dropzone--dragging' : ''}`}
-              role="button"
-              tabIndex={0}
-              aria-label="Upload or drop your design here"
-              onClick={handleDropzoneClick}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  handleDropzoneClick()
-                }
-              }}
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-            >
-              <Upload size={28} className="preview-canvas-dropzone-icon" aria-hidden />
-              <span>Upload or drop your design here</span>
-              <span className="preview-canvas-dropzone-hint">
-                Images only (JPG, PNG, WebP), max {MAX_SIZE_MB} MB
-              </span>
+              {galleryItems.length > 1 && (
+                <div className="preview-mockup-gallery" role="list" aria-label="All mockup views">
+                  {galleryItems.map((item, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      role="listitem"
+                      className={`preview-mockup-gallery-thumb${i === clampedIndex ? ' preview-mockup-gallery-thumb--active' : ''}`}
+                      onClick={() => setActiveGalleryIndex(i)}
+                      title={item.title || `View ${i + 1}`}
+                      aria-pressed={i === clampedIndex}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={item.mockup_url} alt={item.title || `View ${i + 1}`} />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-        </div>
-        {uploadError && (
-          <p className="preview-canvas-error" role="alert">
-            {uploadError}
-          </p>
-        )}
-      </div>
+        </>
+      )}
+
+      {uploadError && (
+        <p className="preview-canvas-error" role="alert">
+          {uploadError}
+        </p>
+      )}
     </div>
   )
 }
