@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useRef, useEffect } from 'react'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import type { PlacementCompactTransform } from '@/lib/designDraftState'
 import PlacementCanvasPreview from './PlacementCanvasPreview'
@@ -36,6 +36,33 @@ export default function ShoeDesignEditor({
   )
 
   const current = rows.find((r) => r.placement === activePlacement) ?? rows[0]
+
+  const compositeRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  // Keep composite width = image's actual rendered width so the overlay percentages
+  // stay accurate even when max-height scales the image down (width: auto shrinks it).
+  useEffect(() => {
+    const img = imgRef.current
+    const composite = compositeRef.current
+    if (!img || !composite) return
+
+    const sync = () => {
+      const w = img.offsetWidth
+      if (w > 0) composite.style.width = `${w}px`
+    }
+
+    sync()
+    img.addEventListener('load', sync)
+    const ro = new ResizeObserver(sync)
+    ro.observe(img)
+    return () => {
+      img.removeEventListener('load', sync)
+      ro.disconnect()
+    }
+  // Re-run when the template image URL changes (placement switch).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.template_url])
 
   if (!current) {
     return null
@@ -84,9 +111,10 @@ export default function ShoeDesignEditor({
       </div>
 
 
-<div className="shoe-design-composite">
+<div ref={compositeRef} className="shoe-design-composite">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          ref={imgRef}
           src={current.template_url}
           alt=""
           className="shoe-design-template-img"
