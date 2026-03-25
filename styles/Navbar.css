@@ -101,6 +101,10 @@
 }
 
 @media (min-width: 1024px) {
+  .navbar-container {
+    flex-wrap: nowrap;
+  }
+
   .navbar-links {
     display: flex;
   }
@@ -150,7 +154,7 @@
   }
 
   .navbar-link {
-    font-size: 0.475rem;
+    font-size: 0.8rem;
     padding: var(--spacing-xs) var(--spacing-xs);
     white-space: nowrap;
     flex-shrink: 0;
@@ -161,7 +165,7 @@
     width: auto;
     text-align: left;
     padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: 0.575rem;
+    font-size: 0.75rem;
     white-space: nowrap;
     flex-shrink: 0;
     margin-left: var(--spacing-xs);
@@ -187,6 +191,7 @@
   transition: var(--transition);
   opacity: 0.9;
   position: relative;
+  white-space: nowrap;
 }
 
 .navbar-link::after {
@@ -236,7 +241,7 @@
   color: white;
   border-radius: var(--border-radius);
   font-weight: 500;
-  font-size: 0.55rem;
+  font-size: 0.875rem;
   transition: var(--transition);
 }
 

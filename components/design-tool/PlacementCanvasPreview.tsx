@@ -157,7 +157,11 @@ export default function PlacementCanvasPreview({
       <div
         ref={stageRef}
         className={stageClass}
-        style={{ aspectRatio: `${areaWidth} / ${areaHeight}` }}
+        // In overlay mode the stage fills its CSS parent (the print-area box on the
+        // template image). Setting aspectRatio here would fight the parent's height and
+        // cause the stage to overflow. In default mode we still need aspectRatio to size
+        // the standalone canvas correctly.
+        style={variant === 'overlay' ? undefined : { aspectRatio: `${areaWidth} / ${areaHeight}` }}
         aria-describedby={hideHint ? undefined : hintId}
         data-disabled={disabled ? 'true' : undefined}
       >

@@ -698,6 +698,9 @@
 }
 
 .placement-canvas-stage--overlay {
+  /* Fill the overlay-inner exactly — dimensions are defined by the template percentage box */
+  width: 100%;
+  height: 100%;
   max-width: 100%;
   margin: 0;
   border: 2px dashed rgba(255, 255, 255, 0.95);
@@ -705,6 +708,13 @@
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.35),
     inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+/* Embedded root must fill the overlay-inner exactly */
+.placement-canvas-root--embedded {
+  width: 100%;
+  height: 100%;
+  margin: 0;
 }
 
 .placement-canvas-root--embedded .placement-canvas-stage--overlay {
@@ -1189,7 +1199,7 @@
 
 /* Shoe canvas in right panel — large interactive view */
 .preview-shoe-canvas-section {
-  padding: var(--spacing-md) var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-md);
   background: var(--color-background);
   border-bottom: 1px solid var(--color-border);
 }
@@ -1232,10 +1242,10 @@
 }
 
 .preview-workspace-model-label {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: var(--color-text-light);
   margin: 0;
-  padding: var(--spacing-sm) var(--spacing-lg);
+  padding: 3px var(--spacing-md);
   text-align: center;
   background: var(--color-background-light);
   border-bottom: 1px solid var(--color-border);
@@ -1707,18 +1717,18 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  margin: var(--spacing-md) var(--spacing-lg) 0;
+  padding: 4px var(--spacing-sm);
+  margin: var(--spacing-xs) var(--spacing-md) 0;
   background: var(--color-background-light);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius);
 }
 
 .preview-image-bar-thumb {
-  width: 36px;
-  height: 36px;
+  width: 26px;
+  height: 26px;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 3px;
   border: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -1774,7 +1784,7 @@
 
 .preview-view-toggle {
   display: flex;
-  margin: var(--spacing-md) var(--spacing-lg) 0;
+  margin: var(--spacing-xs) var(--spacing-md) 0;
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius);
   overflow: hidden;
@@ -1783,8 +1793,8 @@
 
 .preview-view-toggle-btn {
   flex: 1;
-  padding: var(--spacing-xs) var(--spacing-md);
-  font-size: 0.8125rem;
+  padding: 3px var(--spacing-md);
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--color-text-light);
   background: transparent;
@@ -2010,8 +2020,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
   border-top: 1px solid var(--color-border);
   background: var(--color-background-light);
 }
@@ -2135,34 +2145,67 @@
   line-height: 1;
 }
 
-/* ─── Desktop viewport-filling layout (Issue 3) ─────────────────────────── */
+/* ─── Desktop viewport-filling layout ─────────────────────────── */
 
 @media (min-width: 1024px) {
-  /* Left and right panels scroll internally on desktop */
+  /* Left panel scrolls internally */
   .design-tool-left {
     overflow-y: auto;
   }
 
+  /* Right panel clips overflow — no panel-level scroll on desktop */
   .design-tool-right {
-    overflow-y: auto;
+    overflow: hidden;
   }
 
-  /* Editor pages: fill the viewport, let the page scroll for footer */
+  /* Editor pages: fill the viewport exactly — no page-level scroll */
   .design-tool-page-wrapper--editor {
     height: 100vh;
-    overflow-y: auto;
+    overflow: hidden;
   }
 
-  /* Force the flex chain to propagate height properly */
+  /* Propagate height through the flex chain so panels are constrained */
   .design-tool-page-wrapper--editor .design-tool-main,
   .design-tool-page-wrapper--editor .design-tool-page {
-    overflow: hidden;
+    flex: 1;
     min-height: 0;
-    flex-shrink: 0;
+    overflow: hidden;
   }
 
   .design-tool-page-wrapper--editor .design-tool-layout {
-    /* Remove the fixed calc hack; rely on flex fill instead */
+    flex: 1;
     min-height: 0;
+  }
+
+  /* ── Canvas section fills remaining height, image scales to fit ── */
+  .design-tool-right .preview-shoe-canvas-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  /* JS (ShoeDesignEditor) sets inline width = img.offsetWidth so composite always
+     matches the image's actual rendered width, even when max-height scales it down. */
+  .design-tool-right .preview-shoe-canvas-section .shoe-design-composite {
+    max-width: min(440px, 100%);
+    margin: 0 auto;
+    overflow: hidden;
+  }
+
+  /* Image scales down proportionally so the canvas never overflows the panel */
+  .design-tool-right .preview-shoe-canvas-section .shoe-design-template-img {
+    width: auto;
+    max-width: min(440px, 100%);
+    height: auto;
+    max-height: calc(100vh - 310px);
+  }
+
+  /* Action buttons stay pinned at the bottom of the canvas section */
+  .design-tool-right .preview-placement-actions {
+    flex-shrink: 0;
+    width: 100%;
   }
 }
