@@ -2187,6 +2187,18 @@
     overflow: hidden;
   }
 
+  /* Editor expands to fill the space above the buttons,
+     centering the tabs + canvas vertically in the available area */
+  .design-tool-right .preview-shoe-canvas-section .shoe-design-editor {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+  }
+
   /* JS (ShoeDesignEditor) sets inline width = img.offsetWidth so composite always
      matches the image's actual rendered width, even when max-height scales it down. */
   .design-tool-right .preview-shoe-canvas-section .shoe-design-composite {
@@ -2203,9 +2215,10 @@
     max-height: calc(100vh - 310px);
   }
 
-  /* Action buttons stay pinned at the bottom of the canvas section */
+  /* Action buttons pinned to the bottom of the canvas section */
   .design-tool-right .preview-placement-actions {
     flex-shrink: 0;
     width: 100%;
+    margin-top: 0;
   }
 }
