@@ -2,7 +2,6 @@
 
 import Navbar from '@/components/Navbar'
 import Subnavbar from '@/components/Subnavbar'
-import Footer from '@/components/Footer'
 import BaseModelSelection from '@/components/design-tool/BaseModelSelection'
 
 /**
@@ -12,13 +11,12 @@ import BaseModelSelection from '@/components/design-tool/BaseModelSelection'
  */
 export default function DesignToolRoute() {
   return (
-    <div className="design-tool-page-wrapper">
+    <div className="design-tool-page-wrapper design-tool-page-wrapper--editor">
       <Navbar />
       <Subnavbar />
       <main className="design-tool-main" role="main">
         <BaseModelSelection />
       </main>
-      <Footer />
     </div>
   )
 }

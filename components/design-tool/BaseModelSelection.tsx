@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { createDesignDraft } from '@/lib/supabaseClient'
@@ -8,6 +8,8 @@ import type { PrintfulShoeProduct } from '@/app/api/printful/products/route'
 import '../../styles/DesignTool.css'
 
 const PENDING_SELECTION_KEY = 'design-tool-pending-selection'
+
+type VariantInfo = { id: number; color: string; image: string }
 
 export default function BaseModelSelection() {
   const router = useRouter()
@@ -18,6 +20,11 @@ export default function BaseModelSelection() {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
   const [structuralColor, setStructuralColor] = useState<'white' | 'black'>('white')
   const [continueLoading, setContinueLoading] = useState(false)
+  /** Variants cached per model id — fetched eagerly on model selection for preview sync. */
+  const [variantsByModelId, setVariantsByModelId] = useState<Record<string, VariantInfo[]>>({})
+  const [variantsLoadingId, setVariantsLoadingId] = useState<string | null>(null)
+  /** Tracks which model ids have already been fetched (avoids refetch on re-render). */
+  const fetchedModelIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     let cancelled = false
@@ -44,6 +51,25 @@ export default function BaseModelSelection() {
       })
     return () => { cancelled = true }
   }, [])
+
+  // Eagerly fetch variants for the selected model so the preview can show the
+  // correct color-matched image before the user clicks Continue.
+  useEffect(() => {
+    if (!selectedModelId) return
+    if (fetchedModelIdsRef.current.has(selectedModelId)) return
+    fetchedModelIdsRef.current.add(selectedModelId)
+    let cancelled = false
+    setVariantsLoadingId(selectedModelId)
+    fetch(`/api/printful/products/${encodeURIComponent(selectedModelId)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('failed'))))
+      .then((body: { variants?: VariantInfo[] }) => {
+        if (!cancelled)
+          setVariantsByModelId((prev) => ({ ...prev, [selectedModelId]: body.variants ?? [] }))
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setVariantsLoadingId(null) })
+    return () => { cancelled = true }
+  }, [selectedModelId])
 
   useEffect(() => {
     if (loading || products.length === 0) return
@@ -182,35 +208,37 @@ export default function BaseModelSelection() {
               </div>
 
               <div className="base-model-color-section">
-                <span className="design-tool-form-title">Structural color</span>
+                <p className="base-model-color-section-title">Structural color</p>
                 <p className="base-model-color-hint">
                   Laces, sole, and inside of the shoe
                 </p>
-                <div className="base-model-color-options" role="radiogroup" aria-label="Structural color">
-                  <label className="base-model-color-option">
-                    <input
-                      type="radio"
-                      name="structural-color"
-                      value="white"
-                      checked={structuralColor === 'white'}
-                      onChange={() => setStructuralColor('white')}
-                      aria-label="White"
-                    />
-                    <span className="base-model-color-swatch base-model-color-swatch--white" aria-hidden />
-                    <span>White</span>
-                  </label>
-                  <label className="base-model-color-option">
-                    <input
-                      type="radio"
-                      name="structural-color"
-                      value="black"
-                      checked={structuralColor === 'black'}
-                      onChange={() => setStructuralColor('black')}
-                      aria-label="Black"
-                    />
-                    <span className="base-model-color-swatch base-model-color-swatch--black" aria-hidden />
-                    <span>Black</span>
-                  </label>
+                <div className="base-model-color-cards" role="radiogroup" aria-label="Structural color">
+                  {(['white', 'black'] as const).map((color) => (
+                    <label
+                      key={color}
+                      className={`base-model-color-card${structuralColor === color ? ' base-model-color-card--selected' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="structural-color"
+                        value={color}
+                        checked={structuralColor === color}
+                        onChange={() => setStructuralColor(color)}
+                        className="sr-only"
+                        aria-label={color === 'white' ? 'White' : 'Black'}
+                      />
+                      <span
+                        className={`base-model-color-card-swatch base-model-color-card-swatch--${color}`}
+                        aria-hidden="true"
+                      />
+                      <span className="base-model-color-card-name">
+                        {color === 'white' ? 'White' : 'Black'}
+                      </span>
+                      {structuralColor === color && (
+                        <span className="base-model-color-card-check" aria-hidden="true">✓</span>
+                      )}
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -234,15 +262,38 @@ export default function BaseModelSelection() {
 
         <section className="design-tool-right" aria-label="Preview" role="region">
           <div className="base-model-preview">
-            {selectedModelId && products.find((p) => p.id === selectedModelId)?.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={products.find((p) => p.id === selectedModelId)!.image}
-                alt={products.find((p) => p.id === selectedModelId)!.name}
-                width={320}
-                height={320}
-                className="base-model-preview-image"
-              />
+            {selectedModelId ? (
+              (() => {
+                const selectedProduct = products.find((p) => p.id === selectedModelId)
+                const cachedVariants = variantsByModelId[selectedModelId] ?? []
+                const colorMatch = cachedVariants.find(
+                  (v) => (v.color ?? '').toLowerCase() === structuralColor
+                )
+                const previewImage = colorMatch?.image || selectedProduct?.image || ''
+                const isLoadingPreview = variantsLoadingId === selectedModelId
+
+                if (isLoadingPreview) {
+                  return (
+                    <div className="base-model-preview-loading">
+                      <div className="preview-loading-spinner" aria-hidden="true" />
+                      <p className="base-model-preview-placeholder">Loading preview…</p>
+                    </div>
+                  )
+                }
+                if (previewImage) {
+                  return (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={previewImage}
+                      alt={selectedProduct?.name ?? 'Selected model'}
+                      width={320}
+                      height={320}
+                      className="base-model-preview-image"
+                    />
+                  )
+                }
+                return <p className="base-model-preview-placeholder">No preview available</p>
+              })()
             ) : (
               <p className="base-model-preview-placeholder">
                 Select a model to preview

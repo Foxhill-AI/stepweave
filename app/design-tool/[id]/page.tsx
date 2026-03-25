@@ -88,13 +88,12 @@ export default function DesignToolDraftRoute() {
   }
 
   return (
-    <div className="design-tool-page-wrapper">
+    <div className="design-tool-page-wrapper design-tool-page-wrapper--editor">
       <Navbar />
       <Subnavbar />
       <main className="design-tool-main" role="main">
         <DesignToolPage draftId={draft.id} draft={draft} />
       </main>
-      <Footer />
     </div>
   )
 }

@@ -78,20 +78,13 @@ export default function ShoeDesignEditor({
               onClick={() => onActivePlacementChange(row.placement)}
             >
               {row.label}
-              <span className="shoe-design-tab-dims">
-                {row.area_width}×{row.area_height}
-              </span>
             </button>
           )
         })}
       </div>
 
-      <p className="shoe-design-hint">
-        Silueta de Printful (plantilla) + área de impresión. Arrastra el patrón y usa la rueda para
-        escalar; los valores se guardan igual que en el editor estándar.
-      </p>
 
-      <div className="shoe-design-composite">
+<div className="shoe-design-composite">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={current.template_url}
