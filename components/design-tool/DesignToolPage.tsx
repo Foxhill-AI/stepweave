@@ -54,6 +54,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [mockupImagesLoading, setMockupImagesLoading] = useState(false)
   /** Printful did not return mockup URLs; preview uses catalog images per tab. */
   const [mockupCatalogOnly, setMockupCatalogOnly] = useState(false)
+  /** True after the user has explicitly generated at least one preview. */
+  const [hasGeneratedMockups, setHasGeneratedMockups] = useState(false)
   /** POST /preview-mockups (user pattern + design_state positions). */
   const [printfulPreviewLoading, setPrintfulPreviewLoading] = useState(false)
   const [placementSaveLoading, setPlacementSaveLoading] = useState(false)
@@ -107,7 +109,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     return () => { cancelled = true }
   }, [draftId, localDraft?.pattern_image_url])
 
-  // Load product variants, resolve variant_id, generate Printful mockups per placement (same variant).
+  // Load product info: name, variants, catalog fallback image.
+  // Mockup generation is NOT triggered automatically — user clicks "See preview" instead.
   useEffect(() => {
     const baseModelId = localDraft?.base_model_id
     if (!baseModelId || typeof baseModelId !== 'string' || baseModelId.trim() === '') {
@@ -121,8 +124,9 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       return
     }
     let cancelled = false
-    setMockupImagesLoading(true)
+    // Clear stale mockups and reset generation state when model/color changes
     setPlacementMockups([])
+    setHasGeneratedMockups(false)
 
     const pid = baseModelId.trim()
     const storedVid = designData.printful_variant_id
@@ -147,7 +151,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             image: string
           }>
         }) => {
-          if (cancelled) return Promise.reject(new Error('cancel'))
+          if (cancelled) return
           setSelectedModelName(productBody.name ?? null)
           const variants = productBody.variants ?? []
           setVariantOptions(variants)
@@ -165,44 +169,15 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
           }
           if (vid == null) {
             setCatalogFallbackUrl((productBody.image ?? '').trim())
-            return Promise.reject(new Error('no variant'))
+            return
           }
           setPrintfulVariantId(vid)
           const vrow = variants.find((v) => v.id === vid)
-          setCatalogFallbackUrl(
-            ((vrow?.image || productBody.image) ?? '').trim()
-          )
-
-          return fetch(
-            `/api/printful/products/${encodeURIComponent(pid)}/mockup-images?variant_id=${vid}`
-          )
-        }
-      )
-      .then((mockRes) => {
-        if (cancelled) return
-        if (!mockRes || !mockRes.ok) return Promise.reject(new Error('mockup'))
-        return mockRes.json()
-      })
-      .then(
-        (body: {
-          placements?: PlacementTab[]
-          mockup_generation_unavailable?: boolean
-        }) => {
-          if (cancelled || !body?.placements) return
-          setMockupCatalogOnly(Boolean(body.mockup_generation_unavailable))
-          setPlacementMockups(
-            body.placements.length ? body.placements : []
-          )
+          setCatalogFallbackUrl(((vrow?.image || productBody.image) ?? '').trim())
         }
       )
       .catch(() => {
-        if (!cancelled) {
-          setPlacementMockups([])
-          setMockupCatalogOnly(false)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setMockupImagesLoading(false)
+        if (!cancelled) setMockupCatalogOnly(false)
       })
 
     return () => {
@@ -330,6 +305,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       }
       setMockupCatalogOnly(Boolean(body.mockup_generation_unavailable))
       setPlacementMockups(body.placements?.length ? body.placements : [])
+      setHasGeneratedMockups(true)
     } finally {
       setPrintfulPreviewLoading(false)
     }
@@ -686,6 +662,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             hasPatternImage={Boolean(
               localDraft?.pattern_image_url && String(localDraft.pattern_image_url).trim()
             )}
+            hasGeneratedMockups={hasGeneratedMockups}
           />
         </section>
       </div>

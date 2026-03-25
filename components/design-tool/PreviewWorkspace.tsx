@@ -60,6 +60,8 @@ interface PreviewWorkspaceProps {
   saveLoading?: boolean
   previewLoading?: boolean
   hasPatternImage?: boolean
+  /** True after the user has generated at least one preview — changes button label. */
+  hasGeneratedMockups?: boolean
 }
 
 function getExtension(filename: string): string {
@@ -91,6 +93,7 @@ export default function PreviewWorkspace({
   saveLoading = false,
   previewLoading = false,
   hasPatternImage = false,
+  hasGeneratedMockups = false,
 }: PreviewWorkspaceProps) {
   const tabs = placementMockups?.length ? placementMockups : null
   // Internal tab active placement (for mockup tabs), separate from shoe canvas placement
@@ -291,7 +294,9 @@ export default function PreviewWorkspace({
   const referenceUrl = selectedMockupUrl || catalogFallbackUrl || ''
 
   const hasImage = Boolean(imageUrl?.trim())
-  const hasMockups = Boolean(tabs?.some((t) => t.mockup_url?.trim())) || Boolean(catalogFallbackUrl?.trim())
+  // Only count real generated mockups — not the catalog fallback — so the toggle
+  // only appears after the user explicitly clicks "See preview".
+  const hasMockups = Boolean(tabs?.some((t) => t.mockup_url?.trim()))
   const showToggle = useShoeCanvas && hasMockups
 
   return (
@@ -449,7 +454,11 @@ export default function PreviewWorkspace({
                   disabled={previewLoading || !hasPatternImage}
                   title={hasPatternImage ? undefined : 'Add a pattern first'}
                 >
-                  {previewLoading ? 'Generating…' : 'Update preview'}
+                  {previewLoading
+                    ? 'Generating…'
+                    : hasGeneratedMockups
+                      ? 'Update preview'
+                      : 'See preview'}
                 </button>
               )}
               {placementActionMsg && (
