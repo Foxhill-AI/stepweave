@@ -54,6 +54,12 @@ interface PreviewWorkspaceProps {
   onPlacementsStateChange?: (
     nextOrUpdater: PrintfulPlacementsState | ((prev: PrintfulPlacementsState) => PrintfulPlacementsState)
   ) => void
+  /** Placement layout actions — rendered contextually below the shoe canvas */
+  onSaveLayout?: () => Promise<void>
+  onRefreshPrintfulPreview?: () => Promise<void>
+  saveLoading?: boolean
+  previewLoading?: boolean
+  hasPatternImage?: boolean
 }
 
 function getExtension(filename: string): string {
@@ -80,6 +86,11 @@ export default function PreviewWorkspace({
   activePlacement: externalActivePlacement,
   onActivePlacementChange,
   onPlacementsStateChange,
+  onSaveLayout,
+  onRefreshPrintfulPreview,
+  saveLoading = false,
+  previewLoading = false,
+  hasPatternImage = false,
 }: PreviewWorkspaceProps) {
   const tabs = placementMockups?.length ? placementMockups : null
   // Internal tab active placement (for mockup tabs), separate from shoe canvas placement
@@ -92,7 +103,30 @@ export default function PreviewWorkspace({
   const [uploading, setUploading] = useState(false)
   // 'canvas' = shoe template editor, 'mockups' = generated mockup images
   const [viewMode, setViewMode] = useState<'canvas' | 'mockups'>('canvas')
+  const [placementActionMsg, setPlacementActionMsg] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleSaveLayout = async () => {
+    if (!onSaveLayout) return
+    setPlacementActionMsg(null)
+    try {
+      await onSaveLayout()
+      setPlacementActionMsg('Layout saved.')
+      setTimeout(() => setPlacementActionMsg(null), 2500)
+    } catch {
+      setPlacementActionMsg('Save failed.')
+    }
+  }
+
+  const handleRefreshPreview = async () => {
+    if (!onRefreshPrintfulPreview) return
+    setPlacementActionMsg(null)
+    try {
+      await onRefreshPrintfulPreview()
+    } catch {
+      setPlacementActionMsg('Preview request failed.')
+    }
+  }
 
   useEffect(() => {
     if (!tabs?.length) {
@@ -384,7 +418,7 @@ export default function PreviewWorkspace({
         </div>
       )}
 
-      {/* CANVAS VIEW: ShoeDesignEditor */}
+      {/* CANVAS VIEW: ShoeDesignEditor + placement action buttons */}
       {hasImage && useShoeCanvas && (viewMode === 'canvas' || !hasMockups) && !mockupImagesLoading && (
         <div className="preview-shoe-canvas-section">
           <ShoeDesignEditor
@@ -395,6 +429,39 @@ export default function PreviewWorkspace({
             patternImageUrl={imageUrl}
             onPlacementChange={handleShoeChange}
           />
+          {(onSaveLayout || onRefreshPrintfulPreview) && (
+            <div className="preview-placement-actions">
+              {onSaveLayout && (
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-secondary"
+                  onClick={() => void handleSaveLayout()}
+                  disabled={saveLoading}
+                >
+                  {saveLoading ? 'Saving…' : 'Save layout'}
+                </button>
+              )}
+              {onRefreshPrintfulPreview && (
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-publish"
+                  onClick={() => void handleRefreshPreview()}
+                  disabled={previewLoading || !hasPatternImage}
+                  title={hasPatternImage ? undefined : 'Add a pattern first'}
+                >
+                  {previewLoading ? 'Generating…' : 'Update preview'}
+                </button>
+              )}
+              {placementActionMsg && (
+                <span className="preview-placement-msg" role="status">{placementActionMsg}</span>
+              )}
+              {!hasPatternImage && (
+                <p className="preview-placement-hint" role="note">
+                  Upload or generate a pattern to enable product preview.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -1615,52 +1615,6 @@
   color: var(--color-text-light);
 }
 
-.base-model-color-section {
-  padding: 0 var(--spacing-lg) var(--spacing-lg);
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--spacing-lg);
-}
-
-.base-model-color-hint {
-  font-size: 0.8125rem;
-  color: var(--color-text-light);
-  margin: 0 0 var(--spacing-sm) 0;
-}
-
-.base-model-color-options {
-  display: flex;
-  gap: var(--spacing-lg);
-  flex-wrap: wrap;
-}
-
-.base-model-color-option {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  cursor: pointer;
-  font-size: 0.9375rem;
-  color: var(--color-text);
-}
-
-.base-model-color-option input {
-  margin: 0;
-}
-
-.base-model-color-swatch {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.base-model-color-swatch--white {
-  background: #fff;
-}
-
-.base-model-color-swatch--black {
-  background: #1a1a1a;
-}
 
 .base-model-actions {
   padding: var(--spacing-lg);
@@ -1864,4 +1818,351 @@
 .design-tool-left--manual .placement-editor-panel {
   margin-top: 0;
   border-top: none;
+}
+
+/* ─── Step progress bar ─────────────────────────────────────────────────── */
+
+.design-tool-step-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-xl);
+  background: var(--color-background-light);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.design-tool-back-link {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.design-tool-back-link:hover {
+  opacity: 0.75;
+}
+
+.design-tool-steps {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex: 1;
+  justify-content: center;
+}
+
+.design-tool-step {
+  font-size: 0.8125rem;
+  color: var(--color-text-light);
+  font-weight: 400;
+}
+
+.design-tool-step--done {
+  color: var(--color-text-light);
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.design-tool-step--active {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.design-tool-step-sep {
+  font-size: 0.75rem;
+  color: var(--color-text-light);
+  opacity: 0.5;
+}
+
+.design-tool-autosave {
+  font-size: 0.75rem;
+  color: var(--color-text-light);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 60px;
+  text-align: right;
+}
+
+/* ─── Create product slide-over drawer ──────────────────────────────────── */
+
+.design-tool-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 200;
+  backdrop-filter: blur(2px);
+}
+
+.design-tool-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 100vw);
+  background: var(--color-background);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: drawer-slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes drawer-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.design-tool-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.design-tool-drawer-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.design-tool-drawer-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  font-size: 1rem;
+  color: var(--color-text-light);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.design-tool-drawer-close:hover {
+  background: var(--color-background-light);
+  color: var(--color-text);
+}
+
+.design-tool-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.design-tool-drawer-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
+}
+
+.design-tool-drawer-actions .design-tool-btn {
+  flex: 1;
+}
+
+/* ─── Shoe design tabs — cleaner look ───────────────────────────────────── */
+
+.shoe-design-tabs {
+  display: flex;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-background-light);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.shoe-design-tab {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-light);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  line-height: 1.4;
+}
+
+.shoe-design-tab:hover {
+  background: #e8f2ff;
+  color: var(--color-primary);
+}
+
+.shoe-design-tab--active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+/* ─── PreviewWorkspace: placement action buttons (below canvas) ─────────── */
+
+.preview-placement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-background-light);
+}
+
+.preview-placement-actions .design-tool-btn {
+  flex: 1;
+  min-width: 120px;
+}
+
+.preview-placement-msg {
+  width: 100%;
+  font-size: 0.8125rem;
+  color: var(--color-primary);
+  margin: 0;
+}
+
+.preview-placement-hint {
+  width: 100%;
+  font-size: 0.8125rem;
+  color: var(--color-text-light);
+  margin: 0;
+}
+
+/* ─── BaseModelSelection: variant preview loading ───────────────────────── */
+
+.base-model-preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* ─── Structural color cards (Issue 1) ──────────────────────────────────── */
+
+.base-model-color-section {
+  padding: var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.base-model-color-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.base-model-color-hint {
+  font-size: 0.8125rem;
+  color: var(--color-text-light);
+  margin: 0 0 var(--spacing-md) 0;
+}
+
+.base-model-color-cards {
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+.base-model-color-card {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  background: var(--color-background);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  user-select: none;
+}
+
+.base-model-color-card:hover {
+  border-color: var(--color-primary);
+}
+
+.base-model-color-card--selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.14);
+}
+
+.base-model-color-card-swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.base-model-color-card-swatch--white {
+  background: #ffffff;
+  border: 1.5px solid #d0d0d0;
+}
+
+.base-model-color-card-swatch--black {
+  background: #1a1a1a;
+}
+
+.base-model-color-card-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+  text-transform: capitalize;
+}
+
+.base-model-color-card-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 0.625rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ─── Desktop viewport-filling layout (Issue 3) ─────────────────────────── */
+
+@media (min-width: 1024px) {
+  /* Left and right panels scroll internally on desktop */
+  .design-tool-left {
+    overflow-y: auto;
+  }
+
+  .design-tool-right {
+    overflow-y: auto;
+  }
+
+  /* Editor pages: fill the viewport, let the page scroll for footer */
+  .design-tool-page-wrapper--editor {
+    height: 100vh;
+    overflow-y: auto;
+  }
+
+  /* Force the flex chain to propagate height properly */
+  .design-tool-page-wrapper--editor .design-tool-main,
+  .design-tool-page-wrapper--editor .design-tool-page {
+    overflow: hidden;
+    min-height: 0;
+    flex-shrink: 0;
+  }
+
+  .design-tool-page-wrapper--editor .design-tool-layout {
+    /* Remove the fixed calc hack; rely on flex fill instead */
+    min-height: 0;
+  }
 }

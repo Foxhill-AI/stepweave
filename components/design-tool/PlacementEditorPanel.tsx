@@ -37,6 +37,8 @@ interface PlacementEditorPanelProps {
   onExternalActivePlacementChange?: (placement: string) => void
   /** When true, the canvas (ShoeDesignEditor / PlacementCanvasPreview) is rendered elsewhere — skip it here. */
   hideCanvas?: boolean
+  /** When true, action buttons (save layout, update preview) are rendered elsewhere — skip them here. */
+  hideActions?: boolean
 }
 
 export default function PlacementEditorPanel({
@@ -55,6 +57,7 @@ export default function PlacementEditorPanel({
   externalActivePlacement,
   onExternalActivePlacementChange,
   hideCanvas = false,
+  hideActions = false,
 }: PlacementEditorPanelProps) {
   const [meta, setMeta] = useState<PlacementMeta[]>([])
   const [metaLoading, setMetaLoading] = useState(false)
@@ -218,11 +221,6 @@ export default function PlacementEditorPanel({
   return (
     <div className="placement-editor-panel" aria-label="Print placement editor">
       <h3 className="placement-editor-title">Print placement</h3>
-      <p className="placement-editor-hint">
-        Adjust how your pattern fits each print area (visual editor + fine controls). Stored in{' '}
-        <code>design_state.printful_placements</code>. Use &quot;Update product preview&quot; to
-        render Printful mockups.
-      </p>
 
       {metaLoading && <p className="placement-editor-status">Loading placements…</p>}
       {metaError && (
@@ -324,38 +322,42 @@ export default function PlacementEditorPanel({
               </div>
           )}
 
-          <div className="placement-editor-actions">
-            <button
-              type="button"
-              className="design-tool-btn design-tool-btn-secondary"
-              onClick={() => void handleSave()}
-              disabled={saveLoading}
-            >
-              {saveLoading ? 'Saving…' : 'Save layout to draft'}
-            </button>
-            <button
-              type="button"
-              className="design-tool-btn design-tool-btn-publish"
-              onClick={() => void handlePreview()}
-              disabled={previewLoading || !hasPatternImage}
-              title={
-                hasPatternImage
-                  ? 'Calls Printful with your pattern (may take ~15–90s)'
-                  : 'Add a pattern first'
-              }
-            >
-              {previewLoading ? 'Generating preview…' : 'Update product preview (Printful)'}
-            </button>
-          </div>
-          {localMsg && (
-            <p className="placement-editor-msg" role="status">
-              {localMsg}
-            </p>
-          )}
-          {!hasPatternImage && (
-            <p className="placement-editor-warn" role="note">
-              Upload or generate a pattern to enable Printful mockups with your artwork.
-            </p>
+          {!hideActions && (
+            <>
+              <div className="placement-editor-actions">
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-secondary"
+                  onClick={() => void handleSave()}
+                  disabled={saveLoading}
+                >
+                  {saveLoading ? 'Saving…' : 'Save layout to draft'}
+                </button>
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-publish"
+                  onClick={() => void handlePreview()}
+                  disabled={previewLoading || !hasPatternImage}
+                  title={
+                    hasPatternImage
+                      ? 'Generate Printful mockups with your pattern'
+                      : 'Add a pattern first'
+                  }
+                >
+                  {previewLoading ? 'Generating…' : 'Update preview'}
+                </button>
+              </div>
+              {localMsg && (
+                <p className="placement-editor-msg" role="status">
+                  {localMsg}
+                </p>
+              )}
+              {!hasPatternImage && (
+                <p className="placement-editor-warn" role="note">
+                  Upload or generate a pattern to enable Printful mockups.
+                </p>
+              )}
+            </>
           )}
         </>
       )}

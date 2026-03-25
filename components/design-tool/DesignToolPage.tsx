@@ -64,6 +64,9 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
 
   const designDataRef = useRef(designData)
   designDataRef.current = designData
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
 
   const isDraftEditor = Boolean(draftId)
 
@@ -230,6 +233,24 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       .finally(() => { if (!cancelled) setTemplatesLoading(false) })
     return () => { cancelled = true }
   }, [localDraft?.base_model_id, printfulVariantId])
+
+  // Auto-save design_state 2s after the user stops making changes
+  useEffect(() => {
+    if (!draftId) return
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => {
+      setAutoSaveState('saving')
+      void updateDesignDraft(draftId, { design_state: designDataRef.current })
+        .then((ok) => {
+          setAutoSaveState(ok ? 'saved' : 'idle')
+          if (ok) setTimeout(() => setAutoSaveState('idle'), 2000)
+        })
+        .catch(() => setAutoSaveState('idle'))
+    }, 2000)
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    }
+  }, [draftId, designData])
 
   const handlePrintfulVariantChange = useCallback(
     async (nextId: number) => {
@@ -461,6 +482,23 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
 
   return (
     <div className="design-tool-page">
+      {isDraftEditor && (
+        <div className="design-tool-step-bar">
+          <a href="/design-tool" className="design-tool-back-link">← Change shoe</a>
+          <div className="design-tool-steps" aria-label="Progress">
+            <span className="design-tool-step design-tool-step--done">Model</span>
+            <span className="design-tool-step-sep" aria-hidden="true">›</span>
+            <span className="design-tool-step design-tool-step--active" aria-current="step">Design</span>
+            <span className="design-tool-step-sep" aria-hidden="true">›</span>
+            <span className="design-tool-step">Publish</span>
+          </div>
+          {autoSaveState !== 'idle' && (
+            <span className="design-tool-autosave" aria-live="polite">
+              {autoSaveState === 'saving' ? 'Saving…' : 'Saved ✓'}
+            </span>
+          )}
+        </div>
+      )}
       <div className="design-tool-layout">
         <section
           className={`design-tool-left ${mode === 'manual' ? 'design-tool-left--manual' : ''}`}
@@ -470,33 +508,6 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         >
           <ModeTabs mode={mode} onModeChange={setMode} />
           <div className="design-tool-panel-content">
-            {isDraftEditor && variantOptions.length > 0 && (
-              <div className="design-tool-variant-row">
-                <label htmlFor="design-tool-printful-variant" className="design-tool-label">
-                  Shoe color &amp; size (Printful variant)
-                </label>
-                <select
-                  id="design-tool-printful-variant"
-                  className="design-tool-select"
-                  value={printfulVariantId ?? ''}
-                  onChange={(e) => {
-                    const id = Number(e.target.value)
-                    if (Number.isFinite(id)) void handlePrintfulVariantChange(id)
-                  }}
-                >
-                  {variantOptions.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="design-tool-variant-hint">
-                  Used for print areas and mockups. Changing it reloads catalog preview; save layout
-                  if you adjusted placements.
-                </p>
-              </div>
-            )}
-
             {mode === 'ai' ? (
               <AIPromptPanel
                 draftId={draftId}
@@ -509,7 +520,12 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             {isDraftEditor &&
               localDraft?.base_model_id &&
               typeof localDraft.base_model_id === 'string' &&
-              printfulVariantId != null && (
+              printfulVariantId != null &&
+              /* Only show placement controls after the user has added a pattern image */
+              Boolean(
+                (localDraft.pattern_image_url && String(localDraft.pattern_image_url).trim()) ||
+                (typeof designData.imageUrl === 'string' && designData.imageUrl.trim())
+              ) && (
                 <PlacementEditorPanel
                   productId={localDraft.base_model_id.trim()}
                   variantId={printfulVariantId}
@@ -528,79 +544,29 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   externalActivePlacement={activePlacement}
                   onExternalActivePlacementChange={setActivePlacement}
                   hideCanvas
+                  hideActions
                 />
               )}
           </div>
           <div className="design-tool-product-form">
             {isDraftEditor ? (
-              <>
-                <h3 className="design-tool-form-title">Save &amp; create product</h3>
-                <label htmlFor="design-tool-draft-name" className="design-tool-label">
-                  Product name
-                </label>
-                <input
-                  id="design-tool-draft-name"
-                  type="text"
-                  className="design-tool-input"
-                  placeholder="Product name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  aria-required
-                />
-                <label htmlFor="design-tool-draft-price" className="design-tool-label">
-                  Price ($)
-                </label>
-                <input
-                  id="design-tool-draft-price"
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  className="design-tool-input"
-                  placeholder="0.00"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  aria-required
-                />
-                <label htmlFor="design-tool-draft-category" className="design-tool-label">
-                  Category
-                </label>
-                <select
-                  id="design-tool-draft-category"
-                  className="design-tool-select"
-                  value={categoryId === '' ? '' : String(categoryId)}
-                  onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
+              <div className="design-tool-form-actions">
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-draft"
+                  disabled={createLoading}
+                  onClick={handleSaveDraft}
                 >
-                  <option value="">No category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                {createError && (
-                  <p className="design-tool-form-error" role="alert">
-                    {createError}
-                  </p>
-                )}
-                <div className="design-tool-form-actions">
-                  <button
-                    type="button"
-                    className="design-tool-btn design-tool-btn-draft"
-                    disabled={createLoading}
-                    onClick={handleSaveDraft}
-                  >
-                    {createLoading ? 'Saving…' : 'Save as Draft'}
-                  </button>
-                  <button
-                    type="button"
-                    className="design-tool-btn design-tool-btn-publish"
-                    disabled={createLoading}
-                    onClick={handleCreateProductFromDraft}
-                  >
-                    {createLoading ? 'Creating…' : 'Create product'}
-                  </button>
-                </div>
-              </>
+                  {createLoading ? 'Saving…' : 'Save draft'}
+                </button>
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-publish"
+                  onClick={() => setIsCreateDrawerOpen(true)}
+                >
+                  Create product
+                </button>
+              </div>
             ) : (
               <>
                 <h3 className="design-tool-form-title">Product details</h3>
@@ -713,9 +679,113 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             activePlacement={activePlacement}
             onActivePlacementChange={setActivePlacement}
             onPlacementsStateChange={handlePlacementsStateChange}
+            onSaveLayout={isDraftEditor ? handleSavePlacementLayout : undefined}
+            onRefreshPrintfulPreview={isDraftEditor ? handleRefreshPrintfulPreview : undefined}
+            saveLoading={placementSaveLoading}
+            previewLoading={printfulPreviewLoading}
+            hasPatternImage={Boolean(
+              localDraft?.pattern_image_url && String(localDraft.pattern_image_url).trim()
+            )}
           />
         </section>
       </div>
+
+      {/* Create product slide-over drawer */}
+      {isCreateDrawerOpen && isDraftEditor && (
+        <>
+          <div
+            className="design-tool-drawer-backdrop"
+            onClick={() => setIsCreateDrawerOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            className="design-tool-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create product"
+          >
+            <div className="design-tool-drawer-header">
+              <h3 className="design-tool-drawer-title">Create product</h3>
+              <button
+                type="button"
+                className="design-tool-drawer-close"
+                onClick={() => setIsCreateDrawerOpen(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="design-tool-drawer-body">
+              <label htmlFor="dt-drawer-name" className="design-tool-label">
+                Product name
+              </label>
+              <input
+                id="dt-drawer-name"
+                type="text"
+                className="design-tool-input"
+                placeholder="Product name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-required
+              />
+              <label htmlFor="dt-drawer-price" className="design-tool-label">
+                Price ($)
+              </label>
+              <input
+                id="dt-drawer-price"
+                type="number"
+                min={0}
+                step={0.01}
+                className="design-tool-input"
+                placeholder="0.00"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                aria-required
+              />
+              <label htmlFor="dt-drawer-category" className="design-tool-label">
+                Category
+              </label>
+              <select
+                id="dt-drawer-category"
+                className="design-tool-select"
+                value={categoryId === '' ? '' : String(categoryId)}
+                onChange={(e) =>
+                  setCategoryId(e.target.value === '' ? '' : Number(e.target.value))
+                }
+              >
+                <option value="">No category</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {createError && (
+                <p className="design-tool-form-error" role="alert">
+                  {createError}
+                </p>
+              )}
+              <div className="design-tool-drawer-actions">
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-draft"
+                  onClick={() => setIsCreateDrawerOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-publish"
+                  disabled={createLoading}
+                  onClick={handleCreateProductFromDraft}
+                >
+                  {createLoading ? 'Creating…' : 'Create product'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
