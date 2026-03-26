@@ -527,6 +527,103 @@
   color: var(--color-primary);
 }
 
+.ai-prompt-variant-card--selecting {
+  border-color: var(--color-primary);
+  opacity: 0.85;
+}
+
+/* Conversation turn layout */
+.ai-prompt-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.ai-prompt-turn-response {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+/* Chat bubbles */
+.ai-prompt-message {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius);
+  max-width: 90%;
+}
+
+.ai-prompt-message.placeholder {
+  color: var(--color-text-muted, #888);
+  background: none;
+  padding: var(--spacing-md);
+  text-align: center;
+  max-width: 100%;
+}
+
+.ai-prompt-message.user {
+  align-self: flex-end;
+  background: var(--color-primary);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.ai-prompt-message.assistant {
+  align-self: flex-start;
+  background: var(--color-background-light);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-bottom-left-radius: 4px;
+}
+
+/* Inline generating indicator */
+.ai-prompt-generating {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #888);
+  padding: var(--spacing-sm) 0;
+}
+
+.ai-prompt-generating-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-prompt-generating-dots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: ai-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.ai-prompt-generating-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.ai-prompt-generating-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes ai-dot-pulse {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+/* Keyboard shortcut hint */
+.ai-prompt-shortcut-hint {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #aaa);
+  margin: 0;
+  text-align: right;
+}
+
 /* Print placement editor (design_state.printful_placements) */
 .placement-editor-panel {
   margin-top: var(--spacing-lg);
