@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Upload, Palette, X } from 'lucide-react'
+import { Upload, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
-import type { DesignToolMode } from './ModeTabs'
 import ShoeDesignEditor from './ShoeDesignEditor'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import type { PrintfulPlacementsState, PlacementCompactTransform } from '@/lib/designDraftState'
@@ -27,7 +26,6 @@ export type PlacementTab = {
 }
 
 interface PreviewWorkspaceProps {
-  mode: DesignToolMode
   /** Dynamic mockup per placement (same variant). When set, tabs follow these. */
   placementMockups?: PlacementTab[] | null
   /** Catalog image when mockups are loading or failed. */
@@ -70,7 +68,6 @@ function getExtension(filename: string): string {
 }
 
 export default function PreviewWorkspace({
-  mode,
   placementMockups,
   catalogFallbackUrl,
   catalogOnlyReference,
@@ -265,21 +262,6 @@ export default function PreviewWorkspace({
     setIsDragging(false)
   }
 
-  if (mode === 'ai') {
-    return (
-      <div className="preview-workspace preview-workspace--ai">
-        <div className="preview-workspace-preview-area" aria-label="Preview">
-          <div className="preview-workspace-preview-icon" aria-hidden>
-            <Palette size={28} strokeWidth={1.5} />
-          </div>
-          <p className="preview-workspace-preview-hint">
-            Your design will appear here. Describe your idea and tap Generate.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
   const activeTab = tabs?.find((t) => t.placement === activePlacement)
   const activeLabel = activeTab?.label ?? 'Product'
 
@@ -300,7 +282,7 @@ export default function PreviewWorkspace({
   const showToggle = useShoeCanvas && hasMockups
 
   return (
-    <div className="preview-workspace preview-workspace--manual">
+    <div className="preview-workspace">
       {/* Hidden file input — always rendered */}
       <input
         ref={fileInputRef}
@@ -311,8 +293,8 @@ export default function PreviewWorkspace({
         aria-hidden
       />
 
-      {/* STEP 1: No image — full upload hero */}
-      {!hasImage && !uploading && (
+      {/* STEP 1: No image and no shoe canvas — upload hero fallback */}
+      {!hasImage && !uploading && !useShoeCanvas && (
         <div
           className={`preview-upload-hero${isDragging ? ' preview-upload-hero--dragging' : ''}`}
           role="button"
@@ -423,8 +405,8 @@ export default function PreviewWorkspace({
         </div>
       )}
 
-      {/* CANVAS VIEW: ShoeDesignEditor + placement action buttons */}
-      {hasImage && useShoeCanvas && (viewMode === 'canvas' || !hasMockups) && !mockupImagesLoading && (
+      {/* CANVAS VIEW: ShoeDesignEditor + placement action buttons — shown even without a pattern */}
+      {useShoeCanvas && (viewMode === 'canvas' || !hasMockups) && !mockupImagesLoading && (
         <div className="preview-shoe-canvas-section">
           <ShoeDesignEditor
             templates={templateWithUrl}

@@ -1,23 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { moderateText } from '@/lib/openai/moderation'
+import { moderateText, moderateImageUrl } from '@/lib/openai/moderation'
 import { interpretDesignPrompt } from '@/lib/openai/prompt-interpreter'
-import { generateTextToImageBatch } from '@/lib/fal/generate'
+import { generateTextToImageBatch, generateImageToImageBatch } from '@/lib/fal/generate'
 
 const BUCKET = 'design-patterns'
 const SIGNED_URL_EXPIRES_IN = 3600
 const MAX_PROMPT_LENGTH = 4000
 
 type GenerateBody = {
-  mode?: string
+  mode?: 'text-to-image' | 'image-to-image'
   prompt?: string
   variationCount?: number
+  /** Storage path of the reference image (required for image-to-image). */
+  referenceImagePath?: string
 }
 
 /**
  * POST /api/design-drafts/[id]/generate
- * Path A: text → moderation → GPT interpreter → Fal fast-sdxl → upload to Storage → signed preview URLs.
+ * Path A (text-to-image): prompt → moderation → GPT interpreter → Fal fast-sdxl
+ * Path B (image-to-image): referenceImagePath + prompt → moderation → GPT interpreter → Fal fast-sdxl/image-to-image
  */
 export async function POST(
   request: NextRequest,
@@ -36,8 +39,14 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  if (body.mode && body.mode !== 'text-to-image') {
+  const isImageToImage = body.mode === 'image-to-image'
+
+  if (body.mode && body.mode !== 'text-to-image' && body.mode !== 'image-to-image') {
     return NextResponse.json({ error: 'Unsupported mode' }, { status: 400 })
+  }
+
+  if (isImageToImage && !body.referenceImagePath) {
+    return NextResponse.json({ error: 'referenceImagePath is required for image-to-image' }, { status: 400 })
   }
 
   const promptRaw = typeof body.prompt === 'string' ? body.prompt.trim() : ''
@@ -82,10 +91,35 @@ export async function POST(
 
   const textMod = await moderateText(prompt)
   if (!textMod.allowed) {
-    return NextResponse.json(
-      { error: textMod.message },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: textMod.message }, { status: 400 })
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error('[generate] Missing SUPABASE_SERVICE_ROLE_KEY or URL')
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  }
+
+  const admin = createClient(supabaseUrl, serviceRoleKey)
+
+  // For image-to-image: get a signed URL for the reference image and moderate it
+  let referenceSignedUrl: string | null = null
+  if (isImageToImage && body.referenceImagePath) {
+    const { data: signed, error: signErr } = await admin.storage
+      .from(BUCKET)
+      .createSignedUrls([body.referenceImagePath], SIGNED_URL_EXPIRES_IN)
+
+    if (signErr || !signed?.[0]?.signedUrl) {
+      console.error('[generate] reference signed URL', signErr?.message)
+      return NextResponse.json({ error: 'Could not load reference image.' }, { status: 500 })
+    }
+    referenceSignedUrl = signed[0].signedUrl
+
+    const imgMod = await moderateImageUrl(referenceSignedUrl)
+    if (!imgMod.allowed) {
+      return NextResponse.json({ error: imgMod.message }, { status: 400 })
+    }
   }
 
   let interpreted: {
@@ -104,23 +138,22 @@ export async function POST(
     }
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error('[generate] Missing SUPABASE_SERVICE_ROLE_KEY or URL')
-    return NextResponse.json(
-      { error: 'Server configuration error' },
-      { status: 500 }
-    )
-  }
-
   let batch: Awaited<ReturnType<typeof generateTextToImageBatch>>
   try {
-    batch = await generateTextToImageBatch({
-      prompt: interpreted.prompt_for_image_model,
-      negativePrompt: interpreted.negative_prompt,
-      count: variationCount,
-    })
+    if (isImageToImage && referenceSignedUrl) {
+      batch = await generateImageToImageBatch({
+        imageUrl: referenceSignedUrl,
+        prompt: interpreted.prompt_for_image_model,
+        negativePrompt: interpreted.negative_prompt,
+        count: variationCount,
+      })
+    } else {
+      batch = await generateTextToImageBatch({
+        prompt: interpreted.prompt_for_image_model,
+        negativePrompt: interpreted.negative_prompt,
+        count: variationCount,
+      })
+    }
   } catch (e) {
     console.error('[generate] Fal', e)
     return NextResponse.json(
@@ -140,7 +173,6 @@ export async function POST(
     )
   }
 
-  const admin = createClient(supabaseUrl, serviceRoleKey)
   const generationId = crypto.randomUUID()
   const variants: Array<{
     id: string

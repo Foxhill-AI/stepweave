@@ -1,37 +1,40 @@
 'use client'
 
-export type DesignToolMode = 'ai' | 'manual'
+export type PatternSource = 'ai' | 'upload'
 
-interface ModeTabsProps {
-  mode: DesignToolMode
-  onModeChange: (mode: DesignToolMode) => void
+/** @deprecated use PatternSource */
+export type DesignToolMode = PatternSource
+
+interface SourceToggleProps {
+  source: PatternSource
+  onSourceChange: (source: PatternSource) => void
 }
 
-export default function ModeTabs({ mode, onModeChange }: ModeTabsProps) {
+export default function SourceToggle({ source, onSourceChange }: SourceToggleProps) {
   return (
     <div id="design-tool-tabs" className="design-tool-tabs-wrap">
-      <div className="design-tool-tabs" role="tablist" aria-label="Design mode">
+      <div className="design-tool-tabs" role="tablist" aria-label="Pattern source">
         <button
           type="button"
           role="tab"
-          aria-selected={mode === 'ai'}
+          aria-selected={source === 'ai'}
           aria-controls="design-tool-left-panel"
           id="tab-ai"
           className="design-tool-tab"
-          onClick={() => onModeChange('ai')}
+          onClick={() => onSourceChange('ai')}
         >
-          AI Design
+          ✨ Generate
         </button>
         <button
           type="button"
           role="tab"
-          aria-selected={mode === 'manual'}
+          aria-selected={source === 'upload'}
           aria-controls="design-tool-left-panel"
-          id="tab-manual"
+          id="tab-upload"
           className="design-tool-tab"
-          onClick={() => onModeChange('manual')}
+          onClick={() => onSourceChange('upload')}
         >
-          Manual
+          ↑ Upload
         </button>
       </div>
     </div>

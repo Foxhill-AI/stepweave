@@ -384,6 +384,114 @@
   color: var(--color-text-light);
 }
 
+/* Reference image row (shown when a file is attached) */
+.ai-prompt-reference-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-background-light);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+}
+
+.ai-prompt-reference-thumb-wrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: calc(var(--border-radius) / 2);
+  overflow: hidden;
+}
+
+.ai-prompt-reference-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ai-prompt-reference-uploading {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-prompt-reference-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ai-ref-spin 0.7s linear infinite;
+}
+
+@keyframes ai-ref-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ai-prompt-reference-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ai-prompt-reference-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-prompt-reference-hint {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #888);
+}
+
+.ai-prompt-reference-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text-light);
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+
+.ai-prompt-reference-remove:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+/* Badge on user bubble when a reference image was used */
+.ai-prompt-turn-ref-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  padding: 2px 6px;
+  margin-right: var(--spacing-xs);
+  vertical-align: middle;
+}
+
 .ai-prompt-input-wrap {
   display: flex;
   flex-direction: column;
@@ -622,6 +730,102 @@
   color: var(--color-text-muted, #aaa);
   margin: 0;
   text-align: right;
+}
+
+/* ── Source panels (AI always mounted, hidden via CSS to preserve history) ── */
+.design-tool-source-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.design-tool-source-panel--hidden {
+  display: none;
+}
+
+/* Coming soon placeholder (Upload tab) */
+.design-tool-coming-soon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl) var(--spacing-md);
+  text-align: center;
+}
+
+.design-tool-coming-soon-icon {
+  font-size: 2rem;
+  opacity: 0.4;
+}
+
+.design-tool-coming-soon-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.design-tool-coming-soon-hint {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #888);
+  margin: 0;
+  background: var(--color-background-light);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: 999px;
+}
+
+/* ── Selected pattern preview panel (between messages and input) ── */
+.ai-prompt-selected-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background-light);
+}
+
+.ai-prompt-selected-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted, #888);
+  margin: 0;
+  align-self: flex-start;
+}
+
+.ai-prompt-selected-img {
+  width: 100%;
+  max-width: 220px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--border-radius);
+  border: 2px solid var(--color-primary);
+}
+
+.ai-prompt-apply-btn {
+  width: 100%;
+  max-width: 220px;
+  font-size: 0.875rem;
+}
+
+.ai-prompt-selected-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #888);
+  margin: 0;
+  text-align: center;
+}
+
+/* Selected indicator on variant cards */
+.ai-prompt-variant-card--selected {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Print placement editor (design_state.printful_placements) */
