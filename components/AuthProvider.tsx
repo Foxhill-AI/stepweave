@@ -41,39 +41,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadedForUserId = useRef<string | null>(null)
 
   const fetchUserAccount = async (authUserId: string, userEmail?: string | null) => {
-    const { data } = await supabase
+    // First attempt
+    let { data } = await supabase
       .from('user_account')
       .select('*')
       .eq('auth_user_id', authUserId)
       .maybeSingle()
+
+    // If the row isn't there yet, the DB trigger may still be committing (OAuth race).
+    // Retry with increasing delays before giving up and creating the row manually.
+    if (!data) {
+      for (const ms of [300, 700, 1500]) {
+        await new Promise((r) => setTimeout(r, ms))
+        const { data: retried } = await supabase
+          .from('user_account')
+          .select('*')
+          .eq('auth_user_id', authUserId)
+          .maybeSingle()
+        if (retried) { data = retried; break }
+      }
+    }
+
     if (data) {
       setUserAccount(data)
       loadedForUserId.current = authUserId
       return
     }
+
+    // Absolute fallback: trigger didn't run — create the row manually.
     const defaultUsername =
       userEmail && userEmail.includes('@')
         ? userEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 50) || 'user'
         : 'user'
-    const { error } = await supabase
-      .from('user_account')
-      .insert({ auth_user_id: authUserId, username: defaultUsername })
-    if (!error) {
-      const { data: inserted } = await supabase
-        .from('user_account')
-        .select('*')
-        .eq('auth_user_id', authUserId)
-        .maybeSingle()
-      setUserAccount(inserted ?? null)
-      loadedForUserId.current = authUserId
-      return
-    }
-    const { data: retry } = await supabase
+    await supabase.from('user_account').insert({
+      auth_user_id: authUserId,
+      username: defaultUsername,
+      role: 'user',
+      subscription_tier: 'free',
+    })
+    // Fetch regardless of whether the insert succeeded or lost a race
+    const { data: final } = await supabase
       .from('user_account')
       .select('*')
       .eq('auth_user_id', authUserId)
       .maybeSingle()
-    setUserAccount(retry ?? null)
+    setUserAccount(final ?? null)
     loadedForUserId.current = authUserId
   }
 
