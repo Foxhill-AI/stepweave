@@ -328,11 +328,13 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
               }
             : null
         )
+        setMode('manual')
+        void handleRefreshPrintfulPreview()
       } else {
         throw new Error('update failed')
       }
     },
-    [draftId]
+    [draftId, handleRefreshPrintfulPreview]
   )
 
   const handlePatternUploaded = useCallback(
