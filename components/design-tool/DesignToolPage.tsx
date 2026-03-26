@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import ModeTabs, { type DesignToolMode } from './ModeTabs'
 import AIPromptPanel from './AIPromptPanel'
-import ManualEditorPlaceholder from './ManualEditorPlaceholder'
 import PlacementEditorPanel from './PlacementEditorPanel'
 import PreviewWorkspace, { type PlacementTab } from './PreviewWorkspace'
 import {
@@ -27,7 +25,6 @@ interface DesignToolPageProps {
 export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) {
   const router = useRouter()
   const { user, userAccount } = useAuth()
-  const [mode, setMode] = useState<DesignToolMode>('ai')
   const [name, setName] = useState('')
   const [price, setPrice] = useState<string>('')
   const [categoryId, setCategoryId] = useState<number | ''>('')
@@ -328,7 +325,6 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
               }
             : null
         )
-        setMode('manual')
         void handleRefreshPrintfulPreview()
       } else {
         throw new Error('update failed')
@@ -479,21 +475,16 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       )}
       <div className="design-tool-layout">
         <section
-          className={`design-tool-left ${mode === 'manual' ? 'design-tool-left--manual' : ''}`}
+          className="design-tool-left"
           id="design-tool-left-panel"
-          aria-labelledby="design-tool-tabs"
+          aria-label="AI Design"
           role="region"
         >
-          <ModeTabs mode={mode} onModeChange={setMode} />
           <div className="design-tool-panel-content">
-            {mode === 'ai' ? (
-              <AIPromptPanel
-                draftId={draftId}
-                onPatternApplied={handleAiPatternApplied}
-              />
-            ) : (
-              <ManualEditorPlaceholder />
-            )}
+            <AIPromptPanel
+              draftId={draftId}
+              onPatternApplied={handleAiPatternApplied}
+            />
 
             {isDraftEditor &&
               localDraft?.base_model_id &&
@@ -619,11 +610,10 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         </section>
         <section
           className="design-tool-right"
-          aria-label={mode === 'ai' ? 'Preview' : 'Design preview'}
+          aria-label="Shoe design preview"
           role="region"
         >
           <PreviewWorkspace
-            mode={mode}
             draftId={draftId}
             authUserId={user?.id ?? null}
             placementMockups={placementMockups.length > 0 ? placementMockups : null}
