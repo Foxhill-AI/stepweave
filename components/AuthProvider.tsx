@@ -39,54 +39,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userAccount, setUserAccount] = useState<UserAccountRow | null>(null)
   const [loading, setLoading] = useState(true)
   const loadedForUserId = useRef<string | null>(null)
+  const safetyNetRetries = useRef(0)
 
-  const fetchUserAccount = async (authUserId: string, userEmail?: string | null) => {
-    // First attempt
-    let { data } = await supabase
-      .from('user_account')
-      .select('*')
-      .eq('auth_user_id', authUserId)
-      .maybeSingle()
+  const fetchUserAccount = async (authUserId: string, _userEmail?: string | null) => {
+    const dev = process.env.NODE_ENV === 'development'
 
-    // If the row isn't there yet, the DB trigger may still be committing (OAuth race).
-    // Retry with increasing delays before giving up and creating the row manually.
-    if (!data) {
-      for (const ms of [300, 700, 1500]) {
-        await new Promise((r) => setTimeout(r, ms))
-        const { data: retried } = await supabase
-          .from('user_account')
-          .select('*')
-          .eq('auth_user_id', authUserId)
-          .maybeSingle()
-        if (retried) { data = retried; break }
+    // Use the server-side API route which uses the service role key.
+    // This bypasses RLS and any client-side JWT timing issues that occur
+    // right after OAuth (exchangeCodeForSession sets the cookie, server reads it).
+    const tryFetch = async (): Promise<UserAccountRow | null> => {
+      try {
+        const res = await fetch('/api/me/account', { credentials: 'include' })
+        if (!res.ok) {
+          if (dev) console.log('[AuthProvider] /api/me/account status:', res.status)
+          return null
+        }
+        const body = (await res.json()) as { userAccount: UserAccountRow | null }
+        return body.userAccount ?? null
+      } catch {
+        return null
       }
     }
 
-    if (data) {
-      setUserAccount(data)
-      loadedForUserId.current = authUserId
-      return
+    let data = await tryFetch()
+    if (dev) console.log('[AuthProvider] fetchUserAccount attempt 0:', { found: !!data })
+
+    // Retry if the row isn't there yet (DB trigger may still be committing).
+    if (!data) {
+      const delays = [300, 600, 1200, 2400, 4000]
+      for (let i = 0; i < delays.length; i++) {
+        await new Promise((r) => setTimeout(r, delays[i]))
+        data = await tryFetch()
+        if (dev) console.log(`[AuthProvider] fetchUserAccount attempt ${i + 1}:`, { found: !!data })
+        if (data) break
+      }
     }
 
-    // Absolute fallback: trigger didn't run — create the row manually.
-    const defaultUsername =
-      userEmail && userEmail.includes('@')
-        ? userEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 50) || 'user'
-        : 'user'
-    await supabase.from('user_account').insert({
-      auth_user_id: authUserId,
-      username: defaultUsername,
-      role: 'user',
-      subscription_tier: 'free',
-    })
-    // Fetch regardless of whether the insert succeeded or lost a race
-    const { data: final } = await supabase
-      .from('user_account')
-      .select('*')
-      .eq('auth_user_id', authUserId)
-      .maybeSingle()
-    setUserAccount(final ?? null)
+    setUserAccount(data)
     loadedForUserId.current = authUserId
+
+    if (dev && !data) {
+      console.warn('[AuthProvider] fetchUserAccount: no user_account row found after all retries for', authUserId)
+    }
   }
 
   useEffect(() => {
@@ -138,10 +132,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session?.user && !getRecoveryPending()) {
           if (loadedForUserId.current !== session.user.id) {
+            // Keep loading=true while we fetch the user account so no page
+            // renders with user≠null but userAccount=null (blank profile).
+            if (mounted) setLoading(true)
             setUser(session.user)
             await fetchUserAccount(session.user.id, session.user.email)
             if (mounted && typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('auth-ready'))
+              // Yield one tick so React commits setUserAccount before navigating.
+              setTimeout(() => window.dispatchEvent(new CustomEvent('auth-ready')), 0)
             }
           }
         }
@@ -166,6 +164,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // Safety net: if user is authenticated but userAccount is still null after loading
+  // completes, re-fetch. This catches the race where initialize() finds the session
+  // but fetchUserAccount returns null (trigger not committed yet), and the SIGNED_IN
+  // guard then skips re-fetching because loadedForUserId was already set.
+  useEffect(() => {
+    if (loading || !user || userAccount) {
+      if (userAccount) safetyNetRetries.current = 0  // reset counter on success
+      return
+    }
+    if (safetyNetRetries.current >= 3) return  // give up after 3 attempts
+    safetyNetRetries.current += 1
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[AuthProvider] user set but userAccount null — safety-net re-fetch #${safetyNetRetries.current}`)
+    }
+    loadedForUserId.current = null
+    void fetchUserAccount(user.id, user.email)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user, userAccount])
+
   useEffect(() => {
     if (pathname === '/auth/reset-password' || loading) return
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -180,6 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
     setUserAccount(null)
     loadedForUserId.current = null
+    safetyNetRetries.current = 0
   }
 
   const refreshUserAccount = async () => {
