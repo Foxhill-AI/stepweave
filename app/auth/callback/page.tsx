@@ -50,6 +50,10 @@ function AuthCallbackInner() {
             cancelled = true
             clearTimeout(timeoutId)
             if (fallbackId != null) clearTimeout(fallbackId)
+            // Use replace only — router.refresh() was resetting AuthProvider's client state
+            // (userAccount → null) right after fetchUserAccount had correctly set it.
+            // Auth cookies are already in the browser from exchangeCodeForSession, so
+            // server components will read them correctly on the next client-side navigation.
             router.replace('/')
           }
           if (typeof window !== 'undefined') {
