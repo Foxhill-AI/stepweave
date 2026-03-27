@@ -229,7 +229,6 @@ export default function EditProductPage({ productId }: EditProductPageProps) {
           role="region"
         >
           <PreviewWorkspace
-            mode="manual"
             onImageSelect={(url) => setDesignData((prev) => ({ ...prev, imageUrl: url }))}
             imageUrl={typeof designData.imageUrl === 'string' ? designData.imageUrl : null}
             onImageClear={() => setDesignData((prev) => {
