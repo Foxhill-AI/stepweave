@@ -293,8 +293,8 @@ export default function PreviewWorkspace({
         aria-hidden
       />
 
-      {/* STEP 1: No image and no shoe canvas — upload hero fallback */}
-      {!hasImage && !uploading && !useShoeCanvas && (
+      {/* STEP 1: No image — upload hero (shown whether or not shoe canvas is available) */}
+      {!hasImage && !uploading && (
         <div
           className={`preview-upload-hero${isDragging ? ' preview-upload-hero--dragging' : ''}`}
           role="button"
@@ -447,9 +447,13 @@ export default function PreviewWorkspace({
                 <span className="preview-placement-msg" role="status">{placementActionMsg}</span>
               )}
               {!hasPatternImage && (
-                <p className="preview-placement-hint" role="note">
-                  Upload or generate a pattern to enable product preview.
-                </p>
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-secondary"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload size={14} aria-hidden /> Upload pattern
+                </button>
               )}
             </div>
           )}
