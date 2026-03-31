@@ -344,10 +344,9 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         setLocalDraft((prev) =>
           prev ? { ...prev, pattern_image_url: path, pattern_source_type: 'direct_upload' } : null
         )
-        void handleRefreshPrintfulPreview()
       }
     },
-    [draftId, handleRefreshPrintfulPreview]
+    [draftId]
   )
 
   const handlePatternClear = useCallback(async () => {
