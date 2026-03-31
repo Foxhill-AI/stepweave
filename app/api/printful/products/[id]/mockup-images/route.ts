@@ -116,7 +116,8 @@ export async function GET(
       placementKeys,
       variantMapping,
       printfileById,
-      imageUrl: placeholderUrl,
+      imageUrlByPlacement: {},
+      defaultImageUrl: placeholderUrl,
       placementTransforms: {},
     })
 

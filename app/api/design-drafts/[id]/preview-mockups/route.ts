@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { parsePrintfulPlacements } from '@/lib/designDraftState'
+import { parsePrintfulPlacements, parsePlacementImages } from '@/lib/designDraftState'
 import {
   createTaskAndPoll,
   mergeMockups,
@@ -74,9 +74,15 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const patternPath =
+  const globalPatternPath =
     typeof draft.pattern_image_url === 'string' ? draft.pattern_image_url.trim() : ''
-  if (!patternPath) {
+
+  const perPlacementPaths = parsePlacementImages(
+    draft.design_state && typeof draft.design_state === 'object' ? draft.design_state : {}
+  )
+  const hasPerPlacementImages = Object.keys(perPlacementPaths).length > 0
+
+  if (!globalPatternPath && !hasPerPlacementImages) {
     return NextResponse.json(
       { error: 'Upload or generate a pattern image before requesting a product preview.' },
       { status: 400 }
@@ -120,16 +126,33 @@ export async function POST(
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
+
+  // Collect all unique paths to sign in one request
+  const pathsToSign = new Set<string>()
+  if (globalPatternPath) pathsToSign.add(globalPatternPath)
+  for (const p of Object.values(perPlacementPaths)) pathsToSign.add(p)
+
   const { data: signed, error: signError } = await admin.storage
     .from(BUCKET)
-    .createSignedUrls([patternPath], SIGNED_URL_FOR_PRINTFUL_SEC)
+    .createSignedUrls(Array.from(pathsToSign), SIGNED_URL_FOR_PRINTFUL_SEC)
 
-  if (signError || !signed?.length || !signed[0]?.signedUrl) {
+  if (signError || !signed) {
     console.error('[preview-mockups] sign', signError?.message)
     return NextResponse.json({ error: 'Could not sign pattern image URL' }, { status: 500 })
   }
 
-  const imageUrl = signed[0].signedUrl
+  const signedByPath = new Map<string, string>()
+  for (const entry of signed) {
+    if (entry.signedUrl && entry.path) signedByPath.set(entry.path, entry.signedUrl)
+  }
+
+  // Build per-placement signed URLs; fall back to global for placements without specific image
+  const imageUrlByPlacement: Record<string, string> = {}
+  for (const [placement, path] of Object.entries(perPlacementPaths)) {
+    const url = signedByPath.get(path)
+    if (url) imageUrlByPlacement[placement] = url
+  }
+  const defaultImageUrl = globalPatternPath ? signedByPath.get(globalPatternPath) : undefined
 
   const headers: HeadersInit = {
     Authorization: `Bearer ${apiKey.trim()}`,
@@ -177,7 +200,8 @@ export async function POST(
     placementKeys,
     variantMapping,
     printfileById,
-    imageUrl,
+    imageUrlByPlacement,
+    defaultImageUrl,
     placementTransforms,
   })
 

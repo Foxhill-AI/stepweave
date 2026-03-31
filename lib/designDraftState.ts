@@ -126,3 +126,52 @@ export function updatePlacementTransform(
 export const DESIGN_STATE_KEYS = {
   printfulPlacements: PLACEMENTS_KEY,
 } as const
+
+// ---------------------------------------------------------------------------
+// Per-placement images: each placement tab can carry its own pattern image.
+// Stored in design_state as { pattern_images: { left: 'path', right: 'path', … } }
+// ---------------------------------------------------------------------------
+
+/** Storage paths (private bucket) keyed by Printful placement name. */
+export type PlacementImagesState = Record<string, string>
+
+const PATTERN_IMAGES_KEY = 'pattern_images'
+
+/** Parse design_state.pattern_images → { placement: storagePath }. */
+export function parsePlacementImages(raw: unknown): PlacementImagesState {
+  if (!raw || typeof raw !== 'object') return {}
+  const block = (raw as Record<string, unknown>)[PATTERN_IMAGES_KEY]
+  if (!block || typeof block !== 'object') return {}
+  const out: PlacementImagesState = {}
+  for (const [k, v] of Object.entries(block)) {
+    if (typeof v === 'string' && v.trim()) out[k] = v
+  }
+  return out
+}
+
+/** Merge per-placement images into full design_state, preserving other keys. */
+export function mergePlacementImagesIntoDesignState(
+  designState: Record<string, unknown>,
+  images: PlacementImagesState
+): Record<string, unknown> {
+  return { ...designState, [PATTERN_IMAGES_KEY]: images }
+}
+
+/** Return a new state with the given placement's image path added/updated. */
+export function updatePlacementImage(
+  current: PlacementImagesState,
+  placement: string,
+  path: string
+): PlacementImagesState {
+  return { ...current, [placement]: path }
+}
+
+/** Return a new state with the given placement's image removed. */
+export function removePlacementImage(
+  current: PlacementImagesState,
+  placement: string
+): PlacementImagesState {
+  const next = { ...current }
+  delete next[placement]
+  return next
+}

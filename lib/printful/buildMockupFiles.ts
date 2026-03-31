@@ -32,17 +32,21 @@ export function buildPrintfileById(printfilesResult: PrintfulPrintfilesResult) {
 }
 
 /**
- * Build Mockup Generator `files` array: same image URL on every placement, positions from
- * printfile dimensions merged with optional compact transforms from design_state.
+ * Build Mockup Generator `files` array.
+ * Each placement can have its own image URL (imageUrlByPlacement); falls back to defaultImageUrl.
+ * Positions come from printfile dimensions merged with optional compact transforms from design_state.
  */
 export function buildMockupFileEntries(params: {
   placementKeys: string[]
   variantMapping: { placements: Record<string, number> }
   printfileById: Map<number, { width: number; height: number }>
-  imageUrl: string
+  /** Per-placement signed URLs. Takes priority over defaultImageUrl. */
+  imageUrlByPlacement: Record<string, string>
+  /** Fallback image URL for placements not in imageUrlByPlacement. */
+  defaultImageUrl?: string
   placementTransforms: PrintfulPlacementsState
 }): FileEntry[] {
-  const { placementKeys, variantMapping, printfileById, imageUrl, placementTransforms } =
+  const { placementKeys, variantMapping, printfileById, imageUrlByPlacement, defaultImageUrl, placementTransforms } =
     params
 
   return placementKeys.map((placement) => {
@@ -54,7 +58,7 @@ export function buildMockupFileEntries(params: {
     const position = compactToPrintfulPosition(areaWidth, areaHeight, t)
     return {
       placement,
-      image_url: imageUrl,
+      image_url: imageUrlByPlacement[placement] ?? defaultImageUrl ?? '',
       position,
     }
   })
