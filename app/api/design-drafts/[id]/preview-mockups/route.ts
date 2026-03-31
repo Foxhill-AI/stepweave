@@ -13,6 +13,7 @@ import {
   buildPrintfileById,
   resolvePlacementKeys,
 } from '@/lib/printful/buildMockupFiles'
+import { compositeLayersToBuffer } from '@/lib/printful/compositeImages'
 
 const BUCKET = 'design-patterns'
 /** Long enough for Printful to fetch the pattern image during mockup generation */
@@ -127,10 +128,12 @@ export async function POST(
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
 
-  // Collect all unique paths to sign in one request
+  // Collect all unique paths that need to be signed
   const pathsToSign = new Set<string>()
   if (globalPatternPath) pathsToSign.add(globalPatternPath)
-  for (const p of Object.values(perPlacementPaths)) pathsToSign.add(p)
+  for (const layers of Object.values(perPlacementPaths)) {
+    for (const layer of layers) pathsToSign.add(layer.path)
+  }
 
   const { data: signed, error: signError } = await admin.storage
     .from(BUCKET)
@@ -146,13 +149,28 @@ export async function POST(
     if (entry.signedUrl && entry.path) signedByPath.set(entry.path, entry.signedUrl)
   }
 
-  // Build per-placement signed URLs; fall back to global for placements without specific image
-  const imageUrlByPlacement: Record<string, string> = {}
-  for (const [placement, path] of Object.entries(perPlacementPaths)) {
-    const url = signedByPath.get(path)
-    if (url) imageUrlByPlacement[placement] = url
-  }
   const defaultImageUrl = globalPatternPath ? signedByPath.get(globalPatternPath) : undefined
+
+  // Build per-placement image URLs.
+  // Single-layer placements use the signed URL directly (Printful positions it via `position`).
+  // Multi-layer placements are composited into one image pre-positioned at the printfile canvas.
+  const imageUrlByPlacement: Record<string, string> = {}
+  // Overrides for placement transforms: single-layer uses layer's own s/dx/dy;
+  // multi-layer will use { s:1, dx:0, dy:0 } (image is pre-positioned after compositing).
+  const placementTransformOverrides: Record<string, { s: number; dx: number; dy: number }> = {}
+
+  for (const [placement, layers] of Object.entries(perPlacementPaths)) {
+    if (layers.length === 1) {
+      const url = signedByPath.get(layers[0].path)
+      if (url) {
+        imageUrlByPlacement[placement] = url
+        placementTransformOverrides[placement] = { s: layers[0].s, dx: layers[0].dx, dy: layers[0].dy }
+      }
+    } else if (layers.length > 1) {
+      // Will be resolved after printfiles data is available
+      imageUrlByPlacement[`__pending__${placement}`] = placement
+    }
+  }
 
   const headers: HeadersInit = {
     Authorization: `Bearer ${apiKey.trim()}`,
@@ -196,14 +214,86 @@ export async function POST(
   }
 
   const printfileById = buildPrintfileById(printfilesResult)
+
+  // Resolve multi-layer placements: composite layers → upload → sign
+  const pendingPlacements = Object.keys(imageUrlByPlacement)
+    .filter((k) => k.startsWith('__pending__'))
+    .map((k) => k.slice('__pending__'.length))
+
+  if (pendingPlacements.length > 0) {
+    const authUserId = authUser.id
+    await Promise.all(
+      pendingPlacements.map(async (placement) => {
+        delete imageUrlByPlacement[`__pending__${placement}`]
+        const layers = perPlacementPaths[placement]
+        if (!layers?.length) return
+
+        // Get printfile dimensions for this placement
+        const printfileId = variantMapping?.placements[placement]
+        const pf = printfileId != null ? printfileById.get(printfileId) : null
+        const areaWidth = pf?.width ?? 1800
+        const areaHeight = pf?.height ?? 1800
+
+        // Resolve signed URLs for each layer
+        const layerInputs = layers.flatMap((l) => {
+          const url = signedByPath.get(l.path)
+          return url ? [{ signedUrl: url, s: l.s, dx: l.dx, dy: l.dy }] : []
+        })
+        if (layerInputs.length === 0) return
+
+        try {
+          const compositedBuffer = await compositeLayersToBuffer(areaWidth, areaHeight, layerInputs)
+          const compositePath = `${authUserId}/${draftId}/composites/${placement}-${Date.now()}.png`
+          const { error: uploadErr } = await admin.storage
+            .from(BUCKET)
+            .upload(compositePath, compositedBuffer, { contentType: 'image/png', upsert: true })
+          if (uploadErr) {
+            console.error('[preview-mockups] composite upload', uploadErr.message)
+            return
+          }
+          const { data: compositeSigned } = await admin.storage
+            .from(BUCKET)
+            .createSignedUrls([compositePath], SIGNED_URL_FOR_PRINTFUL_SEC)
+          const compositeUrl = compositeSigned?.[0]?.signedUrl
+          if (compositeUrl) imageUrlByPlacement[placement] = compositeUrl
+        } catch (err) {
+          console.error('[preview-mockups] composite error', err)
+        }
+      })
+    )
+  }
+
+  // Build final transform map:
+  // - Multi-layer composited placements → full-canvas (s:1, dx:0, dy:0)
+  // - Single-layer per-placement → layer's own transform
+  // - Global-fallback placements → printful_placements (unchanged)
+  const finalTransforms = { ...placementTransforms }
+  for (const placement of pendingPlacements) {
+    if (imageUrlByPlacement[placement]) {
+      finalTransforms[placement] = { s: 1, dx: 0, dy: 0 }
+    }
+  }
+  for (const [placement, t] of Object.entries(placementTransformOverrides)) {
+    finalTransforms[placement] = t
+  }
+
   const files = buildMockupFileEntries({
     placementKeys,
     variantMapping,
     printfileById,
     imageUrlByPlacement,
     defaultImageUrl,
-    placementTransforms,
+    placementTransforms: finalTransforms,
   })
+
+  if (files.length === 0) {
+    return NextResponse.json({
+      product_id: productId,
+      variant_id: variantId,
+      placements: [] as PreviewMockupPlacement[],
+      mockup_generation_unavailable: true,
+    })
+  }
 
   const batch = await createTaskAndPoll(productId, variantId, files, headers)
   const urlByPlacement = new Map<string, string>()

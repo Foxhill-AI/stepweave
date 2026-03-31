@@ -1,21 +1,18 @@
 'use client'
 
-import { useRef, useCallback, useEffect, useState } from 'react'
+import { useRef, useCallback, useEffect, useState, useMemo } from 'react'
 import { mergeAndClampPlacement } from '@/lib/designDraftState'
-
-function clampS(s: number): number {
-  return Math.min(1, Math.max(0.05, s))
-}
+import type { ResolvedPlacementImageLayer } from '@/lib/designDraftState'
 
 export type PlacementCanvasPreviewProps = {
   areaWidth: number
   areaHeight: number
-  s: number
-  dx: number
-  dy: number
-  /** Signed URL or public pattern URL; placeholder if missing */
-  patternUrl?: string | null
-  onChange: (patch: Partial<{ s: number; dx: number; dy: number }>) => void
+  /** Image layers to render. Each layer has its own position transform. */
+  layers: ResolvedPlacementImageLayer[]
+  /** ID of the currently selected layer. Auto-selects the only layer when there is exactly one. */
+  selectedLayerId?: string | null
+  onLayerSelect?: (id: string) => void
+  onLayerChange: (layerId: string, patch: Partial<{ s: number; dx: number; dy: number }>) => void
   disabled?: boolean
   /**
    * `overlay`: transparent stage, dashed border — for shoe template composite.
@@ -27,45 +24,45 @@ export type PlacementCanvasPreviewProps = {
 }
 
 /**
- * Visual print-area preview: drag artwork, scroll wheel to scale.
- * Maps to design_state.printful_placements { s, dx, dy } (same as compactToPrintfulPosition).
+ * Visual print-area canvas: drag/scroll each image layer independently.
+ * Supports multiple layers per placement — click a layer to select it,
+ * then drag or scroll to reposition/scale it.
  */
 export default function PlacementCanvasPreview({
   areaWidth,
   areaHeight,
-  s,
-  dx,
-  dy,
-  patternUrl,
-  onChange,
+  layers,
+  selectedLayerId: externalSelectedId,
+  onLayerSelect,
+  onLayerChange,
   disabled = false,
   variant = 'default',
   hideHint = false,
 }: PlacementCanvasPreviewProps) {
   const stageRef = useRef<HTMLDivElement>(null)
   const [displayScale, setDisplayScale] = useState(1)
-  const dragRef = useRef<{ sx: number; sy: number; dx0: number; dy0: number } | null>(null)
-  const sRef = useRef(s)
-  const dxRef = useRef(dx)
-  const dyRef = useRef(dy)
-  const onChangeRef = useRef(onChange)
-  sRef.current = s
-  dxRef.current = dx
-  dyRef.current = dy
-  onChangeRef.current = onChange
 
-  const emitClamped = useCallback(
-    (patch: Partial<{ s: number; dx: number; dy: number }>) => {
-      const merged = mergeAndClampPlacement(areaWidth, areaHeight, { s, dx, dy }, patch)
-      const out: Partial<{ s: number; dx: number; dy: number }> = {}
-      if (merged.s !== s) out.s = merged.s
-      if (merged.dx !== dx) out.dx = merged.dx
-      if (merged.dy !== dy) out.dy = merged.dy
-      if (Object.keys(out).length > 0) onChange(out)
-    },
-    [areaWidth, areaHeight, s, dx, dy, onChange]
-  )
+  // When there is exactly one layer, always treat it as selected for seamless UX
+  const effectiveSelectedId =
+    layers.length === 1 ? layers[0].id : (externalSelectedId ?? null)
 
+  // Refs to avoid stale closures in event handlers
+  const layersRef = useRef(layers)
+  layersRef.current = layers
+  const effectiveSelectedIdRef = useRef(effectiveSelectedId)
+  effectiveSelectedIdRef.current = effectiveSelectedId
+  const onLayerChangeRef = useRef(onLayerChange)
+  onLayerChangeRef.current = onLayerChange
+
+  const dragRef = useRef<{
+    layerId: string
+    sx: number
+    sy: number
+    dx0: number
+    dy0: number
+  } | null>(null)
+
+  // Track displayScale via ResizeObserver
   useEffect(() => {
     const el = stageRef.current
     if (!el || areaWidth <= 0) return
@@ -77,119 +74,150 @@ export default function PlacementCanvasPreview({
     const ro = new ResizeObserver(update)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [areaWidth, areaHeight])
+  }, [areaWidth])
 
+  // Wheel → scale selected layer
   useEffect(() => {
     const el = stageRef.current
     if (!el || disabled) return
     const handler = (e: WheelEvent) => {
       e.preventDefault()
+      const layerId = effectiveSelectedIdRef.current
+      if (!layerId) return
+      const layer = layersRef.current.find((l) => l.id === layerId)
+      if (!layer) return
       const factor = e.deltaY > 0 ? 0.94 : 1.06
-      const nextS = clampS(sRef.current * factor)
-      if (Math.abs(nextS - sRef.current) < 1e-6) return
+      const nextS = Math.min(1, Math.max(0.05, layer.s * factor))
+      if (Math.abs(nextS - layer.s) < 1e-6) return
       const merged = mergeAndClampPlacement(
         areaWidth,
         areaHeight,
-        { s: nextS, dx: dxRef.current, dy: dyRef.current },
+        { s: nextS, dx: layer.dx, dy: layer.dy },
         { s: nextS }
       )
       const out: Partial<{ s: number; dx: number; dy: number }> = {}
-      if (merged.s !== sRef.current) out.s = merged.s
-      if (merged.dx !== dxRef.current) out.dx = merged.dx
-      if (merged.dy !== dyRef.current) out.dy = merged.dy
-      if (Object.keys(out).length > 0) onChangeRef.current(out)
+      if (merged.s !== layer.s) out.s = merged.s
+      if (merged.dx !== layer.dx) out.dx = merged.dx
+      if (merged.dy !== layer.dy) out.dy = merged.dy
+      if (Object.keys(out).length > 0) onLayerChangeRef.current(layerId, out)
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
   }, [disabled, areaWidth, areaHeight])
 
-  const sClamped = clampS(s)
-  const wPrint = areaWidth * sClamped
-  const hPrint = areaHeight * sClamped
-  const leftPrint = (areaWidth - wPrint) / 2 + dx
-  const topPrint = (areaHeight - hPrint) / 2 + dy
+  // Render selected layer on top
+  const orderedLayers = useMemo(() => {
+    if (!effectiveSelectedId) return layers
+    return [
+      ...layers.filter((l) => l.id !== effectiveSelectedId),
+      ...layers.filter((l) => l.id === effectiveSelectedId),
+    ]
+  }, [layers, effectiveSelectedId])
 
-  const onArtPointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (disabled) return
-      e.preventDefault()
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-      dragRef.current = { sx: e.clientX, sy: e.clientY, dx0: dx, dy0: dy }
-    },
-    [disabled, dx, dy]
-  )
-
-  const onArtPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!dragRef.current || disabled) return
-      const d = dragRef.current
-      const dPrintX = (e.clientX - d.sx) / displayScale
-      const dPrintY = (e.clientY - d.sy) / displayScale
-      emitClamped({ dx: d.dx0 + dPrintX, dy: d.dy0 + dPrintY })
-    },
-    [disabled, displayScale, emitClamped]
-  )
-
-  const endDrag = useCallback((e: React.PointerEvent) => {
-    dragRef.current = null
-    try {
-      ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
-    } catch {
-      /* ignore */
-    }
-  }, [])
-
-  const showImage = Boolean(patternUrl?.trim())
   const stageClass =
     variant === 'overlay'
       ? 'placement-canvas-stage placement-canvas-stage--overlay'
       : 'placement-canvas-stage'
   const hintId = 'placement-canvas-desc'
 
+  const handleLayerPointerDown = useCallback(
+    (e: React.PointerEvent, layer: ResolvedPlacementImageLayer) => {
+      if (disabled) return
+      e.preventDefault()
+      e.stopPropagation()
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      onLayerSelect?.(layer.id)
+      dragRef.current = { layerId: layer.id, sx: e.clientX, sy: e.clientY, dx0: layer.dx, dy0: layer.dy }
+    },
+    [disabled, onLayerSelect]
+  )
+
+  const handleLayerPointerMove = useCallback(
+    (e: React.PointerEvent, layer: ResolvedPlacementImageLayer, ds: number) => {
+      if (!dragRef.current || dragRef.current.layerId !== layer.id || disabled) return
+      const d = dragRef.current
+      const dPrintX = (e.clientX - d.sx) / ds
+      const dPrintY = (e.clientY - d.sy) / ds
+      const merged = mergeAndClampPlacement(
+        areaWidth,
+        areaHeight,
+        { s: layer.s, dx: d.dx0 + dPrintX, dy: d.dy0 + dPrintY },
+        { dx: d.dx0 + dPrintX, dy: d.dy0 + dPrintY }
+      )
+      const out: Partial<{ s: number; dx: number; dy: number }> = {}
+      if (merged.dx !== layer.dx) out.dx = merged.dx
+      if (merged.dy !== layer.dy) out.dy = merged.dy
+      if (Object.keys(out).length > 0) onLayerChangeRef.current(layer.id, out)
+    },
+    [disabled, areaWidth, areaHeight]
+  )
+
+  const endDrag = useCallback((e: React.PointerEvent, layerId: string) => {
+    if (dragRef.current?.layerId === layerId) {
+      dragRef.current = null
+      try { ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* ignore */ }
+    }
+  }, [])
+
   return (
     <div className={variant === 'overlay' ? 'placement-canvas-root placement-canvas-root--embedded' : 'placement-canvas-root'}>
       {!hideHint && (
         <p className="placement-canvas-hint" id={hintId}>
-          Drag the pattern to move it. Scroll inside the print area to zoom. Values match Printful
-          pixels ({areaWidth}×{areaHeight}).
+          Click an image to select it, then drag to move or scroll to resize.
+          Values match Printful pixels ({areaWidth}×{areaHeight}).
         </p>
       )}
       <div
         ref={stageRef}
         className={stageClass}
-        // In overlay mode the stage fills its CSS parent (the print-area box on the
-        // template image). Setting aspectRatio here would fight the parent's height and
-        // cause the stage to overflow. In default mode we still need aspectRatio to size
-        // the standalone canvas correctly.
         style={variant === 'overlay' ? undefined : { aspectRatio: `${areaWidth} / ${areaHeight}` }}
         aria-describedby={hideHint ? undefined : hintId}
         data-disabled={disabled ? 'true' : undefined}
       >
-        <div
-          className="placement-canvas-art"
-          style={{
-            left: leftPrint * displayScale,
-            top: topPrint * displayScale,
-            width: wPrint * displayScale,
-            height: hPrint * displayScale,
-          }}
-          onPointerDown={onArtPointerDown}
-          onPointerMove={onArtPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          role="img"
-          aria-label="Pattern in print area — drag to reposition"
-        >
-          {showImage ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={patternUrl!} alt="" className="placement-canvas-img" draggable={false} />
-          ) : (
-            <div className="placement-canvas-placeholder" aria-hidden>
-              <span>Pattern preview</span>
+        {layers.length === 0 && (
+          <div className="placement-canvas-placeholder" aria-hidden>
+            <span>Pattern preview</span>
+          </div>
+        )}
+
+        {orderedLayers.map((layer) => {
+          const sClamped = Math.min(1, Math.max(0.05, layer.s))
+          const wPrint = areaWidth * sClamped
+          const hPrint = areaHeight * sClamped
+          const leftPrint = (areaWidth - wPrint) / 2 + layer.dx
+          const topPrint = (areaHeight - hPrint) / 2 + layer.dy
+          const isSelected = layer.id === effectiveSelectedId
+
+          return (
+            <div
+              key={layer.id}
+              className={`placement-canvas-art${isSelected ? ' placement-canvas-art--selected' : ''}`}
+              style={{
+                left: leftPrint * displayScale,
+                top: topPrint * displayScale,
+                width: wPrint * displayScale,
+                height: hPrint * displayScale,
+                zIndex: isSelected ? 2 : 1,
+              }}
+              onPointerDown={(e) => handleLayerPointerDown(e, layer)}
+              onPointerMove={(e) => handleLayerPointerMove(e, layer, displayScale)}
+              onPointerUp={(e) => endDrag(e, layer.id)}
+              onPointerCancel={(e) => endDrag(e, layer.id)}
+              role="img"
+              aria-label={`Image layer${isSelected ? ' (selected)' : ''} — drag to reposition`}
+            >
+              {layer.signedUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={layer.signedUrl} alt="" className="placement-canvas-img" draggable={false} />
+              ) : (
+                <div className="placement-canvas-placeholder" aria-hidden>
+                  <span>Loading…</span>
+                </div>
+              )}
+              <span className="placement-canvas-art-outline" aria-hidden />
             </div>
-          )}
-          <span className="placement-canvas-art-outline" aria-hidden />
-        </div>
+          )
+        })}
       </div>
     </div>
   )

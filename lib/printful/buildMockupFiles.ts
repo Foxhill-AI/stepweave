@@ -49,17 +49,19 @@ export function buildMockupFileEntries(params: {
   const { placementKeys, variantMapping, printfileById, imageUrlByPlacement, defaultImageUrl, placementTransforms } =
     params
 
-  return placementKeys.map((placement) => {
-    const printfileId = variantMapping.placements[placement]
-    const pf = printfileById.get(printfileId)
-    const areaWidth = pf?.width ?? 1800
-    const areaHeight = pf?.height ?? 1800
-    const t = placementTransforms[placement] ?? { s: 1, dx: 0, dy: 0 }
-    const position = compactToPrintfulPosition(areaWidth, areaHeight, t)
-    return {
-      placement,
-      image_url: imageUrlByPlacement[placement] ?? defaultImageUrl ?? '',
-      position,
-    }
-  })
+  return placementKeys
+    .map((placement) => {
+      const printfileId = variantMapping.placements[placement]
+      const pf = printfileById.get(printfileId)
+      const areaWidth = pf?.width ?? 1800
+      const areaHeight = pf?.height ?? 1800
+      const t = placementTransforms[placement] ?? { s: 1, dx: 0, dy: 0 }
+      const position = compactToPrintfulPosition(areaWidth, areaHeight, t)
+      return {
+        placement,
+        image_url: imageUrlByPlacement[placement] ?? defaultImageUrl ?? '',
+        position,
+      }
+    })
+    .filter((entry) => entry.image_url.trim() !== '')
 }

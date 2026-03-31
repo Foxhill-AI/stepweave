@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { PlacementMeta } from '@/app/api/printful/products/[id]/placements/route'
-import type { PrintfulPlacementsState } from '@/lib/designDraftState'
+import type { PrintfulPlacementsState, ResolvedPlacementImageLayer } from '@/lib/designDraftState'
 import { mergeAndClampPlacement, updatePlacementTransform } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import PlacementCanvasPreview from './PlacementCanvasPreview'
@@ -39,6 +39,12 @@ interface PlacementEditorPanelProps {
   hideCanvas?: boolean
   /** When true, action buttons (save layout, update preview) are rendered elsewhere — skip them here. */
   hideActions?: boolean
+  // --- Multi-layer support ---
+  /** Resolved layers for the active placement. When provided, scale/offset controls operate on the selected layer. */
+  activeLayers?: ResolvedPlacementImageLayer[]
+  selectedLayerId?: string | null
+  onLayerSelect?: (id: string) => void
+  onLayerChange?: (layerId: string, patch: Partial<{ s: number; dx: number; dy: number }>) => void
 }
 
 export default function PlacementEditorPanel({
@@ -58,6 +64,10 @@ export default function PlacementEditorPanel({
   onExternalActivePlacementChange,
   hideCanvas = false,
   hideActions = false,
+  activeLayers,
+  selectedLayerId,
+  onLayerSelect,
+  onLayerChange,
 }: PlacementEditorPanelProps) {
   const [meta, setMeta] = useState<PlacementMeta[]>([])
   const [metaLoading, setMetaLoading] = useState(false)
@@ -170,30 +180,44 @@ export default function PlacementEditorPanel({
   const editingPlacement = displayPlacement
   const current = meta.find((m) => m.placement === activePlacement)
   const currentTemplate = templateWithUrl.find((r) => r.placement === editingPlacement)
-  const t = placementsState[editingPlacement] ?? { s: 1, dx: 0, dy: 0 }
+
+  // When layer-based mode is active, read transform from the selected (or only) layer
+  const usingLayers = activeLayers !== undefined && activeLayers.length > 0
+  const effectiveSelectedId = usingLayers && activeLayers!.length === 1
+    ? activeLayers![0].id
+    : selectedLayerId ?? null
+  const selectedLayer = usingLayers
+    ? (activeLayers!.find((l) => l.id === effectiveSelectedId) ?? activeLayers![0])
+    : null
+  const t = selectedLayer
+    ? { s: selectedLayer.s, dx: selectedLayer.dx, dy: selectedLayer.dy }
+    : (placementsState[editingPlacement] ?? { s: 1, dx: 0, dy: 0 })
 
   /** Clamp transforms to print area using either placement meta or template row dimensions. */
   const patchActive = useCallback(
     (patch: Partial<{ s: number; dx: number; dy: number }>) => {
       if (!editingPlacement) return
-      const dims =
-        currentTemplate ??
-        meta.find((m) => m.placement === editingPlacement)
+
+      // Layer-based mode: update the selected layer's transform
+      if (onLayerChange && selectedLayer) {
+        const dims = currentTemplate ?? meta.find((m) => m.placement === editingPlacement)
+        const merged = dims
+          ? mergeAndClampPlacement(dims.area_width, dims.area_height, t, patch)
+          : { ...t, ...patch }
+        onLayerChange(selectedLayer.id, merged)
+        return
+      }
+
+      // Legacy mode: update printful_placements
+      const dims = currentTemplate ?? meta.find((m) => m.placement === editingPlacement)
       onPlacementsStateChange((prev) => {
-        if (!dims) {
-          return updatePlacementTransform(prev, editingPlacement, patch)
-        }
+        if (!dims) return updatePlacementTransform(prev, editingPlacement, patch)
         const prevT = prev[editingPlacement] ?? { s: 1, dx: 0, dy: 0 }
-        const merged = mergeAndClampPlacement(
-          dims.area_width,
-          dims.area_height,
-          prevT,
-          patch
-        )
+        const merged = mergeAndClampPlacement(dims.area_width, dims.area_height, prevT, patch)
         return updatePlacementTransform(prev, editingPlacement, merged)
       })
     },
-    [editingPlacement, onPlacementsStateChange, currentTemplate, meta]
+    [editingPlacement, onPlacementsStateChange, onLayerChange, selectedLayer, t, currentTemplate, meta]
   )
 
   const handleSave = async () => {
@@ -263,9 +287,10 @@ export default function PlacementEditorPanel({
               templates={effectiveTemplateRows}
               activePlacement={editingPlacement}
               onActivePlacementChange={setActivePlacement}
-              transform={t}
-              patternImageUrl={patternImageUrl}
-              onPlacementChange={patchActive}
+              layers={activeLayers ?? []}
+              selectedLayerId={effectiveSelectedId}
+              onLayerSelect={onLayerSelect}
+              onLayerChange={onLayerChange ?? (() => {})}
             />
           )}
 
@@ -273,11 +298,10 @@ export default function PlacementEditorPanel({
             <PlacementCanvasPreview
               areaWidth={current.area_width}
               areaHeight={current.area_height}
-              s={t.s}
-              dx={t.dx}
-              dy={t.dy}
-              patternUrl={patternImageUrl}
-              onChange={patchActive}
+              layers={activeLayers ?? []}
+              selectedLayerId={effectiveSelectedId}
+              onLayerSelect={onLayerSelect}
+              onLayerChange={onLayerChange ?? (() => {})}
             />
           )}
 
