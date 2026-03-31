@@ -8,6 +8,10 @@ import PreviewWorkspace, { type PlacementTab } from './PreviewWorkspace'
 import {
   mergePrintfulPlacementsIntoDesignState,
   parsePrintfulPlacements,
+  parsePlacementImages,
+  mergePlacementImagesIntoDesignState,
+  updatePlacementImage,
+  removePlacementImage,
   type PrintfulPlacementsState,
 } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
@@ -38,6 +42,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [localDraft, setLocalDraft] = useState<DesignDraftRow | null>(draft ?? null)
   /** Resolved signed URL for draft pattern image (when using Storage). */
   const [patternImageSignedUrl, setPatternImageSignedUrl] = useState<string | null>(null)
+  /** Signed URLs for per-placement pattern images stored in design_state.pattern_images. */
+  const [placementImageSignedUrls, setPlacementImageSignedUrls] = useState<Record<string, string>>({})
   /** Mockup URL per Printful placement (same variant). */
   const [placementMockups, setPlacementMockups] = useState<PlacementTab[]>([])
   const [catalogFallbackUrl, setCatalogFallbackUrl] = useState<string>('')
@@ -105,6 +111,32 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       })
     return () => { cancelled = true }
   }, [draftId, localDraft?.pattern_image_url])
+
+  // Fetch signed URLs for per-placement images stored in design_state.pattern_images.
+  // Re-runs whenever the pattern_images map changes (keyed by JSON to avoid object identity issues).
+  const placementImagesJson = JSON.stringify(parsePlacementImages(designData))
+  useEffect(() => {
+    const images = parsePlacementImages(designData)
+    if (!draftId || Object.keys(images).length === 0) {
+      setPlacementImageSignedUrls({})
+      return
+    }
+    let cancelled = false
+    fetch(`/api/design-drafts/${draftId}/placement-images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths: images }),
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((body: { urls?: Record<string, string> }) => {
+        if (!cancelled) setPlacementImageSignedUrls(body.urls ?? {})
+      })
+      .catch(() => {
+        if (!cancelled) setPlacementImageSignedUrls({})
+      })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId, placementImagesJson])
 
   // Load product info: name, variants, catalog fallback image.
   // Mockup generation is NOT triggered automatically — user clicks "See preview" instead.
@@ -334,19 +366,15 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   )
 
   const handlePatternUploaded = useCallback(
-    async (path: string) => {
-      if (!draftId) return
-      const ok = await updateDesignDraft(draftId, {
-        pattern_image_url: path,
-        pattern_source_type: 'direct_upload',
+    (path: string) => {
+      if (!activePlacement) return
+      setDesignData((prev) => {
+        const current = parsePlacementImages(prev)
+        const next = updatePlacementImage(current, activePlacement, path)
+        return mergePlacementImagesIntoDesignState(prev, next)
       })
-      if (ok) {
-        setLocalDraft((prev) =>
-          prev ? { ...prev, pattern_image_url: path, pattern_source_type: 'direct_upload' } : null
-        )
-      }
     },
-    [draftId]
+    [activePlacement]
   )
 
   const handlePatternClear = useCallback(async () => {
@@ -625,7 +653,16 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             onImageSelect={(url) => setDesignData((prev) => ({ ...prev, imageUrl: url }))}
             onPatternUploaded={handlePatternUploaded}
             onImageClear={() => {
-              if (localDraft?.pattern_image_url) {
+              const placementImages = parsePlacementImages(designData)
+              if (activePlacement && placementImages[activePlacement]) {
+                // Remove per-placement image for the active tab only
+                setDesignData((prev) =>
+                  mergePlacementImagesIntoDesignState(
+                    prev,
+                    removePlacementImage(parsePlacementImages(prev), activePlacement)
+                  )
+                )
+              } else if (localDraft?.pattern_image_url) {
                 handlePatternClear()
               } else {
                 setDesignData((prev) => {
@@ -636,11 +673,13 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
               }
             }}
             imageUrl={
-              localDraft?.pattern_image_url
+              // Priority: per-placement signed URL > global signed URL > legacy imageUrl
+              placementImageSignedUrls[activePlacement] ??
+              (localDraft?.pattern_image_url
                 ? patternImageSignedUrl ?? undefined
                 : typeof designData.imageUrl === 'string'
                   ? designData.imageUrl
-                  : null
+                  : null)
             }
             templateRows={templateRows}
             templatesLoading={templatesLoading}
@@ -653,7 +692,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             saveLoading={placementSaveLoading}
             previewLoading={printfulPreviewLoading}
             hasPatternImage={Boolean(
-              localDraft?.pattern_image_url && String(localDraft.pattern_image_url).trim()
+              (localDraft?.pattern_image_url && String(localDraft.pattern_image_url).trim()) ||
+              Object.keys(parsePlacementImages(designData)).length > 0
             )}
             hasGeneratedMockups={hasGeneratedMockups}
           />
