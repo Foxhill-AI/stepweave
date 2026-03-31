@@ -128,28 +128,65 @@ export const DESIGN_STATE_KEYS = {
 } as const
 
 // ---------------------------------------------------------------------------
-// Per-placement images: each placement tab can carry its own pattern image.
-// Stored in design_state as { pattern_images: { left: 'path', right: 'path', … } }
+// Per-placement images: each placement tab can carry multiple image layers.
+// Stored in design_state as:
+//   { pattern_images: { left: [{ id, path, s, dx, dy }, …], right: […] } }
 // ---------------------------------------------------------------------------
 
-/** Storage paths (private bucket) keyed by Printful placement name. */
-export type PlacementImagesState = Record<string, string>
+/** One image layer within a placement — stores both the storage path and its transform. */
+export type PlacementImageLayer = {
+  id: string
+  path: string  // Supabase storage path (private bucket)
+  s: number     // scale (0.05–1)
+  dx: number    // x offset from center in printfile pixels
+  dy: number    // y offset from center in printfile pixels
+}
+
+/** Same as PlacementImageLayer but with the signed URL resolved for display. */
+export type ResolvedPlacementImageLayer = PlacementImageLayer & {
+  signedUrl?: string | null
+}
+
+/** Per-placement layers keyed by Printful placement name. */
+export type PlacementImagesState = Record<string, PlacementImageLayer[]>
 
 const PATTERN_IMAGES_KEY = 'pattern_images'
 
-/** Parse design_state.pattern_images → { placement: storagePath }. */
+function parseLayer(v: unknown): PlacementImageLayer | null {
+  if (!v || typeof v !== 'object') return null
+  const o = v as Record<string, unknown>
+  if (typeof o.path !== 'string' || !o.path.trim()) return null
+  return {
+    id: typeof o.id === 'string' && o.id.trim() ? o.id : crypto.randomUUID(),
+    path: o.path,
+    s: typeof o.s === 'number' && o.s > 0 && o.s <= 1 ? o.s : 1,
+    dx: typeof o.dx === 'number' ? o.dx : 0,
+    dy: typeof o.dy === 'number' ? o.dy : 0,
+  }
+}
+
+/**
+ * Parse design_state.pattern_images.
+ * Handles both legacy string values and new array-of-layers format.
+ */
 export function parsePlacementImages(raw: unknown): PlacementImagesState {
   if (!raw || typeof raw !== 'object') return {}
   const block = (raw as Record<string, unknown>)[PATTERN_IMAGES_KEY]
   if (!block || typeof block !== 'object') return {}
   const out: PlacementImagesState = {}
-  for (const [k, v] of Object.entries(block)) {
-    if (typeof v === 'string' && v.trim()) out[k] = v
+  for (const [placement, v] of Object.entries(block)) {
+    if (Array.isArray(v)) {
+      const layers = v.map(parseLayer).filter((l): l is PlacementImageLayer => l !== null)
+      if (layers.length) out[placement] = layers
+    } else if (typeof v === 'string' && v.trim()) {
+      // Legacy single-string format → wrap as single layer
+      out[placement] = [{ id: 'legacy', path: v, s: 1, dx: 0, dy: 0 }]
+    }
   }
   return out
 }
 
-/** Merge per-placement images into full design_state, preserving other keys. */
+/** Merge per-placement layers into full design_state, preserving other keys. */
 export function mergePlacementImagesIntoDesignState(
   designState: Record<string, unknown>,
   images: PlacementImagesState
@@ -157,16 +194,53 @@ export function mergePlacementImagesIntoDesignState(
   return { ...designState, [PATTERN_IMAGES_KEY]: images }
 }
 
-/** Return a new state with the given placement's image path added/updated. */
+/** Return a new state with a new layer appended to the given placement. */
+export function addPlacementImageLayer(
+  current: PlacementImagesState,
+  placement: string,
+  layer: PlacementImageLayer
+): PlacementImagesState {
+  return { ...current, [placement]: [...(current[placement] ?? []), layer] }
+}
+
+/** Return a new state with a specific layer's transform updated. */
+export function updatePlacementImageLayer(
+  current: PlacementImagesState,
+  placement: string,
+  layerId: string,
+  patch: Partial<Pick<PlacementImageLayer, 's' | 'dx' | 'dy'>>
+): PlacementImagesState {
+  const layers = (current[placement] ?? []).map((l) =>
+    l.id === layerId ? { ...l, ...patch } : l
+  )
+  return { ...current, [placement]: layers }
+}
+
+/** Return a new state with a specific layer removed from the given placement. */
+export function removePlacementImageLayer(
+  current: PlacementImagesState,
+  placement: string,
+  layerId: string
+): PlacementImagesState {
+  const layers = (current[placement] ?? []).filter((l) => l.id !== layerId)
+  const next = { ...current }
+  if (layers.length > 0) next[placement] = layers
+  else delete next[placement]
+  return next
+}
+
+// Keep legacy exports for callers that haven't migrated yet
+/** @deprecated Use addPlacementImageLayer */
 export function updatePlacementImage(
   current: PlacementImagesState,
   placement: string,
   path: string
 ): PlacementImagesState {
-  return { ...current, [placement]: path }
+  const layer: PlacementImageLayer = { id: crypto.randomUUID(), path, s: 1, dx: 0, dy: 0 }
+  return addPlacementImageLayer(current, placement, layer)
 }
 
-/** Return a new state with the given placement's image removed. */
+/** @deprecated Use removePlacementImageLayer with a specific layerId */
 export function removePlacementImage(
   current: PlacementImagesState,
   placement: string

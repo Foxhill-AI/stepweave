@@ -5,7 +5,7 @@ import { Upload, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ShoeDesignEditor from './ShoeDesignEditor'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
-import type { PrintfulPlacementsState, PlacementCompactTransform } from '@/lib/designDraftState'
+import type { ResolvedPlacementImageLayer } from '@/lib/designDraftState'
 
 const ACCEPT_IMAGES = 'image/*'
 const MAX_SIZE_MB = 10
@@ -43,15 +43,14 @@ interface PreviewWorkspaceProps {
   /** Template rows from Printful for shoe canvas display. */
   templateRows?: PlacementTemplateRow[]
   templatesLoading?: boolean
-  /** Current placement transforms from design_state */
-  placementsState?: PrintfulPlacementsState
   /** Controlled active placement for shoe editor */
   activePlacement?: string
   onActivePlacementChange?: (placement: string) => void
-  /** Called when user drags/scales in the shoe canvas */
-  onPlacementsStateChange?: (
-    nextOrUpdater: PrintfulPlacementsState | ((prev: PrintfulPlacementsState) => PrintfulPlacementsState)
-  ) => void
+  /** Image layers for the active placement (resolved with signed URLs). */
+  activeLayers?: ResolvedPlacementImageLayer[]
+  selectedLayerId?: string | null
+  onLayerSelect?: (id: string) => void
+  onLayerChange?: (layerId: string, patch: Partial<{ s: number; dx: number; dy: number }>) => void
   /** Placement layout actions — rendered contextually below the shoe canvas */
   onSaveLayout?: () => Promise<void>
   onRefreshPrintfulPreview?: () => Promise<void>
@@ -81,10 +80,12 @@ export default function PreviewWorkspace({
   onImageClear,
   templateRows,
   templatesLoading: _templatesLoading,
-  placementsState,
   activePlacement: externalActivePlacement,
   onActivePlacementChange,
-  onPlacementsStateChange,
+  activeLayers = [],
+  selectedLayerId,
+  onLayerSelect,
+  onLayerChange,
   onSaveLayout,
   onRefreshPrintfulPreview,
   saveLoading = false,
@@ -175,25 +176,6 @@ export default function PreviewWorkspace({
   // Shoe canvas computations — use templateRows passed from parent
   const templateWithUrl = templateRows?.filter((r) => r.template_url?.trim()) ?? []
   const useShoeCanvas = templateWithUrl.length > 0
-  const activeShoeTemplate = templateWithUrl.find(r => r.placement === externalActivePlacement) ?? templateWithUrl[0]
-  const activeTransform: PlacementCompactTransform = (placementsState && externalActivePlacement && placementsState[externalActivePlacement])
-    ? placementsState[externalActivePlacement]
-    : { s: 1, dx: 0, dy: 0 }
-
-  const handleShoeChange = useCallback(
-    (patch: Partial<PlacementCompactTransform>) => {
-      if (!onPlacementsStateChange || !externalActivePlacement) return
-      onPlacementsStateChange((prev) => ({
-        ...prev,
-        [externalActivePlacement]: {
-          s: patch.s ?? (prev[externalActivePlacement]?.s ?? 1),
-          dx: patch.dx ?? (prev[externalActivePlacement]?.dx ?? 0),
-          dy: patch.dy ?? (prev[externalActivePlacement]?.dy ?? 0),
-        },
-      }))
-    },
-    [onPlacementsStateChange, externalActivePlacement]
-  )
 
   const handleFile = async (file: File | null) => {
     setUploadError(null)
@@ -275,7 +257,8 @@ export default function PreviewWorkspace({
   const selectedMockupUrl = galleryItems[clampedIndex]?.mockup_url ?? ''
   const referenceUrl = selectedMockupUrl || catalogFallbackUrl || ''
 
-  const hasImage = Boolean(imageUrl?.trim())
+  const hasImage = activeLayers.length > 0 || Boolean(imageUrl?.trim())
+  const layerCount = activeLayers.length
   // Only count real generated mockups — not the catalog fallback — so the toggle
   // only appears after the user explicitly clicks "See preview".
   const hasMockups = Boolean(tabs?.some((t) => t.mockup_url?.trim()))
@@ -336,21 +319,30 @@ export default function PreviewWorkspace({
       {hasImage && (
         <div className="preview-image-bar">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl!} alt="" className="preview-image-bar-thumb" />
-          <span className="preview-image-bar-label">Pattern applied</span>
+          {(activeLayers[0]?.signedUrl || imageUrl) && (
+            <img
+              src={activeLayers[0]?.signedUrl ?? imageUrl!}
+              alt=""
+              className="preview-image-bar-thumb"
+            />
+          )}
+          <span className="preview-image-bar-label">
+            {layerCount > 1 ? `${layerCount} images applied` : 'Pattern applied'}
+          </span>
           <div className="preview-image-bar-actions">
             <button
               type="button"
               className="preview-image-bar-btn"
               onClick={() => fileInputRef.current?.click()}
             >
-              <Upload size={13} aria-hidden /> Change
+              <Upload size={13} aria-hidden /> Add image
             </button>
             <button
               type="button"
               className="preview-image-bar-btn preview-image-bar-btn--remove"
               onClick={onImageClear}
-              aria-label="Remove image"
+              aria-label="Remove selected image"
+              disabled={layerCount === 0}
             >
               <X size={13} aria-hidden /> Remove
             </button>
@@ -410,11 +402,12 @@ export default function PreviewWorkspace({
         <div className="preview-shoe-canvas-section">
           <ShoeDesignEditor
             templates={templateWithUrl}
-            activePlacement={externalActivePlacement ?? activeShoeTemplate?.placement ?? ''}
+            activePlacement={externalActivePlacement ?? templateWithUrl[0]?.placement ?? ''}
             onActivePlacementChange={onActivePlacementChange ?? (() => {})}
-            transform={activeTransform}
-            patternImageUrl={imageUrl}
-            onPlacementChange={handleShoeChange}
+            layers={activeLayers}
+            selectedLayerId={selectedLayerId}
+            onLayerSelect={onLayerSelect}
+            onLayerChange={onLayerChange ?? (() => {})}
           />
           {(onSaveLayout || onRefreshPrintfulPreview) && (
             <div className="preview-placement-actions">

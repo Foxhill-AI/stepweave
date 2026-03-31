@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useEffect } from 'react'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
-import type { PlacementCompactTransform } from '@/lib/designDraftState'
+import type { ResolvedPlacementImageLayer } from '@/lib/designDraftState'
 import PlacementCanvasPreview from './PlacementCanvasPreview'
 
 export type ShoeDesignEditorProps = {
@@ -10,10 +10,11 @@ export type ShoeDesignEditorProps = {
   templates: PlacementTemplateRow[]
   activePlacement: string
   onActivePlacementChange: (placement: string) => void
-  /** Transform for the active placement */
-  transform: PlacementCompactTransform
-  patternImageUrl?: string | null
-  onPlacementChange: (patch: Partial<PlacementCompactTransform>) => void
+  /** Image layers for the active placement. */
+  layers: ResolvedPlacementImageLayer[]
+  selectedLayerId?: string | null
+  onLayerSelect?: (id: string) => void
+  onLayerChange: (layerId: string, patch: Partial<{ s: number; dx: number; dy: number }>) => void
   disabled?: boolean
 }
 
@@ -25,9 +26,10 @@ export default function ShoeDesignEditor({
   templates,
   activePlacement,
   onActivePlacementChange,
-  transform,
-  patternImageUrl = null,
-  onPlacementChange,
+  layers,
+  selectedLayerId,
+  onLayerSelect,
+  onLayerChange,
   disabled = false,
 }: ShoeDesignEditorProps) {
   const rows = useMemo(
@@ -40,8 +42,7 @@ export default function ShoeDesignEditor({
   const compositeRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
 
-  // Keep composite width = image's actual rendered width so the overlay percentages
-  // stay accurate even when max-height scales the image down (width: auto shrinks it).
+  // Keep composite width = image's actual rendered width so overlay percentages stay accurate
   useEffect(() => {
     const img = imgRef.current
     const composite = compositeRef.current
@@ -60,16 +61,11 @@ export default function ShoeDesignEditor({
       img.removeEventListener('load', sync)
       ro.disconnect()
     }
-  // Re-run when the template image URL changes (placement switch).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.template_url])
 
-  if (!current) {
-    return null
-  }
+  if (!current) return null
 
-  // Compute pixel-accurate overlay position from Printful layout template bounds.
-  // Falls back to centered CSS when the template metadata is not available.
   const hasExactBounds =
     current.template_width != null &&
     current.template_height != null &&
@@ -80,7 +76,6 @@ export default function ShoeDesignEditor({
 
   const overlayStyle = hasExactBounds
     ? {
-        // Reset CSS `inset: 0` so our explicit left/top/width/height take effect.
         inset: 'auto' as const,
         display: 'block' as const,
         left: `${(current.print_area_left! / current.template_width!) * 100}%`,
@@ -110,8 +105,7 @@ export default function ShoeDesignEditor({
         })}
       </div>
 
-
-<div ref={compositeRef} className="shoe-design-composite">
+      <div ref={compositeRef} className="shoe-design-composite">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
@@ -125,11 +119,10 @@ export default function ShoeDesignEditor({
             <PlacementCanvasPreview
               areaWidth={current.area_width}
               areaHeight={current.area_height}
-              s={transform.s}
-              dx={transform.dx}
-              dy={transform.dy}
-              patternUrl={patternImageUrl}
-              onChange={onPlacementChange}
+              layers={layers}
+              selectedLayerId={selectedLayerId}
+              onLayerSelect={onLayerSelect}
+              onLayerChange={onLayerChange}
               disabled={disabled}
               variant="overlay"
               hideHint

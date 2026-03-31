@@ -10,9 +10,12 @@ import {
   parsePrintfulPlacements,
   parsePlacementImages,
   mergePlacementImagesIntoDesignState,
-  updatePlacementImage,
-  removePlacementImage,
+  addPlacementImageLayer,
+  updatePlacementImageLayer,
+  removePlacementImageLayer,
   type PrintfulPlacementsState,
+  type PlacementImageLayer,
+  type ResolvedPlacementImageLayer,
 } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import { useAuth } from '@/components/AuthProvider'
@@ -42,8 +45,10 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [localDraft, setLocalDraft] = useState<DesignDraftRow | null>(draft ?? null)
   /** Resolved signed URL for draft pattern image (when using Storage). */
   const [patternImageSignedUrl, setPatternImageSignedUrl] = useState<string | null>(null)
-  /** Signed URLs for per-placement pattern images stored in design_state.pattern_images. */
-  const [placementImageSignedUrls, setPlacementImageSignedUrls] = useState<Record<string, string>>({})
+  /** Signed URLs per placement + layer: { [placement]: { [layerId]: signedUrl } } */
+  const [placementLayerSignedUrls, setPlacementLayerSignedUrls] = useState<Record<string, Record<string, string>>>({})
+  /** Which layer is selected per placement: { [placement]: layerId } */
+  const [selectedLayerByPlacement, setSelectedLayerByPlacement] = useState<Record<string, string>>({})
   /** Mockup URL per Printful placement (same variant). */
   const [placementMockups, setPlacementMockups] = useState<PlacementTab[]>([])
   const [catalogFallbackUrl, setCatalogFallbackUrl] = useState<string>('')
@@ -112,27 +117,33 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     return () => { cancelled = true }
   }, [draftId, localDraft?.pattern_image_url])
 
-  // Fetch signed URLs for per-placement images stored in design_state.pattern_images.
-  // Re-runs whenever the pattern_images map changes (keyed by JSON to avoid object identity issues).
+  // Fetch signed URLs for per-placement image layers stored in design_state.pattern_images.
+  // Re-runs whenever pattern_images changes (JSON key for stable comparison).
   const placementImagesJson = JSON.stringify(parsePlacementImages(designData))
   useEffect(() => {
     const images = parsePlacementImages(designData)
     if (!draftId || Object.keys(images).length === 0) {
-      setPlacementImageSignedUrls({})
+      setPlacementLayerSignedUrls({})
       return
+    }
+    // Build nested paths map: { placement: { layerId: storagePath } }
+    const paths: Record<string, Record<string, string>> = {}
+    for (const [placement, layers] of Object.entries(images)) {
+      paths[placement] = {}
+      for (const layer of layers) paths[placement][layer.id] = layer.path
     }
     let cancelled = false
     fetch(`/api/design-drafts/${draftId}/placement-images`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paths: images }),
+      body: JSON.stringify({ paths }),
     })
       .then((res) => (res.ok ? res.json() : Promise.reject()))
-      .then((body: { urls?: Record<string, string> }) => {
-        if (!cancelled) setPlacementImageSignedUrls(body.urls ?? {})
+      .then((body: { urls?: Record<string, Record<string, string>> }) => {
+        if (!cancelled) setPlacementLayerSignedUrls(body.urls ?? {})
       })
       .catch(() => {
-        if (!cancelled) setPlacementImageSignedUrls({})
+        if (!cancelled) setPlacementLayerSignedUrls({})
       })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -368,13 +379,49 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const handlePatternUploaded = useCallback(
     (path: string) => {
       if (!activePlacement) return
+      const newLayer: PlacementImageLayer = {
+        id: crypto.randomUUID(),
+        path,
+        s: 1,
+        dx: 0,
+        dy: 0,
+      }
       setDesignData((prev) => {
         const current = parsePlacementImages(prev)
-        const next = updatePlacementImage(current, activePlacement, path)
-        return mergePlacementImagesIntoDesignState(prev, next)
+        return mergePlacementImagesIntoDesignState(prev, addPlacementImageLayer(current, activePlacement, newLayer))
+      })
+      // Auto-select the newly added layer
+      setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: newLayer.id }))
+    },
+    [activePlacement]
+  )
+
+  const handleLayerChange = useCallback(
+    (layerId: string, patch: Partial<{ s: number; dx: number; dy: number }>) => {
+      if (!activePlacement) return
+      setDesignData((prev) => {
+        const current = parsePlacementImages(prev)
+        return mergePlacementImagesIntoDesignState(prev, updatePlacementImageLayer(current, activePlacement, layerId, patch))
       })
     },
     [activePlacement]
+  )
+
+  const handleLayerRemove = useCallback(
+    (placement: string, layerId: string) => {
+      setDesignData((prev) => {
+        const current = parsePlacementImages(prev)
+        return mergePlacementImagesIntoDesignState(prev, removePlacementImageLayer(current, placement, layerId))
+      })
+      setSelectedLayerByPlacement((prev) => {
+        if (prev[placement] === layerId) {
+          const { [placement]: _, ...rest } = prev
+          return rest
+        }
+        return prev
+      })
+    },
+    []
   )
 
   const handlePatternClear = useCallback(async () => {
@@ -522,7 +569,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
               /* Only show placement controls after the user has added a pattern image */
               Boolean(
                 (localDraft.pattern_image_url && String(localDraft.pattern_image_url).trim()) ||
-                (typeof designData.imageUrl === 'string' && designData.imageUrl.trim())
+                (typeof designData.imageUrl === 'string' && designData.imageUrl.trim()) ||
+                Object.keys(parsePlacementImages(designData)).length > 0
               ) && (
                 <PlacementEditorPanel
                   productId={localDraft.base_model_id.trim()}
@@ -532,7 +580,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   onSaveLayout={handleSavePlacementLayout}
                   onRefreshPrintfulPreview={handleRefreshPrintfulPreview}
                   hasPatternImage={Boolean(
-                    localDraft.pattern_image_url && String(localDraft.pattern_image_url).trim()
+                    (localDraft.pattern_image_url && String(localDraft.pattern_image_url).trim()) ||
+                    Object.keys(parsePlacementImages(designData)).length > 0
                   )}
                   patternImageUrl={patternImageSignedUrl}
                   saveLoading={placementSaveLoading}
@@ -543,6 +592,14 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   onExternalActivePlacementChange={setActivePlacement}
                   hideCanvas
                   hideActions
+                  activeLayers={(() => {
+                    const layers = parsePlacementImages(designData)[activePlacement] ?? []
+                    const urls = placementLayerSignedUrls[activePlacement] ?? {}
+                    return layers.map((l): ResolvedPlacementImageLayer => ({ ...l, signedUrl: urls[l.id] ?? null }))
+                  })()}
+                  selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
+                  onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
+                  onLayerChange={handleLayerChange}
                 />
               )}
           </div>
@@ -654,39 +711,37 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             onPatternUploaded={handlePatternUploaded}
             onImageClear={() => {
               const placementImages = parsePlacementImages(designData)
-              if (activePlacement && placementImages[activePlacement]) {
-                // Remove per-placement image for the active tab only
-                setDesignData((prev) =>
-                  mergePlacementImagesIntoDesignState(
-                    prev,
-                    removePlacementImage(parsePlacementImages(prev), activePlacement)
-                  )
-                )
+              const selectedId = selectedLayerByPlacement[activePlacement]
+              const layers = placementImages[activePlacement] ?? []
+              if (layers.length > 0) {
+                // Remove selected layer, or last layer if none selected
+                const targetId = selectedId ?? layers[layers.length - 1].id
+                handleLayerRemove(activePlacement, targetId)
               } else if (localDraft?.pattern_image_url) {
                 handlePatternClear()
               } else {
-                setDesignData((prev) => {
-                  const next = { ...prev }
-                  delete next.imageUrl
-                  return next
-                })
+                setDesignData((prev) => { const next = { ...prev }; delete next.imageUrl; return next })
               }
             }}
             imageUrl={
-              // Priority: per-placement signed URL > global signed URL > legacy imageUrl
-              placementImageSignedUrls[activePlacement] ??
-              (localDraft?.pattern_image_url
+              localDraft?.pattern_image_url
                 ? patternImageSignedUrl ?? undefined
                 : typeof designData.imageUrl === 'string'
                   ? designData.imageUrl
-                  : null)
+                  : null
             }
             templateRows={templateRows}
             templatesLoading={templatesLoading}
-            placementsState={parsePrintfulPlacements(designData)}
             activePlacement={activePlacement}
             onActivePlacementChange={setActivePlacement}
-            onPlacementsStateChange={handlePlacementsStateChange}
+            activeLayers={(() => {
+              const layers = parsePlacementImages(designData)[activePlacement] ?? []
+              const urls = placementLayerSignedUrls[activePlacement] ?? {}
+              return layers.map((l): ResolvedPlacementImageLayer => ({ ...l, signedUrl: urls[l.id] ?? null }))
+            })()}
+            selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
+            onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
+            onLayerChange={handleLayerChange}
             onSaveLayout={isDraftEditor ? handleSavePlacementLayout : undefined}
             onRefreshPrintfulPreview={isDraftEditor ? handleRefreshPrintfulPreview : undefined}
             saveLoading={placementSaveLoading}
