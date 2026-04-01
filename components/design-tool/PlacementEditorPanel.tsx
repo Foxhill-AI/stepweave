@@ -2,8 +2,12 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { PlacementMeta } from '@/app/api/printful/products/[id]/placements/route'
-import type { PrintfulPlacementsState, ResolvedPlacementImageLayer } from '@/lib/designDraftState'
-import { mergeAndClampPlacement, updatePlacementTransform } from '@/lib/designDraftState'
+import type {
+  PrintfulPlacementsState,
+  ResolvedPlacementLayer,
+  PlacementLayerPatch,
+} from '@/lib/designDraftState'
+import { mergeAndClampPlacement, updatePlacementTransform, isTextLayer } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import PlacementCanvasPreview from './PlacementCanvasPreview'
 import ShoeDesignEditor from './ShoeDesignEditor'
@@ -40,11 +44,11 @@ interface PlacementEditorPanelProps {
   /** When true, action buttons (save layout, update preview) are rendered elsewhere — skip them here. */
   hideActions?: boolean
   // --- Multi-layer support ---
-  /** Resolved layers for the active placement. When provided, scale/offset controls operate on the selected layer. */
-  activeLayers?: ResolvedPlacementImageLayer[]
+  /** Resolved layers for the active placement (image + text). When provided, controls operate on the selected layer. */
+  activeLayers?: ResolvedPlacementLayer[]
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
-  onLayerChange?: (layerId: string, patch: Partial<{ s: number; dx: number; dy: number }>) => void
+  onLayerChange?: (layerId: string, patch: PlacementLayerPatch) => void
 }
 
 export default function PlacementEditorPanel({
@@ -189,22 +193,32 @@ export default function PlacementEditorPanel({
   const selectedLayer = usingLayers
     ? (activeLayers!.find((l) => l.id === effectiveSelectedId) ?? activeLayers![0])
     : null
+  const selectedIsText = selectedLayer != null && isTextLayer(selectedLayer)
+  // Unified transform view: s is 1 for text layers (they use fontSize instead)
   const t = selectedLayer
-    ? { s: selectedLayer.s, dx: selectedLayer.dx, dy: selectedLayer.dy }
+    ? { s: selectedIsText ? 1 : (selectedLayer as { s: number }).s, dx: selectedLayer.dx, dy: selectedLayer.dy }
     : (placementsState[editingPlacement] ?? { s: 1, dx: 0, dy: 0 })
 
-  /** Clamp transforms to print area using either placement meta or template row dimensions. */
+  /** Update transforms for the active layer or placement. */
   const patchActive = useCallback(
     (patch: Partial<{ s: number; dx: number; dy: number }>) => {
       if (!editingPlacement) return
 
       // Layer-based mode: update the selected layer's transform
       if (onLayerChange && selectedLayer) {
-        const dims = currentTemplate ?? meta.find((m) => m.placement === editingPlacement)
-        const merged = dims
-          ? mergeAndClampPlacement(dims.area_width, dims.area_height, t, patch)
-          : { ...t, ...patch }
-        onLayerChange(selectedLayer.id, merged)
+        if (selectedIsText) {
+          // Text layers: only dx/dy, no scale
+          const p: Partial<{ dx: number; dy: number }> = {}
+          if ('dx' in patch) p.dx = patch.dx
+          if ('dy' in patch) p.dy = patch.dy
+          if (Object.keys(p).length > 0) onLayerChange(selectedLayer.id, p)
+        } else {
+          const dims = currentTemplate ?? meta.find((m) => m.placement === editingPlacement)
+          const merged = dims
+            ? mergeAndClampPlacement(dims.area_width, dims.area_height, t, patch)
+            : { ...t, ...patch }
+          onLayerChange(selectedLayer.id, merged)
+        }
         return
       }
 
@@ -217,7 +231,7 @@ export default function PlacementEditorPanel({
         return updatePlacementTransform(prev, editingPlacement, merged)
       })
     },
-    [editingPlacement, onPlacementsStateChange, onLayerChange, selectedLayer, t, currentTemplate, meta]
+    [editingPlacement, onPlacementsStateChange, onLayerChange, selectedLayer, selectedIsText, t, currentTemplate, meta]
   )
 
   const handleSave = async () => {
@@ -307,20 +321,39 @@ export default function PlacementEditorPanel({
 
           {(current || currentTemplate) && (
             <div className="placement-editor-controls">
-                <div className="placement-editor-field">
-                  <label htmlFor="pe-scale">Scale in print area</label>
-                  <input
-                    id="pe-scale"
-                    type="range"
-                    min={5}
-                    max={100}
-                    value={Math.round(t.s * 100)}
-                    onChange={(e) =>
-                      patchActive({ s: Math.max(0.05, Number(e.target.value) / 100) })
-                    }
-                  />
-                  <span className="placement-editor-value">{Math.round(t.s * 100)}%</span>
-                </div>
+                {selectedIsText && selectedLayer ? (
+                  <div className="placement-editor-field">
+                    <label htmlFor="pe-fontsize">Font size (px)</label>
+                    <input
+                      id="pe-fontsize"
+                      type="range"
+                      min={20}
+                      max={500}
+                      value={(selectedLayer as { fontSize: number }).fontSize}
+                      onChange={(e) =>
+                        onLayerChange?.(selectedLayer.id, { fontSize: Number(e.target.value) })
+                      }
+                    />
+                    <span className="placement-editor-value">
+                      {(selectedLayer as { fontSize: number }).fontSize}px
+                    </span>
+                  </div>
+                ) : (
+                  <div className="placement-editor-field">
+                    <label htmlFor="pe-scale">Scale in print area</label>
+                    <input
+                      id="pe-scale"
+                      type="range"
+                      min={5}
+                      max={100}
+                      value={Math.round(t.s * 100)}
+                      onChange={(e) =>
+                        patchActive({ s: Math.max(0.05, Number(e.target.value) / 100) })
+                      }
+                    />
+                    <span className="placement-editor-value">{Math.round(t.s * 100)}%</span>
+                  </div>
+                )}
                 <div className="placement-editor-field-row">
                   <div className="placement-editor-field">
                     <label htmlFor="pe-dx">Offset X (px)</label>
@@ -328,7 +361,7 @@ export default function PlacementEditorPanel({
                       id="pe-dx"
                       type="number"
                       className="design-tool-input"
-                      value={t.dx}
+                      value={Math.round(t.dx)}
                       onChange={(e) => patchActive({ dx: Number(e.target.value) || 0 })}
                     />
                   </div>
@@ -338,7 +371,7 @@ export default function PlacementEditorPanel({
                       id="pe-dy"
                       type="number"
                       className="design-tool-input"
-                      value={t.dy}
+                      value={Math.round(t.dy)}
                       onChange={(e) => patchActive({ dy: Number(e.target.value) || 0 })}
                     />
                   </div>

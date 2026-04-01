@@ -2534,3 +2534,87 @@
     margin-top: 0;
   }
 }
+
+/* ── Text layer canvas element ─────────────────────────────────────────────── */
+
+.placement-canvas-text {
+  position: absolute;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+  line-height: 1;
+  white-space: nowrap;
+  /* Selection outline shares the same outline element as image layers */
+}
+
+.placement-canvas-text .placement-canvas-art-outline {
+  position: absolute;
+  inset: -3px;
+  border: 1px dashed transparent;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.placement-canvas-text.placement-canvas-art--selected .placement-canvas-art-outline {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+/* ── Text layer add panel ──────────────────────────────────────────────────── */
+
+.preview-text-panel {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--border-radius, 8px);
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.preview-text-panel--standalone {
+  margin: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.preview-text-panel-input {
+  width: 100%;
+  font-size: 1rem;
+}
+
+.preview-text-panel-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.preview-text-panel-font {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-text-panel-size {
+  width: 4.5rem;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.preview-text-panel-color {
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 2px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: none;
+}
+
+.preview-text-panel-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}

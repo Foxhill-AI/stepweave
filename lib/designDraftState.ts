@@ -147,14 +147,69 @@ export type ResolvedPlacementImageLayer = PlacementImageLayer & {
   signedUrl?: string | null
 }
 
+/** One text layer within a placement. */
+export type PlacementTextLayer = {
+  id: string
+  type: 'text'
+  text: string
+  fontFamily: string   // Font value from lib/fonts.ts
+  fontSize: number     // Font size in printfile pixels
+  color: string        // CSS color string, e.g. '#ffffff'
+  dx: number           // x offset from center in printfile pixels
+  dy: number           // y offset from center in printfile pixels
+}
+
+/** Resolved text layer — same structure (no async resolution needed). */
+export type ResolvedPlacementTextLayer = PlacementTextLayer
+
+/** Union of all layer types. */
+export type PlacementLayer = PlacementImageLayer | PlacementTextLayer
+
+/** Union of resolved layer types (image with signedUrl, text as-is). */
+export type ResolvedPlacementLayer = ResolvedPlacementImageLayer | ResolvedPlacementTextLayer
+
+/** Patch type accepted by onLayerChange for any layer. */
+export type PlacementLayerPatch = Partial<{
+  s: number
+  dx: number
+  dy: number
+  fontSize: number
+  text: string
+  fontFamily: string
+  color: string
+}>
+
+export function isTextLayer(l: PlacementLayer): l is PlacementTextLayer {
+  return (l as PlacementTextLayer).type === 'text'
+}
+
+export function isImageLayer(l: PlacementLayer): l is PlacementImageLayer {
+  return (l as PlacementTextLayer).type !== 'text'
+}
+
 /** Per-placement layers keyed by Printful placement name. */
-export type PlacementImagesState = Record<string, PlacementImageLayer[]>
+export type PlacementImagesState = Record<string, PlacementLayer[]>
 
 const PATTERN_IMAGES_KEY = 'pattern_images'
 
-function parseLayer(v: unknown): PlacementImageLayer | null {
+function parseLayer(v: unknown): PlacementLayer | null {
   if (!v || typeof v !== 'object') return null
   const o = v as Record<string, unknown>
+  // Text layer
+  if (o.type === 'text') {
+    if (typeof o.text !== 'string') return null
+    return {
+      id: typeof o.id === 'string' && o.id.trim() ? o.id : crypto.randomUUID(),
+      type: 'text',
+      text: o.text,
+      fontFamily: typeof o.fontFamily === 'string' && o.fontFamily.trim() ? o.fontFamily : 'Roboto',
+      fontSize: typeof o.fontSize === 'number' && o.fontSize > 0 ? o.fontSize : 120,
+      color: typeof o.color === 'string' && o.color.trim() ? o.color : '#000000',
+      dx: typeof o.dx === 'number' ? o.dx : 0,
+      dy: typeof o.dy === 'number' ? o.dy : 0,
+    }
+  }
+  // Image layer (no type field, or type !== 'text')
   if (typeof o.path !== 'string' || !o.path.trim()) return null
   return {
     id: typeof o.id === 'string' && o.id.trim() ? o.id : crypto.randomUUID(),
@@ -167,7 +222,7 @@ function parseLayer(v: unknown): PlacementImageLayer | null {
 
 /**
  * Parse design_state.pattern_images.
- * Handles both legacy string values and new array-of-layers format.
+ * Handles both legacy string values and new array-of-layers format (image + text).
  */
 export function parsePlacementImages(raw: unknown): PlacementImagesState {
   if (!raw || typeof raw !== 'object') return {}
@@ -176,10 +231,10 @@ export function parsePlacementImages(raw: unknown): PlacementImagesState {
   const out: PlacementImagesState = {}
   for (const [placement, v] of Object.entries(block)) {
     if (Array.isArray(v)) {
-      const layers = v.map(parseLayer).filter((l): l is PlacementImageLayer => l !== null)
+      const layers = v.map(parseLayer).filter((l): l is PlacementLayer => l !== null)
       if (layers.length) out[placement] = layers
     } else if (typeof v === 'string' && v.trim()) {
-      // Legacy single-string format → wrap as single layer
+      // Legacy single-string format → wrap as single image layer
       out[placement] = [{ id: 'legacy', path: v, s: 1, dx: 0, dy: 0 }]
     }
   }
@@ -194,7 +249,7 @@ export function mergePlacementImagesIntoDesignState(
   return { ...designState, [PATTERN_IMAGES_KEY]: images }
 }
 
-/** Return a new state with a new layer appended to the given placement. */
+/** Return a new state with a new image layer appended to the given placement. */
 export function addPlacementImageLayer(
   current: PlacementImagesState,
   placement: string,
@@ -203,17 +258,36 @@ export function addPlacementImageLayer(
   return { ...current, [placement]: [...(current[placement] ?? []), layer] }
 }
 
-/** Return a new state with a specific layer's transform updated. */
+/** Return a new state with a new text layer appended to the given placement. */
+export function addPlacementTextLayer(
+  current: PlacementImagesState,
+  placement: string,
+  layer: PlacementTextLayer
+): PlacementImagesState {
+  return { ...current, [placement]: [...(current[placement] ?? []), layer] }
+}
+
+/** Return a new state with a specific layer's fields updated (works for both image and text layers). */
+export function updatePlacementLayer(
+  current: PlacementImagesState,
+  placement: string,
+  layerId: string,
+  patch: PlacementLayerPatch
+): PlacementImagesState {
+  const layers = (current[placement] ?? []).map((l) =>
+    l.id === layerId ? { ...l, ...patch } : l
+  )
+  return { ...current, [placement]: layers }
+}
+
+/** @deprecated Use updatePlacementLayer */
 export function updatePlacementImageLayer(
   current: PlacementImagesState,
   placement: string,
   layerId: string,
   patch: Partial<Pick<PlacementImageLayer, 's' | 'dx' | 'dy'>>
 ): PlacementImagesState {
-  const layers = (current[placement] ?? []).map((l) =>
-    l.id === layerId ? { ...l, ...patch } : l
-  )
-  return { ...current, [placement]: layers }
+  return updatePlacementLayer(current, placement, layerId, patch)
 }
 
 /** Return a new state with a specific layer removed from the given placement. */

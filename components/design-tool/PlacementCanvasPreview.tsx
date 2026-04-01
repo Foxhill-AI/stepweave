@@ -1,18 +1,18 @@
 'use client'
 
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react'
-import { mergeAndClampPlacement } from '@/lib/designDraftState'
-import type { ResolvedPlacementImageLayer } from '@/lib/designDraftState'
+import { mergeAndClampPlacement, isTextLayer, isImageLayer } from '@/lib/designDraftState'
+import type { ResolvedPlacementLayer, PlacementLayerPatch } from '@/lib/designDraftState'
 
 export type PlacementCanvasPreviewProps = {
   areaWidth: number
   areaHeight: number
-  /** Image layers to render. Each layer has its own position transform. */
-  layers: ResolvedPlacementImageLayer[]
+  /** Layers to render (image + text). Each layer has its own position. */
+  layers: ResolvedPlacementLayer[]
   /** ID of the currently selected layer. Auto-selects the only layer when there is exactly one. */
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
-  onLayerChange: (layerId: string, patch: Partial<{ s: number; dx: number; dy: number }>) => void
+  onLayerChange: (layerId: string, patch: PlacementLayerPatch) => void
   disabled?: boolean
   /**
    * `overlay`: transparent stage, dashed border — for shoe template composite.
@@ -24,9 +24,9 @@ export type PlacementCanvasPreviewProps = {
 }
 
 /**
- * Visual print-area canvas: drag/scroll each image layer independently.
- * Supports multiple layers per placement — click a layer to select it,
- * then drag or scroll to reposition/scale it.
+ * Visual print-area canvas: drag/scroll each layer independently.
+ * Image layers: scroll changes scale, drag repositions.
+ * Text layers: scroll changes fontSize, drag repositions.
  */
 export default function PlacementCanvasPreview({
   areaWidth,
@@ -76,7 +76,7 @@ export default function PlacementCanvasPreview({
     return () => ro.disconnect()
   }, [areaWidth])
 
-  // Wheel → scale selected layer
+  // Wheel → scale image layer / change fontSize for text layer
   useEffect(() => {
     const el = stageRef.current
     if (!el || disabled) return
@@ -86,20 +86,31 @@ export default function PlacementCanvasPreview({
       if (!layerId) return
       const layer = layersRef.current.find((l) => l.id === layerId)
       if (!layer) return
-      const factor = e.deltaY > 0 ? 0.94 : 1.06
-      const nextS = Math.min(1, Math.max(0.05, layer.s * factor))
-      if (Math.abs(nextS - layer.s) < 1e-6) return
-      const merged = mergeAndClampPlacement(
-        areaWidth,
-        areaHeight,
-        { s: nextS, dx: layer.dx, dy: layer.dy },
-        { s: nextS }
-      )
-      const out: Partial<{ s: number; dx: number; dy: number }> = {}
-      if (merged.s !== layer.s) out.s = merged.s
-      if (merged.dx !== layer.dx) out.dx = merged.dx
-      if (merged.dy !== layer.dy) out.dy = merged.dy
-      if (Object.keys(out).length > 0) onLayerChangeRef.current(layerId, out)
+
+      if (isTextLayer(layer)) {
+        // Scroll changes fontSize for text layers
+        const factor = e.deltaY > 0 ? 0.94 : 1.06
+        const nextSize = Math.max(10, Math.round(layer.fontSize * factor))
+        if (nextSize !== layer.fontSize) {
+          onLayerChangeRef.current(layerId, { fontSize: nextSize })
+        }
+      } else {
+        // Scroll changes scale for image layers
+        const factor = e.deltaY > 0 ? 0.94 : 1.06
+        const nextS = Math.min(1, Math.max(0.05, layer.s * factor))
+        if (Math.abs(nextS - layer.s) < 1e-6) return
+        const merged = mergeAndClampPlacement(
+          areaWidth,
+          areaHeight,
+          { s: nextS, dx: layer.dx, dy: layer.dy },
+          { s: nextS }
+        )
+        const out: PlacementLayerPatch = {}
+        if (merged.s !== layer.s) out.s = merged.s
+        if (merged.dx !== layer.dx) out.dx = merged.dx
+        if (merged.dy !== layer.dy) out.dy = merged.dy
+        if (Object.keys(out).length > 0) onLayerChangeRef.current(layerId, out)
+      }
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
@@ -121,7 +132,7 @@ export default function PlacementCanvasPreview({
   const hintId = 'placement-canvas-desc'
 
   const handleLayerPointerDown = useCallback(
-    (e: React.PointerEvent, layer: ResolvedPlacementImageLayer) => {
+    (e: React.PointerEvent, layer: ResolvedPlacementLayer) => {
       if (disabled) return
       e.preventDefault()
       e.stopPropagation()
@@ -133,20 +144,30 @@ export default function PlacementCanvasPreview({
   )
 
   const handleLayerPointerMove = useCallback(
-    (e: React.PointerEvent, layer: ResolvedPlacementImageLayer, ds: number) => {
+    (e: React.PointerEvent, layer: ResolvedPlacementLayer, ds: number) => {
       if (!dragRef.current || dragRef.current.layerId !== layer.id || disabled) return
       const d = dragRef.current
       const dPrintX = (e.clientX - d.sx) / ds
       const dPrintY = (e.clientY - d.sy) / ds
-      const merged = mergeAndClampPlacement(
-        areaWidth,
-        areaHeight,
-        { s: layer.s, dx: d.dx0 + dPrintX, dy: d.dy0 + dPrintY },
-        { dx: d.dx0 + dPrintX, dy: d.dy0 + dPrintY }
-      )
-      const out: Partial<{ s: number; dx: number; dy: number }> = {}
-      if (merged.dx !== layer.dx) out.dx = merged.dx
-      if (merged.dy !== layer.dy) out.dy = merged.dy
+      const newDx = d.dx0 + dPrintX
+      const newDy = d.dy0 + dPrintY
+
+      const out: PlacementLayerPatch = {}
+      if (isImageLayer(layer)) {
+        // Clamp image layers within print area
+        const merged = mergeAndClampPlacement(
+          areaWidth,
+          areaHeight,
+          { s: layer.s, dx: newDx, dy: newDy },
+          { dx: newDx, dy: newDy }
+        )
+        if (merged.dx !== layer.dx) out.dx = merged.dx
+        if (merged.dy !== layer.dy) out.dy = merged.dy
+      } else {
+        // Text layers — no clamping, free positioning
+        if (Math.abs(newDx - layer.dx) > 0.5) out.dx = newDx
+        if (Math.abs(newDy - layer.dy) > 0.5) out.dy = newDy
+      }
       if (Object.keys(out).length > 0) onLayerChangeRef.current(layer.id, out)
     },
     [disabled, areaWidth, areaHeight]
@@ -163,7 +184,7 @@ export default function PlacementCanvasPreview({
     <div className={variant === 'overlay' ? 'placement-canvas-root placement-canvas-root--embedded' : 'placement-canvas-root'}>
       {!hideHint && (
         <p className="placement-canvas-hint" id={hintId}>
-          Click an image to select it, then drag to move or scroll to resize.
+          Click a layer to select it, then drag to move or scroll to resize.
           Values match Printful pixels ({areaWidth}×{areaHeight}).
         </p>
       )}
@@ -181,12 +202,50 @@ export default function PlacementCanvasPreview({
         )}
 
         {orderedLayers.map((layer) => {
+          const isSelected = layer.id === effectiveSelectedId
+
+          if (isTextLayer(layer)) {
+            // Text layer: centered at (areaWidth/2 + dx, areaHeight/2 + dy)
+            const centerX = (areaWidth / 2 + layer.dx) * displayScale
+            const centerY = (areaHeight / 2 + layer.dy) * displayScale
+            const fontSizeDisplay = layer.fontSize * displayScale
+            return (
+              <div
+                key={layer.id}
+                className={`placement-canvas-text${isSelected ? ' placement-canvas-art--selected' : ''}`}
+                style={{
+                  position: 'absolute',
+                  left: centerX,
+                  top: centerY,
+                  transform: 'translate(-50%, -50%)',
+                  fontSize: fontSizeDisplay,
+                  fontFamily: layer.fontFamily,
+                  color: layer.color,
+                  whiteSpace: 'nowrap',
+                  cursor: 'move',
+                  userSelect: 'none',
+                  zIndex: isSelected ? 2 : 1,
+                  lineHeight: 1,
+                }}
+                onPointerDown={(e) => handleLayerPointerDown(e, layer)}
+                onPointerMove={(e) => handleLayerPointerMove(e, layer, displayScale)}
+                onPointerUp={(e) => endDrag(e, layer.id)}
+                onPointerCancel={(e) => endDrag(e, layer.id)}
+                role="img"
+                aria-label={`Text layer: "${layer.text}"${isSelected ? ' (selected)' : ''} — drag to reposition`}
+              >
+                {layer.text || <span style={{ opacity: 0.4 }}>Text…</span>}
+                <span className="placement-canvas-art-outline" aria-hidden />
+              </div>
+            )
+          }
+
+          // Image layer
           const sClamped = Math.min(1, Math.max(0.05, layer.s))
           const wPrint = areaWidth * sClamped
           const hPrint = areaHeight * sClamped
           const leftPrint = (areaWidth - wPrint) / 2 + layer.dx
           const topPrint = (areaHeight - hPrint) / 2 + layer.dy
-          const isSelected = layer.id === effectiveSelectedId
 
           return (
             <div
