@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { parsePrintfulPlacements, parsePlacementImages } from '@/lib/designDraftState'
+import {
+  parsePrintfulPlacements,
+  parsePlacementImages,
+  isTextLayer,
+  isImageLayer,
+} from '@/lib/designDraftState'
 import {
   createTaskAndPoll,
   mergeMockups,
@@ -13,7 +18,7 @@ import {
   buildPrintfileById,
   resolvePlacementKeys,
 } from '@/lib/printful/buildMockupFiles'
-import { compositeLayersToBuffer } from '@/lib/printful/compositeImages'
+import { compositeLayersToBuffer, type CompositeInput } from '@/lib/printful/compositeImages'
 
 const BUCKET = 'design-patterns'
 /** Long enough for Printful to fetch the pattern image during mockup generation */
@@ -128,11 +133,13 @@ export async function POST(
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
 
-  // Collect all unique paths that need to be signed
+  // Collect all unique paths that need to be signed (image layers only — text layers have no path)
   const pathsToSign = new Set<string>()
   if (globalPatternPath) pathsToSign.add(globalPatternPath)
   for (const layers of Object.values(perPlacementPaths)) {
-    for (const layer of layers) pathsToSign.add(layer.path)
+    for (const layer of layers) {
+      if (isImageLayer(layer)) pathsToSign.add(layer.path)
+    }
   }
 
   const { data: signed, error: signError } = await admin.storage
@@ -152,22 +159,29 @@ export async function POST(
   const defaultImageUrl = globalPatternPath ? signedByPath.get(globalPatternPath) : undefined
 
   // Build per-placement image URLs.
-  // Single-layer placements use the signed URL directly (Printful positions it via `position`).
-  // Multi-layer placements are composited into one image pre-positioned at the printfile canvas.
+  // Single image-only layers use the signed URL directly (Printful positions it via `position`).
+  // Any placement with text layers or multiple layers must be composited server-side.
   const imageUrlByPlacement: Record<string, string> = {}
   // Overrides for placement transforms: single-layer uses layer's own s/dx/dy;
-  // multi-layer will use { s:1, dx:0, dy:0 } (image is pre-positioned after compositing).
+  // composited placements use { s:1, dx:0, dy:0 } (image is pre-positioned).
   const placementTransformOverrides: Record<string, { s: number; dx: number; dy: number }> = {}
 
   for (const [placement, layers] of Object.entries(perPlacementPaths)) {
-    if (layers.length === 1) {
-      const url = signedByPath.get(layers[0].path)
+    const hasText = layers.some(isTextLayer)
+    const imageLayers = layers.filter(isImageLayer)
+    if (!hasText && imageLayers.length === 1) {
+      // Pure single-image placement — use signed URL directly
+      const url = signedByPath.get(imageLayers[0].path)
       if (url) {
         imageUrlByPlacement[placement] = url
-        placementTransformOverrides[placement] = { s: layers[0].s, dx: layers[0].dx, dy: layers[0].dy }
+        placementTransformOverrides[placement] = {
+          s: imageLayers[0].s,
+          dx: imageLayers[0].dx,
+          dy: imageLayers[0].dy,
+        }
       }
-    } else if (layers.length > 1) {
-      // Will be resolved after printfiles data is available
+    } else if (layers.length > 0) {
+      // Mixed or multi-layer — will be composited after printfiles data is available
       imageUrlByPlacement[`__pending__${placement}`] = placement
     }
   }
@@ -234,11 +248,26 @@ export async function POST(
         const areaWidth = pf?.width ?? 1800
         const areaHeight = pf?.height ?? 1800
 
-        // Resolve signed URLs for each layer
-        const layerInputs = layers.flatMap((l) => {
-          const url = signedByPath.get(l.path)
-          return url ? [{ signedUrl: url, s: l.s, dx: l.dx, dy: l.dy }] : []
-        })
+        // Build composite inputs: image layers (need signed URL) + text layers (no URL)
+        const layerInputs: CompositeInput[] = []
+        for (const l of layers) {
+          if (isTextLayer(l)) {
+            layerInputs.push({
+              kind: 'text',
+              text: l.text,
+              fontFamily: l.fontFamily,
+              fontSize: l.fontSize,
+              color: l.color,
+              dx: l.dx,
+              dy: l.dy,
+            })
+          } else {
+            const url = signedByPath.get(l.path)
+            if (url) {
+              layerInputs.push({ kind: 'image', signedUrl: url, s: l.s, dx: l.dx, dy: l.dy })
+            }
+          }
+        }
         if (layerInputs.length === 0) return
 
         try {

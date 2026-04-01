@@ -11,11 +11,14 @@ import {
   parsePlacementImages,
   mergePlacementImagesIntoDesignState,
   addPlacementImageLayer,
-  updatePlacementImageLayer,
+  addPlacementTextLayer,
+  updatePlacementLayer,
   removePlacementImageLayer,
+  isImageLayer,
   type PrintfulPlacementsState,
   type PlacementImageLayer,
-  type ResolvedPlacementImageLayer,
+  type PlacementTextLayer,
+  type ResolvedPlacementLayer,
 } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import { useAuth } from '@/components/AuthProvider'
@@ -126,11 +129,19 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       setPlacementLayerSignedUrls({})
       return
     }
-    // Build nested paths map: { placement: { layerId: storagePath } }
+    // Build nested paths map: { placement: { layerId: storagePath } } — image layers only
     const paths: Record<string, Record<string, string>> = {}
     for (const [placement, layers] of Object.entries(images)) {
       paths[placement] = {}
-      for (const layer of layers) paths[placement][layer.id] = layer.path
+      for (const layer of layers) {
+        if (isImageLayer(layer)) paths[placement][layer.id] = layer.path
+      }
+    }
+    // If no image layers at all, skip the fetch
+    const hasImagePaths = Object.values(paths).some((p) => Object.keys(p).length > 0)
+    if (!hasImagePaths) {
+      setPlacementLayerSignedUrls({})
+      return
     }
     let cancelled = false
     fetch(`/api/design-drafts/${draftId}/placement-images`, {
@@ -397,12 +408,24 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   )
 
   const handleLayerChange = useCallback(
-    (layerId: string, patch: Partial<{ s: number; dx: number; dy: number }>) => {
+    (layerId: string, patch: Parameters<typeof updatePlacementLayer>[3]) => {
       if (!activePlacement) return
       setDesignData((prev) => {
         const current = parsePlacementImages(prev)
-        return mergePlacementImagesIntoDesignState(prev, updatePlacementImageLayer(current, activePlacement, layerId, patch))
+        return mergePlacementImagesIntoDesignState(prev, updatePlacementLayer(current, activePlacement, layerId, patch))
       })
+    },
+    [activePlacement]
+  )
+
+  const handleAddTextLayer = useCallback(
+    (layer: PlacementTextLayer) => {
+      if (!activePlacement) return
+      setDesignData((prev) => {
+        const current = parsePlacementImages(prev)
+        return mergePlacementImagesIntoDesignState(prev, addPlacementTextLayer(current, activePlacement, layer))
+      })
+      setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: layer.id }))
     },
     [activePlacement]
   )
@@ -595,7 +618,9 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   activeLayers={(() => {
                     const layers = parsePlacementImages(designData)[activePlacement] ?? []
                     const urls = placementLayerSignedUrls[activePlacement] ?? {}
-                    return layers.map((l): ResolvedPlacementImageLayer => ({ ...l, signedUrl: urls[l.id] ?? null }))
+                    return layers.map((l): ResolvedPlacementLayer =>
+                      isImageLayer(l) ? { ...l, signedUrl: urls[l.id] ?? null } : l
+                    )
                   })()}
                   selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
                   onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
@@ -737,11 +762,14 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             activeLayers={(() => {
               const layers = parsePlacementImages(designData)[activePlacement] ?? []
               const urls = placementLayerSignedUrls[activePlacement] ?? {}
-              return layers.map((l): ResolvedPlacementImageLayer => ({ ...l, signedUrl: urls[l.id] ?? null }))
+              return layers.map((l): ResolvedPlacementLayer =>
+                isImageLayer(l) ? { ...l, signedUrl: urls[l.id] ?? null } : l
+              )
             })()}
             selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
             onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
             onLayerChange={handleLayerChange}
+            onAddTextLayer={isDraftEditor ? handleAddTextLayer : undefined}
             onSaveLayout={isDraftEditor ? handleSavePlacementLayout : undefined}
             onRefreshPrintfulPreview={isDraftEditor ? handleRefreshPrintfulPreview : undefined}
             saveLoading={placementSaveLoading}

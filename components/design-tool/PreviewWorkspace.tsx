@@ -5,7 +5,8 @@ import { Upload, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ShoeDesignEditor from './ShoeDesignEditor'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
-import type { ResolvedPlacementImageLayer } from '@/lib/designDraftState'
+import type { ResolvedPlacementLayer, PlacementLayerPatch, PlacementTextLayer } from '@/lib/designDraftState'
+import { FONTS } from '@/lib/fonts'
 
 const ACCEPT_IMAGES = 'image/*'
 const MAX_SIZE_MB = 10
@@ -46,11 +47,13 @@ interface PreviewWorkspaceProps {
   /** Controlled active placement for shoe editor */
   activePlacement?: string
   onActivePlacementChange?: (placement: string) => void
-  /** Image layers for the active placement (resolved with signed URLs). */
-  activeLayers?: ResolvedPlacementImageLayer[]
+  /** Layers for the active placement (image + text, resolved). */
+  activeLayers?: ResolvedPlacementLayer[]
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
-  onLayerChange?: (layerId: string, patch: Partial<{ s: number; dx: number; dy: number }>) => void
+  onLayerChange?: (layerId: string, patch: PlacementLayerPatch) => void
+  /** Called when the user adds a new text layer. */
+  onAddTextLayer?: (layer: PlacementTextLayer) => void
   /** Placement layout actions — rendered contextually below the shoe canvas */
   onSaveLayout?: () => Promise<void>
   onRefreshPrintfulPreview?: () => Promise<void>
@@ -86,6 +89,7 @@ export default function PreviewWorkspace({
   selectedLayerId,
   onLayerSelect,
   onLayerChange,
+  onAddTextLayer,
   onSaveLayout,
   onRefreshPrintfulPreview,
   saveLoading = false,
@@ -105,6 +109,12 @@ export default function PreviewWorkspace({
   // 'canvas' = shoe template editor, 'mockups' = generated mockup images
   const [viewMode, setViewMode] = useState<'canvas' | 'mockups'>('canvas')
   const [placementActionMsg, setPlacementActionMsg] = useState<string | null>(null)
+  // Text layer add panel
+  const [showTextPanel, setShowTextPanel] = useState(false)
+  const [textInput, setTextInput] = useState('')
+  const [textFont, setTextFont] = useState(FONTS[0].value)
+  const [textColor, setTextColor] = useState('#000000')
+  const [textSize, setTextSize] = useState(120)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleSaveLayout = async () => {
@@ -277,7 +287,7 @@ export default function PreviewWorkspace({
       />
 
       {/* STEP 1: No image — upload hero (shown whether or not shoe canvas is available) */}
-      {!hasImage && !uploading && (
+      {!hasImage && !uploading && !showTextPanel && (
         <div
           className={`preview-upload-hero${isDragging ? ' preview-upload-hero--dragging' : ''}`}
           role="button"
@@ -307,6 +317,84 @@ export default function PreviewWorkspace({
         </div>
       )}
 
+      {/* Alternative: add text when no image and text panel shown */}
+      {!hasImage && !uploading && showTextPanel && (
+        <div className="preview-text-panel preview-text-panel--standalone">
+          <h3 className="preview-upload-hero-title" style={{ margin: '0 0 0.75rem' }}>Add text to template</h3>
+          <input
+            type="text"
+            className="design-tool-input preview-text-panel-input"
+            placeholder="Enter text…"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            aria-label="Text content"
+          />
+          <div className="preview-text-panel-row">
+            <select
+              className="design-tool-select preview-text-panel-font"
+              value={textFont}
+              onChange={(e) => setTextFont(e.target.value)}
+              aria-label="Font"
+              style={{ fontFamily: textFont }}
+            >
+              {FONTS.map((f) => (
+                <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              className="design-tool-input preview-text-panel-size"
+              value={textSize}
+              min={20}
+              max={600}
+              onChange={(e) => setTextSize(Math.max(20, Number(e.target.value) || 120))}
+              aria-label="Font size"
+              title="Font size (printfile pixels)"
+            />
+            <input
+              type="color"
+              className="preview-text-panel-color"
+              value={textColor}
+              onChange={(e) => setTextColor(e.target.value)}
+              aria-label="Text color"
+            />
+          </div>
+          <div className="preview-text-panel-actions">
+            <button
+              type="button"
+              className="design-tool-btn design-tool-btn-secondary"
+              onClick={() => setShowTextPanel(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="design-tool-btn design-tool-btn-publish"
+              disabled={!textInput.trim()}
+              onClick={() => {
+                if (!textInput.trim()) return
+                onAddTextLayer?.({
+                  id: crypto.randomUUID(),
+                  type: 'text',
+                  text: textInput.trim(),
+                  fontFamily: textFont,
+                  fontSize: textSize,
+                  color: textColor,
+                  dx: 0,
+                  dy: 0,
+                })
+                setTextInput('')
+                setShowTextPanel(false)
+              }}
+            >
+              Add text
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Uploading state */}
       {uploading && (
         <div className="preview-upload-hero">
@@ -319,15 +407,16 @@ export default function PreviewWorkspace({
       {hasImage && (
         <div className="preview-image-bar">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {(activeLayers[0]?.signedUrl || imageUrl) && (
-            <img
-              src={activeLayers[0]?.signedUrl ?? imageUrl!}
-              alt=""
-              className="preview-image-bar-thumb"
-            />
-          )}
+          {(() => {
+            const imgLayer = activeLayers.find((l): l is (typeof l & { signedUrl?: string | null }) => 'signedUrl' in l)
+            const thumbSrc = imgLayer?.signedUrl ?? imageUrl
+            return thumbSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={thumbSrc} alt="" className="preview-image-bar-thumb" />
+            ) : null
+          })()}
           <span className="preview-image-bar-label">
-            {layerCount > 1 ? `${layerCount} images applied` : 'Pattern applied'}
+            {layerCount > 1 ? `${layerCount} layers applied` : 'Pattern applied'}
           </span>
           <div className="preview-image-bar-actions">
             <button
@@ -337,14 +426,100 @@ export default function PreviewWorkspace({
             >
               <Upload size={13} aria-hidden /> Add image
             </button>
+            {onAddTextLayer && (
+              <button
+                type="button"
+                className="preview-image-bar-btn"
+                onClick={() => setShowTextPanel((v) => !v)}
+              >
+                T Add text
+              </button>
+            )}
             <button
               type="button"
               className="preview-image-bar-btn preview-image-bar-btn--remove"
               onClick={onImageClear}
-              aria-label="Remove selected image"
+              aria-label="Remove selected layer"
               disabled={layerCount === 0}
             >
               <X size={13} aria-hidden /> Remove
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Text layer add panel */}
+      {showTextPanel && onAddTextLayer && (
+        <div className="preview-text-panel">
+          <input
+            type="text"
+            className="design-tool-input preview-text-panel-input"
+            placeholder="Enter text…"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            aria-label="Text content"
+          />
+          <div className="preview-text-panel-row">
+            <select
+              className="design-tool-select preview-text-panel-font"
+              value={textFont}
+              onChange={(e) => setTextFont(e.target.value)}
+              aria-label="Font"
+              style={{ fontFamily: textFont }}
+            >
+              {FONTS.map((f) => (
+                <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              className="design-tool-input preview-text-panel-size"
+              value={textSize}
+              min={20}
+              max={600}
+              onChange={(e) => setTextSize(Math.max(20, Number(e.target.value) || 120))}
+              aria-label="Font size"
+              title="Font size (printfile pixels)"
+            />
+            <input
+              type="color"
+              className="preview-text-panel-color"
+              value={textColor}
+              onChange={(e) => setTextColor(e.target.value)}
+              aria-label="Text color"
+            />
+          </div>
+          <div className="preview-text-panel-actions">
+            <button
+              type="button"
+              className="design-tool-btn design-tool-btn-secondary"
+              onClick={() => setShowTextPanel(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="design-tool-btn design-tool-btn-publish"
+              disabled={!textInput.trim()}
+              onClick={() => {
+                if (!textInput.trim()) return
+                onAddTextLayer({
+                  id: crypto.randomUUID(),
+                  type: 'text',
+                  text: textInput.trim(),
+                  fontFamily: textFont,
+                  fontSize: textSize,
+                  color: textColor,
+                  dx: 0,
+                  dy: 0,
+                })
+                setTextInput('')
+                setShowTextPanel(false)
+              }}
+            >
+              Add text
             </button>
           </div>
         </div>
@@ -440,13 +615,24 @@ export default function PreviewWorkspace({
                 <span className="preview-placement-msg" role="status">{placementActionMsg}</span>
               )}
               {!hasPatternImage && (
-                <button
-                  type="button"
-                  className="design-tool-btn design-tool-btn-secondary"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload size={14} aria-hidden /> Upload pattern
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="design-tool-btn design-tool-btn-secondary"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload size={14} aria-hidden /> Upload pattern
+                  </button>
+                  {onAddTextLayer && (
+                    <button
+                      type="button"
+                      className="design-tool-btn design-tool-btn-secondary"
+                      onClick={() => setShowTextPanel((v) => !v)}
+                    >
+                      T Add text
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}

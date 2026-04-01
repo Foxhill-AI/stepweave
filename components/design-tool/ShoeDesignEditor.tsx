@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useEffect } from 'react'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
-import type { ResolvedPlacementImageLayer } from '@/lib/designDraftState'
+import type { ResolvedPlacementLayer, PlacementLayerPatch } from '@/lib/designDraftState'
 import PlacementCanvasPreview from './PlacementCanvasPreview'
 
 export type ShoeDesignEditorProps = {
@@ -10,11 +10,11 @@ export type ShoeDesignEditorProps = {
   templates: PlacementTemplateRow[]
   activePlacement: string
   onActivePlacementChange: (placement: string) => void
-  /** Image layers for the active placement. */
-  layers: ResolvedPlacementImageLayer[]
+  /** Layers for the active placement (image + text). */
+  layers: ResolvedPlacementLayer[]
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
-  onLayerChange: (layerId: string, patch: Partial<{ s: number; dx: number; dy: number }>) => void
+  onLayerChange: (layerId: string, patch: PlacementLayerPatch) => void
   disabled?: boolean
 }
 
