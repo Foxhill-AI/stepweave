@@ -5,6 +5,9 @@ import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import type { ResolvedPlacementLayer, PlacementLayerPatch } from '@/lib/designDraftState'
 import PlacementCanvasPreview from './PlacementCanvasPreview'
 
+/** Pre-layout/decode `offsetWidth` can be ~2px; never lock `.shoe-design-composite` to that (img is width:100%). */
+const MIN_TEMPLATE_LAYOUT_PX = 32
+
 export type ShoeDesignEditorProps = {
   /** Rows from GET .../templates (only those with template_url are required for silhouette mode). */
   templates: PlacementTemplateRow[]
@@ -48,15 +51,30 @@ export default function ShoeDesignEditor({
     const composite = compositeRef.current
     if (!img || !composite) return
 
-    // Set explicit placeholder height immediately so percentage-based overlay
-    // heights resolve correctly on desktop before the image finishes loading
+    // Placeholder until intrinsic layout is trustworthy (percentage overlay needs a height box)
+    composite.style.removeProperty('width')
     composite.style.height = '200px'
 
     const sync = () => {
+      const nw = img.naturalWidth
+      const nh = img.naturalHeight
       const w = img.offsetWidth
-      if (w > 0) composite.style.width = `${w}px`
       const h = img.offsetHeight
-      if (h > 0) composite.style.height = `${h}px`
+      const layoutReady =
+        nw > 0 &&
+        nh > 0 &&
+        w >= MIN_TEMPLATE_LAYOUT_PX &&
+        h >= MIN_TEMPLATE_LAYOUT_PX
+
+      if (layoutReady) {
+        composite.style.width = `${w}px`
+        composite.style.height = `${h}px`
+      } else {
+        // Break 2×2px trap: drop inline width so CSS `width:100%` / max-width can size the img again
+        composite.style.removeProperty('width')
+        composite.style.height = '200px'
+      }
+
       // #region agent log
       fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
         method: 'POST',
@@ -68,10 +86,11 @@ export default function ShoeDesignEditor({
           location: 'ShoeDesignEditor.tsx:sync',
           message: 'template composite sync',
           data: {
-            ow: img.offsetWidth,
-            oh: img.offsetHeight,
+            ow: w,
+            oh: h,
             complete: img.complete,
-            nw: img.naturalWidth,
+            nw,
+            appliedPx: layoutReady,
           },
           timestamp: Date.now(),
         }),
@@ -83,8 +102,6 @@ export default function ShoeDesignEditor({
     img.addEventListener('load', sync)
     const ro = new ResizeObserver(sync)
     ro.observe(img)
-    // Cached / decoded template: `load` does not fire again; without this the composite
-    // can keep width/height at 0 or the 200px placeholder → blank canvas until full reload.
     let raf = 0
     if (img.complete) {
       raf = requestAnimationFrame(() => {
@@ -96,7 +113,8 @@ export default function ShoeDesignEditor({
       if (raf) cancelAnimationFrame(raf)
       img.removeEventListener('load', sync)
       ro.disconnect()
-      composite.style.height = ''
+      composite.style.removeProperty('width')
+      composite.style.removeProperty('height')
     }
   }, [current?.template_url, layers.length])
 
