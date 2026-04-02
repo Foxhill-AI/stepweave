@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Upload, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ShoeDesignEditor from './ShoeDesignEditor'
@@ -116,6 +116,9 @@ export default function PreviewWorkspace({
   const [textColor, setTextColor] = useState('#000000')
   const [textSize, setTextSize] = useState(120)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const prevPreviewLoadingRef = useRef(previewLoading)
+  const prevHadImageRef = useRef(false)
+  const prevActiveLayerCountRef = useRef(0)
 
   const handleSaveLayout = async () => {
     if (!onSaveLayout) return
@@ -151,28 +154,61 @@ export default function PreviewWorkspace({
     setActiveGalleryIndex(0)
   }, [tabs, activePlacement])
 
-  // Auto-switch to mockups view when real mockup URLs arrive after generation
+  // Switch to mockups only when a preview run finishes — `mockupImagesLoading` is often always false
+  // in the parent, so the old effect hid the template canvas whenever mockups existed in state.
   useEffect(() => {
-    const hasRealMockups = placementMockups?.some((t) => t.mockup_url?.trim())
-    if (hasRealMockups && !mockupImagesLoading) {
+    const wasLoading = prevPreviewLoadingRef.current
+    prevPreviewLoadingRef.current = previewLoading
+    if (wasLoading && !previewLoading) {
+      const hasRealMockups = placementMockups?.some((t) => t.mockup_url?.trim())
+      if (hasRealMockups) {
+        // #region agent log
+        fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
+          body: JSON.stringify({
+            sessionId: 'ffdcdb',
+            runId: 'post-fix',
+            hypothesisId: 'B',
+            location: 'PreviewWorkspace.tsx:viewModeAfterPreview',
+            message: 'set viewMode mockups after preview finished',
+            data: { hasRealMockups },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {})
+        // #endregion
+        setViewMode('mockups')
+      }
+    }
+  }, [previewLoading, placementMockups])
+
+  // After upload / new layer, show template editor (user may have been on Preview tab).
+  useEffect(() => {
+    const hasImage = activeLayers.length > 0 || Boolean(imageUrl?.trim())
+    const n = activeLayers.length
+    const gainedFirstImage = !prevHadImageRef.current && hasImage
+    const addedLayer = n > prevActiveLayerCountRef.current && n > 0
+    if (gainedFirstImage || addedLayer) {
       // #region agent log
       fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
         body: JSON.stringify({
           sessionId: 'ffdcdb',
-          runId: 'pre-fix',
+          runId: 'post-fix',
           hypothesisId: 'B',
-          location: 'PreviewWorkspace.tsx:viewModeEffect',
-          message: 'forcing viewMode mockups',
-          data: { hasRealMockups, mockupImagesLoading },
+          location: 'PreviewWorkspace.tsx:viewModeAfterPattern',
+          message: 'set viewMode canvas after pattern/layer',
+          data: { gainedFirstImage, addedLayer, layerCount: n },
           timestamp: Date.now(),
         }),
       }).catch(() => {})
       // #endregion
-      setViewMode('mockups')
+      setViewMode('canvas')
     }
-  }, [placementMockups, mockupImagesLoading])
+    prevHadImageRef.current = hasImage
+    prevActiveLayerCountRef.current = n
+  }, [activeLayers.length, imageUrl])
 
   useEffect(() => {
     if (!mockupImagesLoading) {
@@ -301,7 +337,7 @@ export default function PreviewWorkspace({
     headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
     body: JSON.stringify({
       sessionId: 'ffdcdb',
-      runId: 'pre-fix',
+      runId: 'post-fix',
       hypothesisId: 'A',
       location: 'PreviewWorkspace.tsx:render',
       message: 'preview workspace render gates',
