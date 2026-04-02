@@ -155,6 +155,21 @@ export default function PreviewWorkspace({
   useEffect(() => {
     const hasRealMockups = placementMockups?.some((t) => t.mockup_url?.trim())
     if (hasRealMockups && !mockupImagesLoading) {
+      // #region agent log
+      fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
+        body: JSON.stringify({
+          sessionId: 'ffdcdb',
+          runId: 'pre-fix',
+          hypothesisId: 'B',
+          location: 'PreviewWorkspace.tsx:viewModeEffect',
+          message: 'forcing viewMode mockups',
+          data: { hasRealMockups, mockupImagesLoading },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
       setViewMode('mockups')
     }
   }, [placementMockups, mockupImagesLoading])
@@ -273,6 +288,38 @@ export default function PreviewWorkspace({
   // only appears after the user explicitly clicks "See preview".
   const hasMockups = Boolean(tabs?.some((t) => t.mockup_url?.trim()))
   const showToggle = useShoeCanvas && hasMockups
+
+  const showShoeCanvas =
+    useShoeCanvas && (viewMode === 'canvas' || !hasMockups) && !mockupImagesLoading
+  const layersWithSignedUrl = activeLayers.filter(
+    (l) => 'signedUrl' in l && Boolean((l as { signedUrl?: string | null }).signedUrl)
+  ).length
+
+  // #region agent log
+  fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
+    body: JSON.stringify({
+      sessionId: 'ffdcdb',
+      runId: 'pre-fix',
+      hypothesisId: 'A',
+      location: 'PreviewWorkspace.tsx:render',
+      message: 'preview workspace render gates',
+      data: {
+        mockupImagesLoading,
+        viewMode,
+        useShoeCanvas,
+        hasMockups,
+        hasImage,
+        showShoeCanvas,
+        activeLayersLen: activeLayers.length,
+        layersWithSignedUrl,
+        extPlacement: externalActivePlacement ?? '',
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
 
   return (
     <div className="preview-workspace">
@@ -573,7 +620,7 @@ export default function PreviewWorkspace({
       )}
 
       {/* CANVAS VIEW: ShoeDesignEditor + placement action buttons — shown even without a pattern */}
-      {useShoeCanvas && (viewMode === 'canvas' || !hasMockups) && !mockupImagesLoading && (
+      {showShoeCanvas && (
         <div className="preview-shoe-canvas-section">
           <ShoeDesignEditor
             templates={templateWithUrl}
