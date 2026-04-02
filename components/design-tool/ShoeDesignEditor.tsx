@@ -48,9 +48,15 @@ export default function ShoeDesignEditor({
     const composite = compositeRef.current
     if (!img || !composite) return
 
+    // Set explicit placeholder height immediately so percentage-based overlay
+    // heights resolve correctly on desktop before the image finishes loading
+    composite.style.height = '200px'
+
     const sync = () => {
       const w = img.offsetWidth
       if (w > 0) composite.style.width = `${w}px`
+      const h = img.offsetHeight
+      if (h > 0) composite.style.height = `${h}px`
     }
 
     sync()
@@ -60,6 +66,7 @@ export default function ShoeDesignEditor({
     return () => {
       img.removeEventListener('load', sync)
       ro.disconnect()
+      composite.style.height = ''
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.template_url])
