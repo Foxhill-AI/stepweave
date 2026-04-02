@@ -57,19 +57,48 @@ export default function ShoeDesignEditor({
       if (w > 0) composite.style.width = `${w}px`
       const h = img.offsetHeight
       if (h > 0) composite.style.height = `${h}px`
+      // #region agent log
+      fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
+        body: JSON.stringify({
+          sessionId: 'ffdcdb',
+          runId: 'post-fix',
+          hypothesisId: 'F',
+          location: 'ShoeDesignEditor.tsx:sync',
+          message: 'template composite sync',
+          data: {
+            ow: img.offsetWidth,
+            oh: img.offsetHeight,
+            complete: img.complete,
+            nw: img.naturalWidth,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
     }
 
     sync()
     img.addEventListener('load', sync)
     const ro = new ResizeObserver(sync)
     ro.observe(img)
+    // Cached / decoded template: `load` does not fire again; without this the composite
+    // can keep width/height at 0 or the 200px placeholder → blank canvas until full reload.
+    let raf = 0
+    if (img.complete) {
+      raf = requestAnimationFrame(() => {
+        sync()
+        requestAnimationFrame(sync)
+      })
+    }
     return () => {
+      if (raf) cancelAnimationFrame(raf)
       img.removeEventListener('load', sync)
       ro.disconnect()
       composite.style.height = ''
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.template_url])
+  }, [current?.template_url, layers.length])
 
   if (!current) return null
 
