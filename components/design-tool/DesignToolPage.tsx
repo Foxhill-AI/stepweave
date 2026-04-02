@@ -80,6 +80,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
+  /** Temporary object URLs for layers uploaded in this session (before server signed URL arrives). */
+  const [localLayerUrls, setLocalLayerUrls] = useState<Record<string, string>>({})
 
   const isDraftEditor = Boolean(draftId)
 
@@ -393,7 +395,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   )
 
   const handlePatternUploaded = useCallback(
-    (path: string) => {
+    (path: string, localUrl?: string) => {
       const placement = activePlacement || templateRows[0]?.placement || ''
       if (!placement) return
       const newLayer: PlacementImageLayer = {
@@ -407,6 +409,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         const current = parsePlacementImages(prev)
         return mergePlacementImagesIntoDesignState(prev, addPlacementImageLayer(current, placement, newLayer))
       })
+      // Store the object URL so the canvas can render immediately before signed URL arrives
+      if (localUrl) setLocalLayerUrls((prev) => ({ ...prev, [newLayer.id]: localUrl }))
       // Auto-select the newly added layer
       setSelectedLayerByPlacement((prev) => ({ ...prev, [placement]: newLayer.id }))
       // Ensure the active placement is set so the canvas shows the new layer immediately
@@ -627,7 +631,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                     const layers = parsePlacementImages(designData)[activePlacement] ?? []
                     const urls = placementLayerSignedUrls[activePlacement] ?? {}
                     return layers.map((l): ResolvedPlacementLayer =>
-                      isImageLayer(l) ? { ...l, signedUrl: urls[l.id] ?? null } : l
+                      isImageLayer(l) ? { ...l, signedUrl: urls[l.id] ?? localLayerUrls[l.id] ?? null } : l
                     )
                   })()}
                   selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
@@ -771,7 +775,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
               const layers = parsePlacementImages(designData)[activePlacement] ?? []
               const urls = placementLayerSignedUrls[activePlacement] ?? {}
               return layers.map((l): ResolvedPlacementLayer =>
-                isImageLayer(l) ? { ...l, signedUrl: urls[l.id] ?? null } : l
+                isImageLayer(l) ? { ...l, signedUrl: urls[l.id] ?? localLayerUrls[l.id] ?? null } : l
               )
             })()}
             selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}

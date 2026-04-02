@@ -38,7 +38,7 @@ interface PreviewWorkspaceProps {
   draftId?: number
   authUserId?: string | null
   onImageSelect?: (imageUrl: string) => void
-  onPatternUploaded?: (path: string) => void
+  onPatternUploaded?: (path: string, localUrl?: string) => void
   imageUrl?: string | null
   onImageClear?: () => void
   /** Template rows from Printful for shoe canvas display. */
@@ -211,7 +211,7 @@ export default function PreviewWorkspace({
           setUploadError(error.message || 'Upload failed.')
           return
         }
-        onPatternUploaded?.(path)
+        onPatternUploaded?.(path, URL.createObjectURL(file))
       } catch {
         setUploadError('Upload failed. Please try again.')
       } finally {
