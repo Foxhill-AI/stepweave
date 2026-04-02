@@ -253,7 +253,12 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     fetch(`/api/printful/products/${encodeURIComponent(pid)}/templates?variant_id=${printfulVariantId}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('templates'))))
       .then((body: { placements?: PlacementTemplateRow[] }) => {
-        if (!cancelled) setTemplateRows(body.placements ?? [])
+        if (!cancelled) {
+          const rows = body.placements ?? []
+          setTemplateRows(rows)
+          // Auto-select first placement if none is active yet
+          setActivePlacement((prev) => prev || rows[0]?.placement || '')
+        }
       })
       .catch(() => { if (!cancelled) setTemplateRows([]) })
       .finally(() => { if (!cancelled) setTemplatesLoading(false) })
@@ -389,7 +394,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
 
   const handlePatternUploaded = useCallback(
     (path: string) => {
-      if (!activePlacement) return
+      const placement = activePlacement || templateRows[0]?.placement || ''
+      if (!placement) return
       const newLayer: PlacementImageLayer = {
         id: crypto.randomUUID(),
         path,
@@ -399,12 +405,14 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       }
       setDesignData((prev) => {
         const current = parsePlacementImages(prev)
-        return mergePlacementImagesIntoDesignState(prev, addPlacementImageLayer(current, activePlacement, newLayer))
+        return mergePlacementImagesIntoDesignState(prev, addPlacementImageLayer(current, placement, newLayer))
       })
       // Auto-select the newly added layer
-      setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: newLayer.id }))
+      setSelectedLayerByPlacement((prev) => ({ ...prev, [placement]: newLayer.id }))
+      // Ensure the active placement is set so the canvas shows the new layer immediately
+      if (!activePlacement) setActivePlacement(placement)
     },
-    [activePlacement]
+    [activePlacement, templateRows]
   )
 
   const handleLayerChange = useCallback(
