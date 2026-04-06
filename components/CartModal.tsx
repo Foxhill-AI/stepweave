@@ -13,6 +13,7 @@ import {
   type CartItemRow,
 } from '@/lib/supabaseClient'
 import ProductImage from './ProductImage'
+import { getDesignDraftByCartItemIdForCheckout } from '@/lib/cartDesignDraftMap'
 import '../styles/CartModal.css'
 
 function mapCartItemRowToItem(row: CartItemRow): CartItem {
@@ -96,10 +97,18 @@ export default function CartModal({ isOpen, onClose }: CartModalProps) {
     if (cartId == null || cartItems.length === 0) return
     setCheckoutLoading(true)
     try {
+      const designDraftByCartItemId = getDesignDraftByCartItemIdForCheckout(null)
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cartId, shipping, taxes }),
+        body: JSON.stringify({
+          cartId,
+          shipping,
+          taxes,
+          ...(Object.keys(designDraftByCartItemId).length > 0
+            ? { designDraftByCartItemId }
+            : {}),
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {

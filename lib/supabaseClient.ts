@@ -656,6 +656,8 @@ export const supabase =
     subtotal: number
     stripe_price_id: string | null
     created_at: string
+    design_draft_id?: number | null
+    design_snapshot?: Record<string, unknown> | null
   }
 
   /** Order row with items (for list/detail). */
@@ -710,7 +712,9 @@ export const supabase =
           unit_price,
           subtotal,
           stripe_price_id,
-          created_at
+          created_at,
+          design_draft_id,
+          design_snapshot
         )
       `
       )
@@ -733,6 +737,52 @@ export const supabase =
     quantity: number
     unit_price: number
     stripe_price_id?: string | null
+    /** Set when checkout links a design line item to a draft (Printful fulfillment). */
+    design_draft_id?: number | null
+    design_snapshot?: Record<string, unknown> | null
+  }
+
+  /** Frozen design fields for Printful / order fulfillment (stored at checkout). */
+  export type DesignDraftSnapshotPayload = {
+    design_state: Record<string, unknown>
+    pattern_image_url: string | null
+    base_model_id: string
+    structural_color: string
+    captured_at: string
+  }
+
+  /**
+   * Load a design draft owned by the user and build a snapshot for order_item.design_snapshot.
+   */
+  export async function getDesignDraftSnapshotForUser(
+    draftId: number,
+    userAccountId: number,
+    client?: typeof supabase
+  ): Promise<{ draftId: number; snapshot: DesignDraftSnapshotPayload } | null> {
+    const db = client ?? supabase
+    const { data, error } = await db
+      .from('design_draft')
+      .select('id, design_state, pattern_image_url, base_model_id, structural_color')
+      .eq('id', draftId)
+      .eq('user_account_id', userAccountId)
+      .maybeSingle()
+    if (error || !data) {
+      if (error) console.error('getDesignDraftSnapshotForUser:', error)
+      return null
+    }
+    const raw = data.design_state
+    const design_state =
+      typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {}
+    const snapshot: DesignDraftSnapshotPayload = {
+      design_state,
+      pattern_image_url: data.pattern_image_url ?? null,
+      base_model_id: data.base_model_id,
+      structural_color: data.structural_color,
+      captured_at: new Date().toISOString(),
+    }
+    return { draftId: data.id as number, snapshot }
   }
 
   /**
@@ -784,6 +834,12 @@ export const supabase =
       unit_price: item.unit_price,
       subtotal: item.quantity * item.unit_price,
       stripe_price_id: item.stripe_price_id ?? null,
+      ...(item.design_draft_id != null
+        ? { design_draft_id: item.design_draft_id }
+        : {}),
+      ...(item.design_snapshot != null
+        ? { design_snapshot: item.design_snapshot }
+        : {}),
     }))
     const { error } = await db.from('order_item').insert(rows)
     if (error) {
@@ -826,7 +882,9 @@ export const supabase =
           unit_price,
           subtotal,
           stripe_price_id,
-          created_at
+          created_at,
+          design_draft_id,
+          design_snapshot
         )
       `
       )
@@ -869,7 +927,9 @@ export const supabase =
           unit_price,
           subtotal,
           stripe_price_id,
-          created_at
+          created_at,
+          design_draft_id,
+          design_snapshot
         )
       `
       )
@@ -905,32 +965,132 @@ export const supabase =
     return data != null
   }
 
+  export type UpdateOrderPaidOptions = {
+    stripePaymentIntentId?: string | null
+    stripeCustomerId?: string | null
+    /**
+     * If set, update only when user_order.stripe_checkout_session_id matches (webhook hardening).
+     */
+    expectedStripeCheckoutSessionId?: string | null
+  }
+
   /**
    * Mark order as paid (for Stripe webhook: checkout.session.completed).
-   * Sets status to 'paid', paid_at to now, and optionally shipping_address.
+   * Sets status to 'paid', paid_at to now, optional Stripe ids, shipping_address.
+   * Idempotent: if order is already `paid`, returns true without updating.
    */
   export async function updateOrderPaid(
     orderId: number,
     client?: typeof supabase,
-    shippingAddress?: ShippingAddressRow | null
+    shippingAddress?: ShippingAddressRow | null,
+    options?: UpdateOrderPaidOptions
   ): Promise<boolean> {
     const db = client ?? supabase
+    const { data: existing, error: loadErr } = await db
+      .from('user_order')
+      .select('id, status, stripe_checkout_session_id')
+      .eq('id', orderId)
+      .maybeSingle()
+    if (loadErr || !existing) {
+      console.error('updateOrderPaid: load order', loadErr)
+      return false
+    }
+    if (String(existing.status) === 'paid') {
+      return true
+    }
+
+    const expectedSession = options?.expectedStripeCheckoutSessionId
+    if (
+      expectedSession &&
+      existing.stripe_checkout_session_id &&
+      existing.stripe_checkout_session_id !== expectedSession
+    ) {
+      console.error(
+        'updateOrderPaid: stripe_checkout_session_id mismatch for order',
+        orderId
+      )
+      return false
+    }
+
     const now = new Date().toISOString()
-    const payload: { status: string; paid_at: string; shipping_address?: ShippingAddressRow | null } = {
+    const payload: Record<string, unknown> = {
       status: 'paid',
       paid_at: now,
     }
     if (shippingAddress != null) {
       payload.shipping_address = shippingAddress
     }
-    const { error } = await db
-      .from('user_order')
-      .update(payload)
-      .eq('id', orderId)
+    if (options?.stripePaymentIntentId) {
+      payload.stripe_payment_intent_id = options.stripePaymentIntentId
+    }
+    if (options?.stripeCustomerId) {
+      payload.stripe_customer_id = options.stripeCustomerId
+    }
+
+    const { error } = await db.from('user_order').update(payload).eq('id', orderId)
     if (error) {
       console.error('updateOrderPaid:', error)
       return false
     }
+    return true
+  }
+
+  /**
+   * Claim a Stripe webhook event for idempotent processing.
+   * `inserted: true` = first delivery; `inserted: false` + `duplicate: true` = already handled (return 200).
+   */
+  export async function claimStripeWebhookEvent(
+    eventId: string,
+    eventType: string,
+    client?: typeof supabase
+  ): Promise<{ inserted: boolean; duplicate: boolean; dbError: boolean }> {
+    const db = client ?? supabase
+    const { error } = await db.from('stripe_webhook_event').insert({
+      id: eventId,
+      event_type: eventType,
+    })
+    if (error) {
+      if ((error as { code?: string }).code === '23505') {
+        return { inserted: false, duplicate: true, dbError: false }
+      }
+      console.error('claimStripeWebhookEvent:', error)
+      return { inserted: false, duplicate: false, dbError: true }
+    }
+    return { inserted: true, duplicate: false, dbError: false }
+  }
+
+  export async function markStripeWebhookEventProcessed(
+    eventId: string,
+    client?: typeof supabase,
+    userOrderId?: number | null,
+    errorMessage?: string | null
+  ): Promise<void> {
+    const db = client ?? supabase
+    const { error } = await db
+      .from('stripe_webhook_event')
+      .update({
+        processed_at: new Date().toISOString(),
+        ...(userOrderId != null ? { user_order_id: userOrderId } : {}),
+        ...(errorMessage != null ? { error: errorMessage } : {}),
+      })
+      .eq('id', eventId)
+    if (error) {
+      console.error('markStripeWebhookEventProcessed:', error)
+    }
+  }
+
+  /** If event row exists and is fully processed, webhook can return 200 without re-running side effects. */
+  export async function isStripeWebhookEventFullyProcessed(
+    eventId: string,
+    client?: typeof supabase
+  ): Promise<boolean> {
+    const db = client ?? supabase
+    const { data, error } = await db
+      .from('stripe_webhook_event')
+      .select('processed_at')
+      .eq('id', eventId)
+      .maybeSingle()
+    if (error || !data?.processed_at) return false
     return true
   }
 

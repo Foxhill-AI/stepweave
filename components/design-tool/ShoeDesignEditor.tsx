@@ -74,28 +74,6 @@ export default function ShoeDesignEditor({
         composite.style.removeProperty('width')
         composite.style.height = '200px'
       }
-
-      // #region agent log
-      fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-        body: JSON.stringify({
-          sessionId: 'ffdcdb',
-          runId: 'post-fix',
-          hypothesisId: 'F',
-          location: 'ShoeDesignEditor.tsx:sync',
-          message: 'template composite sync',
-          data: {
-            ow: w,
-            oh: h,
-            complete: img.complete,
-            nw,
-            appliedPx: layoutReady,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
     }
 
     sync()

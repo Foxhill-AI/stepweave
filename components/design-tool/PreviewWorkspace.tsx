@@ -162,21 +162,6 @@ export default function PreviewWorkspace({
     if (wasLoading && !previewLoading) {
       const hasRealMockups = placementMockups?.some((t) => t.mockup_url?.trim())
       if (hasRealMockups) {
-        // #region agent log
-        fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-          body: JSON.stringify({
-            sessionId: 'ffdcdb',
-            runId: 'post-fix',
-            hypothesisId: 'B',
-            location: 'PreviewWorkspace.tsx:viewModeAfterPreview',
-            message: 'set viewMode mockups after preview finished',
-            data: { hasRealMockups },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
         setViewMode('mockups')
       }
     }
@@ -189,21 +174,6 @@ export default function PreviewWorkspace({
     const gainedFirstImage = !prevHadImageRef.current && hasImage
     const addedLayer = n > prevActiveLayerCountRef.current && n > 0
     if (gainedFirstImage || addedLayer) {
-      // #region agent log
-      fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-        body: JSON.stringify({
-          sessionId: 'ffdcdb',
-          runId: 'post-fix',
-          hypothesisId: 'B',
-          location: 'PreviewWorkspace.tsx:viewModeAfterPattern',
-          message: 'set viewMode canvas after pattern/layer',
-          data: { gainedFirstImage, addedLayer, layerCount: n },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
       setViewMode('canvas')
     }
     prevHadImageRef.current = hasImage
@@ -327,35 +297,6 @@ export default function PreviewWorkspace({
 
   const showShoeCanvas =
     useShoeCanvas && (viewMode === 'canvas' || !hasMockups) && !mockupImagesLoading
-  const layersWithSignedUrl = activeLayers.filter(
-    (l) => 'signedUrl' in l && Boolean((l as { signedUrl?: string | null }).signedUrl)
-  ).length
-
-  // #region agent log
-  fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-    body: JSON.stringify({
-      sessionId: 'ffdcdb',
-      runId: 'post-fix',
-      hypothesisId: 'A',
-      location: 'PreviewWorkspace.tsx:render',
-      message: 'preview workspace render gates',
-      data: {
-        mockupImagesLoading,
-        viewMode,
-        useShoeCanvas,
-        hasMockups,
-        hasImage,
-        showShoeCanvas,
-        activeLayersLen: activeLayers.length,
-        layersWithSignedUrl,
-        extPlacement: externalActivePlacement ?? '',
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion
 
   return (
     <div className="preview-workspace">
