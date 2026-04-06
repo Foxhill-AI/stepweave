@@ -397,27 +397,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const handlePatternUploaded = useCallback(
     (path: string, localUrl?: string) => {
       const placement = activePlacement || templateRows[0]?.placement || ''
-      if (!placement) {
-        // #region agent log
-        fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-          body: JSON.stringify({
-            sessionId: 'ffdcdb',
-            runId: 'pre-fix',
-            hypothesisId: 'C',
-            location: 'DesignToolPage.tsx:handlePatternUploaded',
-            message: 'early return no placement',
-            data: {
-              templateRowsLen: templateRows.length,
-              activePlacement: activePlacement || '',
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
-        return
-      }
+      if (!placement) return
       const newLayer: PlacementImageLayer = {
         id: crypto.randomUUID(),
         path,
@@ -431,25 +411,6 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       })
       // Store the object URL so the canvas can render immediately before signed URL arrives
       if (localUrl) setLocalLayerUrls((prev) => ({ ...prev, [newLayer.id]: localUrl }))
-      // #region agent log
-      fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-        body: JSON.stringify({
-          sessionId: 'ffdcdb',
-          runId: 'pre-fix',
-          hypothesisId: 'D',
-          location: 'DesignToolPage.tsx:handlePatternUploaded',
-          message: 'pattern uploaded applied',
-          data: {
-            placement,
-            layerIdSuffix: newLayer.id.slice(-8),
-            hasLocalUrl: Boolean(localUrl),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
       // Auto-select the newly added layer
       setSelectedLayerByPlacement((prev) => ({ ...prev, [placement]: newLayer.id }))
       // Ensure the active placement is set so the canvas shows the new layer immediately

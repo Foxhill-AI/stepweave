@@ -6,9 +6,27 @@ import {
   createOrder,
   createOrderItems,
   updateOrderStripeCheckoutSession,
+  getDesignDraftSnapshotForUser,
   type CartItemRow,
   type CreateOrderItemInput,
 } from '@/lib/supabaseClient'
+
+/** Body `designDraftByCartItemId`: maps cart_item.id → design_draft.id (must belong to cart owner). */
+function parseDesignDraftByCartItemId(
+  raw: unknown,
+  cartItemIds: Set<number>
+): Map<number, number> {
+  const m = new Map<number, number>()
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return m
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const cartItemId = Number(k)
+    const draftId = typeof v === 'number' ? v : Number(v)
+    if (!Number.isInteger(cartItemId) || cartItemId <= 0 || !cartItemIds.has(cartItemId)) continue
+    if (!Number.isInteger(draftId) || draftId <= 0) continue
+    m.set(cartItemId, draftId)
+  }
+  return m
+}
 
 function buildVariantLabel(row: CartItemRow): string | null {
   if (row.variant_label != null && String(row.variant_label).trim() !== '') {
@@ -81,13 +99,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const cartItemIdSet = new Set(cartItems.map((r) => r.id))
+    const draftMap = parseDesignDraftByCartItemId(body.designDraftByCartItemId, cartItemIdSet)
+
+    const resolvedDrafts = new Map<number, { draftId: number; snapshot: Record<string, unknown> }>()
+    const draftEntries = Array.from(draftMap.entries())
+    for (let i = 0; i < draftEntries.length; i++) {
+      const cartItemId = draftEntries[i][0]
+      const draftId = draftEntries[i][1]
+      const resolved = await getDesignDraftSnapshotForUser(draftId, userAccountId, supabase)
+      if (!resolved) {
+        return NextResponse.json(
+          { error: `Invalid or unauthorized design draft for cart item ${cartItemId}` },
+          { status: 400 }
+        )
+      }
+      resolvedDrafts.set(cartItemId, {
+        draftId: resolved.draftId,
+        snapshot: { ...resolved.snapshot } as Record<string, unknown>,
+      })
+    }
+
     const orderItems: CreateOrderItemInput[] = cartItems.map((row) => {
       const product = row.product_variant?.product
       const productId = product?.id ?? 0
       const productName = product?.name ?? 'Product'
       const unitPrice = Number(row.unit_price_at_added)
       const quantity = row.quantity
-      return {
+      const base: CreateOrderItemInput = {
         product_id: productId,
         product_variant_id: row.product_variant_id,
         product_name: productName,
@@ -96,6 +135,12 @@ export async function POST(request: NextRequest) {
         unit_price: unitPrice,
         stripe_price_id: row.product_variant?.stripe_price_id ?? undefined,
       }
+      const linked = resolvedDrafts.get(row.id)
+      if (linked) {
+        base.design_draft_id = linked.draftId
+        base.design_snapshot = linked.snapshot
+      }
+      return base
     })
 
     const subtotal = orderItems.reduce(
