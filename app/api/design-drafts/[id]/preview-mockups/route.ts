@@ -361,6 +361,18 @@ export async function POST(
 
   const anyUrl = placements.some((p) => p.mockup_url)
 
+  // Persist mockup URLs to design_draft so product cards and gallery can use them later.
+  // Fire-and-forget: failure does not affect the response.
+  if (anyUrl) {
+    supabase
+      .from('design_draft')
+      .update({ mockup_urls: placements })
+      .eq('id', draftId)
+      .then(({ error }) => {
+        if (error) console.error('[preview-mockups] persist mockup_urls:', error.message)
+      })
+  }
+
   return NextResponse.json({
     product_id: productId,
     variant_id: variantId,

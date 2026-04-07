@@ -6,7 +6,11 @@ import { Heart, Share2, Bookmark, ChevronLeft, ChevronRight, ChevronDown, Chevro
 import ItemCard from './ItemCard'
 import Carousel from './Carousel'
 import { useAuth } from '@/components/AuthProvider'
-import { isFollowing as getIsFollowing, followUser, unfollowUser, createNotification } from '@/lib/supabaseClient'
+import {
+  isFollowing as getIsFollowing, followUser, unfollowUser, createNotification,
+  getProductComments, addProductComment, deleteProductComment,
+  type ProductCommentRow,
+} from '@/lib/supabaseClient'
 import '../styles/Product.css'
 
 const COLOR_LABEL_TO_HEX: Record<string, string> = {
@@ -129,6 +133,8 @@ interface ProductProps {
   onSaveToggle?: () => void
   /** Creator's user_account id (for follow button; only shown when logged in and not own product). */
   creatorUserAccountId?: number
+  /** Numeric product id — needed for discussions. */
+  productNumericId?: number
 }
 
 function findVariantIdFromSelection(
@@ -217,6 +223,7 @@ export default function Product({
   isSaved: isSavedProp,
   onSaveToggle,
   creatorUserAccountId,
+  productNumericId,
 }: ProductProps) {
   const { userAccount } = useAuth()
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
@@ -224,6 +231,11 @@ export default function Product({
   const [localLiked, setLocalLiked] = useState(false)
   const [isFollowing, setIsFollowing] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
+  // Discussions
+  const [comments, setComments] = useState<ProductCommentRow[]>([])
+  const [commentBody, setCommentBody] = useState('')
+  const [commentSubmitting, setCommentSubmitting] = useState(false)
+  const [commentError, setCommentError] = useState<string | null>(null)
   const isLiked = onLikeToggle !== undefined && isLikedProp !== undefined ? isLikedProp : localLiked
   const handleLikeClick = onLikeToggle ? () => onLikeToggle() : () => setLocalLiked((prev) => !prev)
   const isSaved = isSavedProp ?? false
@@ -265,6 +277,37 @@ export default function Product({
     }
     setFollowLoading(false)
   }
+  useEffect(() => {
+    if (!productNumericId) return
+    let cancelled = false
+    getProductComments(productNumericId).then((rows) => {
+      if (!cancelled) setComments(rows)
+    })
+    return () => { cancelled = true }
+  }, [productNumericId])
+
+  const handleCommentSubmit = async () => {
+    const body = commentBody.trim()
+    if (!body || !userAccount?.id || !productNumericId) return
+    setCommentSubmitting(true)
+    setCommentError(null)
+    const newId = await addProductComment(productNumericId, userAccount.id, body)
+    if (newId) {
+      setCommentBody('')
+      // Re-fetch to get author info attached
+      getProductComments(productNumericId).then(setComments)
+    } else {
+      setCommentError('Could not post comment. Please try again.')
+    }
+    setCommentSubmitting(false)
+  }
+
+  const handleCommentDelete = async (commentId: number) => {
+    if (!productNumericId) return
+    const ok = await deleteProductComment(commentId)
+    if (ok) setComments((prev) => prev.filter((c) => c.id !== commentId))
+  }
+
   /** One option per attribute (attributeId -> optionId) for variant selection */
   const [selectedOptionByAttribute, setSelectedOptionByAttribute] = useState<Record<number, number>>({})
   const [addToCartQuantity, setAddToCartQuantity] = useState(1)
@@ -899,37 +942,80 @@ export default function Product({
           <div className="product-discussions">
             <h2 className="product-section-title">Discussions</h2>
             <div className="product-discussions-content">
-              {!productData.isMember ? (
-                <p className="product-discussions-message">
-                  Become a member to join the conversation
-                </p>
-              ) : (
+              {comments.length > 0 ? (
                 <div className="product-discussions-list">
-                  {/* Mock discussion items */}
-                  <div className="product-discussion-item">
-                    <div className="product-discussion-author">User1</div>
-                    <div className="product-discussion-text">
-                      Great model! What settings did you use?
+                  {comments.map((c) => (
+                    <div key={c.id} className="product-discussion-item">
+                      <div className="product-discussion-author">
+                        {c.author_username ?? 'User'}
+                      </div>
+                      <div className="product-discussion-text">{c.body}</div>
+                      {userAccount?.id === c.user_account_id && (
+                        <button
+                          type="button"
+                          className="product-discussion-delete"
+                          onClick={() => handleCommentDelete(c.id)}
+                          aria-label="Delete comment"
+                        >
+                          ✕
+                        </button>
+                      )}
+                      {c.replies && c.replies.length > 0 && (
+                        <div className="product-discussion-replies">
+                          {c.replies.map((r) => (
+                            <div key={r.id} className="product-discussion-item product-discussion-item--reply">
+                              <div className="product-discussion-author">{r.author_username ?? 'User'}</div>
+                              <div className="product-discussion-text">{r.body}</div>
+                              {userAccount?.id === r.user_account_id && (
+                                <button
+                                  type="button"
+                                  className="product-discussion-delete"
+                                  onClick={() => handleCommentDelete(r.id)}
+                                  aria-label="Delete reply"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <div className="product-discussion-item">
-                    <div className="product-discussion-author">Creator</div>
-                    <div className="product-discussion-text">
-                      Thanks! I used the settings listed above. Let me know if you need more details.
-                    </div>
-                  </div>
+                  ))}
                 </div>
+              ) : (
+                <p className="product-discussions-message">
+                  No comments yet. Be the first to start the conversation!
+                </p>
               )}
-              <div className="product-discussions-input">
-                <textarea
-                  placeholder={productData.isMember ? "Add a comment..." : "Become a member to join the conversation"}
-                  disabled={!productData.isMember}
-                  className="product-discussions-textarea"
-                />
-                {productData.isMember && (
-                  <button className="product-discussions-submit">Comment</button>
-                )}
-              </div>
+
+              {userAccount ? (
+                <div className="product-discussions-input">
+                  <textarea
+                    placeholder="Add a comment…"
+                    value={commentBody}
+                    onChange={(e) => setCommentBody(e.target.value)}
+                    className="product-discussions-textarea"
+                    maxLength={2000}
+                    disabled={commentSubmitting}
+                  />
+                  {commentError && (
+                    <p className="product-discussions-error" role="alert">{commentError}</p>
+                  )}
+                  <button
+                    type="button"
+                    className="product-discussions-submit"
+                    onClick={handleCommentSubmit}
+                    disabled={!commentBody.trim() || commentSubmitting}
+                  >
+                    {commentSubmitting ? 'Posting…' : 'Comment'}
+                  </button>
+                </div>
+              ) : (
+                <p className="product-discussions-message">
+                  <a href="/sign-in">Sign in</a> to join the conversation.
+                </p>
+              )}
             </div>
           </div>
         </div>
