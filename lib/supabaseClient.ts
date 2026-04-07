@@ -669,6 +669,10 @@ export const supabase =
     state?: string | null
     postal_code?: string | null
     country?: string | null
+    /** From Stripe customer / shipping details (Printful recipient). */
+    name?: string | null
+    email?: string | null
+    phone?: string | null
   }
 
   export type OrderWithItemsRow = {
