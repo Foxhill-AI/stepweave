@@ -13,11 +13,36 @@ import { sendOrderConfirmationEmail, sendSubscriptionEndedEmail } from '@/lib/em
 import { fulfillOrderAfterPayment } from '@/lib/fulfillment/fulfillOrderAfterPayment'
 
 function shippingAddressFromSession(session: Stripe.Checkout.Session): ShippingAddressRow | null {
+  /** Stripe typings omit `shipping_details` on Session in some API versions; it exists at runtime. */
+  const sessionExt = session as Stripe.Checkout.Session & {
+    shipping_details?: { name?: string | null; address?: Stripe.Address | null } | null
+  }
+  const shippingDetails =
+    session.collected_information?.shipping_details ?? sessionExt.shipping_details ?? null
   const addr =
-    session.collected_information?.shipping_details?.address ??
+    shippingDetails?.address ??
     session.customer_details?.address ??
     null
   if (!addr || typeof addr !== 'object') return null
+  const nameFromShipping =
+    shippingDetails && typeof shippingDetails === 'object' && 'name' in shippingDetails
+      ? (shippingDetails as { name?: string | null }).name
+      : null
+  const name =
+    (typeof nameFromShipping === 'string' && nameFromShipping.trim()
+      ? nameFromShipping.trim()
+      : null) ??
+    (typeof session.customer_details?.name === 'string' && session.customer_details.name.trim()
+      ? session.customer_details.name.trim()
+      : null)
+  const email =
+    typeof session.customer_details?.email === 'string' && session.customer_details.email.trim()
+      ? session.customer_details.email.trim()
+      : null
+  const phone =
+    typeof session.customer_details?.phone === 'string' && session.customer_details.phone.trim()
+      ? session.customer_details.phone.trim()
+      : null
   return {
     line1: addr.line1 ?? null,
     line2: addr.line2 ?? null,
@@ -25,6 +50,9 @@ function shippingAddressFromSession(session: Stripe.Checkout.Session): ShippingA
     state: addr.state ?? null,
     postal_code: addr.postal_code ?? null,
     country: addr.country ?? null,
+    ...(name ? { name } : {}),
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {}),
   }
 }
 
