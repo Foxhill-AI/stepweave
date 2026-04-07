@@ -15,8 +15,10 @@ interface ProductImageProps {
 }
 
 /**
- * Renders product image. When design_data.source === 'design_draft', fetches
- * signed URL from /api/products/[id]/design-image; otherwise uses design_data.imageUrl.
+ * Renders product image. When design_data.source === 'design_draft':
+ * 1. Tries /api/products/[id]/mockup-image (Printful mockup — best visual quality).
+ * 2. Falls back to /api/products/[id]/design-image (raw pattern from Storage).
+ * Otherwise uses design_data.imageUrl as a static URL.
  */
 export default function ProductImage({
   productId,
@@ -27,7 +29,6 @@ export default function ProductImage({
   fallback,
 }: ProductImageProps) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
-  const [failed, setFailed] = useState(false)
 
   const useDesignDraftApi =
     designData && (designData as { source?: string }).source === 'design_draft'
@@ -36,21 +37,38 @@ export default function ProductImage({
   useEffect(() => {
     if (!useDesignDraftApi) {
       setResolvedUrl(staticUrl)
-      setFailed(false)
       return
     }
     setResolvedUrl(null)
-    setFailed(false)
     let cancelled = false
-    fetch(`/api/products/${productId}/design-image`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Not found'))))
-      .then((body: { url?: string }) => {
-        if (!cancelled && body.url) setResolvedUrl(body.url)
-        else if (!cancelled) setFailed(true)
+
+    // Try mockup image first; fall back to raw design image
+    fetch(`/api/products/${productId}/mockup-image`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((body: { url?: string | null }) => {
+        if (cancelled) return
+        if (body.url) {
+          setResolvedUrl(body.url)
+        } else {
+          // No mockup yet — fall back to pattern image from Storage
+          return fetch(`/api/products/${productId}/design-image`)
+            .then((res) => (res.ok ? res.json() : Promise.reject()))
+            .then((b: { url?: string }) => {
+              if (!cancelled && b.url) setResolvedUrl(b.url)
+            })
+        }
       })
       .catch(() => {
-        if (!cancelled) setFailed(true)
+        // Mockup failed — try design image
+        if (cancelled) return
+        fetch(`/api/products/${productId}/design-image`)
+          .then((res) => (res.ok ? res.json() : Promise.reject()))
+          .then((b: { url?: string }) => {
+            if (!cancelled && b.url) setResolvedUrl(b.url)
+          })
+          .catch(() => {})
       })
+
     return () => {
       cancelled = true
     }

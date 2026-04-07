@@ -2743,3 +2743,88 @@ export type Database = {
       }
     }
   }
+// ─── Product Comments ────────────────────────────────────────────────────────
+
+export type ProductCommentRow = {
+  id: number
+  product_id: number
+  user_account_id: number
+  parent_id: number | null
+  body: string
+  created_at: string
+  updated_at: string
+  author_username?: string | null
+  author_avatar_url?: string | null
+  replies?: ProductCommentRow[]
+}
+
+/**
+ * Fetches top-level comments for a product with author info, ordered oldest-first.
+ * Replies are nested under their parent comment.
+ */
+export async function getProductComments(productId: number): Promise<ProductCommentRow[]> {
+  const { data, error } = await supabase
+    .from('product_comment')
+    .select(`
+      id,
+      product_id,
+      user_account_id,
+      parent_id,
+      body,
+      created_at,
+      updated_at,
+      user_account ( username, user_public_profile ( avatar_url ) )
+    `)
+    .eq('product_id', productId)
+    .order('created_at', { ascending: true })
+  if (error) {
+    console.error('getProductComments:', error)
+    return []
+  }
+  type RawRow = {
+    id: number; product_id: number; user_account_id: number; parent_id: number | null
+    body: string; created_at: string; updated_at: string
+    user_account: { username: string; user_public_profile: { avatar_url: string | null } | null } | null
+  }
+  const rows = (data ?? []) as unknown as RawRow[]
+  const all: ProductCommentRow[] = rows.map((r) => ({
+    id: r.id, product_id: r.product_id, user_account_id: r.user_account_id,
+    parent_id: r.parent_id, body: r.body, created_at: r.created_at, updated_at: r.updated_at,
+    author_username: r.user_account?.username ?? null,
+    author_avatar_url: r.user_account?.user_public_profile?.avatar_url ?? null,
+    replies: [],
+  }))
+  const byId = new Map<number, ProductCommentRow>(all.map((c) => [c.id, c]))
+  const topLevel: ProductCommentRow[] = []
+  for (const comment of all) {
+    if (comment.parent_id != null) {
+      byId.get(comment.parent_id)?.replies!.push(comment)
+    } else {
+      topLevel.push(comment)
+    }
+  }
+  return topLevel
+}
+
+/** Inserts a new comment. Returns new comment id or null on failure. */
+export async function addProductComment(
+  productId: number,
+  userAccountId: number,
+  body: string,
+  parentId?: number | null
+): Promise<number | null> {
+  const { data, error } = await supabase
+    .from('product_comment')
+    .insert({ product_id: productId, user_account_id: userAccountId, body: body.trim(), parent_id: parentId ?? null })
+    .select('id')
+    .single()
+  if (error) { console.error('addProductComment:', error); return null }
+  return (data as { id: number }).id
+}
+
+/** Deletes a comment. RLS enforces only author or product owner can delete. */
+export async function deleteProductComment(commentId: number): Promise<boolean> {
+  const { error } = await supabase.from('product_comment').delete().eq('id', commentId)
+  if (error) { console.error('deleteProductComment:', error); return false }
+  return true
+}

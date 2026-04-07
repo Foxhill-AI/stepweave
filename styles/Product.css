@@ -971,3 +971,48 @@
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
+
+.product-discussions-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.product-discussions-error {
+  font-size: 0.875rem;
+  color: var(--color-error, #dc2626);
+  margin: 0;
+}
+
+.product-discussion-delete {
+  align-self: flex-end;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-light);
+  font-size: 0.75rem;
+  padding: 2px 4px;
+  border-radius: 3px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.product-discussion-delete:hover {
+  opacity: 1;
+  color: var(--color-error, #dc2626);
+}
+
+.product-discussion-replies {
+  margin-top: var(--spacing-xs);
+  padding-left: var(--spacing-md);
+  border-left: 2px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.product-discussion-item--reply {
+  background: transparent;
+  padding: var(--spacing-xs) 0;
+}
