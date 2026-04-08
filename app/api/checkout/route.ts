@@ -10,6 +10,7 @@ import {
   type CartItemRow,
   type CreateOrderItemInput,
 } from '@/lib/supabaseClient'
+import { resolveDesignSnapshotForProductCheckout } from '@/lib/checkout/resolveDesignSnapshotForProduct'
 
 /** Body `designDraftByCartItemId`: maps cart_item.id → design_draft.id (must belong to cart owner). */
 function parseDesignDraftByCartItemId(
@@ -103,21 +104,50 @@ export async function POST(request: NextRequest) {
     const draftMap = parseDesignDraftByCartItemId(body.designDraftByCartItemId, cartItemIdSet)
 
     const resolvedDrafts = new Map<number, { draftId: number; snapshot: Record<string, unknown> }>()
-    const draftEntries = Array.from(draftMap.entries())
-    for (let i = 0; i < draftEntries.length; i++) {
-      const cartItemId = draftEntries[i][0]
-      const draftId = draftEntries[i][1]
-      const resolved = await getDesignDraftSnapshotForUser(draftId, userAccountId, supabase)
-      if (!resolved) {
-        return NextResponse.json(
-          { error: `Invalid or unauthorized design draft for cart item ${cartItemId}` },
-          { status: 400 }
-        )
+
+    for (const row of cartItems) {
+      const product = row.product_variant?.product
+      const productId = product?.id
+      const designData = product?.design_data
+      const isPrintfulListing =
+        productId != null &&
+        designData &&
+        typeof designData === 'object' &&
+        !Array.isArray(designData) &&
+        (designData as Record<string, unknown>).source === 'design_draft'
+
+      if (isPrintfulListing) {
+        const resolved = await resolveDesignSnapshotForProductCheckout(productId)
+        if (!resolved) {
+          return NextResponse.json(
+            {
+              error:
+                'A customizable product in your cart cannot be fulfilled (missing design link or server config). Remove it or contact support.',
+            },
+            { status: 400 }
+          )
+        }
+        resolvedDrafts.set(row.id, {
+          draftId: resolved.draftId,
+          snapshot: { ...resolved.snapshot } as Record<string, unknown>,
+        })
+        continue
       }
-      resolvedDrafts.set(cartItemId, {
-        draftId: resolved.draftId,
-        snapshot: { ...resolved.snapshot } as Record<string, unknown>,
-      })
+
+      const draftIdFromClient = draftMap.get(row.id)
+      if (draftIdFromClient != null) {
+        const resolved = await getDesignDraftSnapshotForUser(draftIdFromClient, userAccountId, supabase)
+        if (!resolved) {
+          return NextResponse.json(
+            { error: `Invalid or unauthorized design draft for cart item ${row.id}` },
+            { status: 400 }
+          )
+        }
+        resolvedDrafts.set(row.id, {
+          draftId: resolved.draftId,
+          snapshot: { ...resolved.snapshot } as Record<string, unknown>,
+        })
+      }
     }
 
     const orderItems: CreateOrderItemInput[] = cartItems.map((row) => {
