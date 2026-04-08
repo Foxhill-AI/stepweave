@@ -7,8 +7,6 @@ import { getActiveProducts, getFeaturedCreatorsForHero } from '@/lib/supabaseCli
  * depend on the browser Supabase client (which can hang with createBrowserClient).
  */
 export async function GET() {
-  console.log("SUPABASE_URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
-  console.log("HAS_ANON_KEY:", !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   try {
     const [products, featuredCreators] = await Promise.all([
       getActiveProducts(),
