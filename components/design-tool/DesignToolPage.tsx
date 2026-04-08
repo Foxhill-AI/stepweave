@@ -22,7 +22,14 @@ import {
 } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import { useAuth } from '@/components/AuthProvider'
-import { getCategories, createProduct, updateDesignDraft } from '@/lib/supabaseClient'
+import {
+  getCategories,
+  createProduct,
+  updateDesignDraft,
+  getProductById,
+  updateProduct,
+  setProductCategories,
+} from '@/lib/supabaseClient'
 import type { CategoryRow, DesignDraftRow } from '@/lib/supabaseClient'
 import PricingEstimatePanel, { formatPricingMoney } from './PricingEstimatePanel'
 import type { PricingEstimateOk } from '@/lib/printful/pricingEstimate'
@@ -94,6 +101,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [localLayerUrls, setLocalLayerUrls] = useState<Record<string, string>>({})
 
   const isDraftEditor = Boolean(draftId)
+  /** Draft is linked to an existing storefront product — publish flow updates that row instead of inserting. */
+  const isEditingPublishedProduct = Boolean(localDraft?.final_product_id)
 
   useEffect(() => {
     setLocalDraft(draft ?? null)
@@ -112,6 +121,26 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     })
     return () => { cancelled = true }
   }, [])
+
+  // Pre-fill listing fields when editing a product that was created from this draft.
+  useEffect(() => {
+    const pid = localDraft?.final_product_id
+    if (pid == null || typeof pid !== 'number') return
+    let cancelled = false
+    getProductById(pid).then((p) => {
+      if (cancelled || !p) return
+      const row = p as {
+        name?: string
+        price?: number
+        product_category?: Array<{ category_id: number }>
+      }
+      if (typeof row.name === 'string' && row.name.trim()) setName(row.name)
+      if (row.price != null && Number.isFinite(Number(row.price))) setPrice(String(row.price))
+      const firstCat = row.product_category?.[0]?.category_id
+      setCategoryId(firstCat != null && firstCat > 0 ? firstCat : '')
+    })
+    return () => { cancelled = true }
+  }, [localDraft?.final_product_id])
 
   // Fetch signed URL when draft has a pattern stored in Storage (private bucket).
   useEffect(() => {
@@ -528,6 +557,39 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     setCreateError(null)
     setCreateLoading(true)
     try {
+      const existingProductId = localDraft?.final_product_id
+      if (typeof existingProductId === 'number' && existingProductId > 0) {
+        const okDraft = await updateDesignDraft(draftId, { design_state: designData })
+        if (!okDraft) {
+          setCreateError('Failed to save design. Please try again.')
+          return
+        }
+        const okProduct = await updateProduct(existingProductId, {
+          name: trimmedName,
+          price: priceNum,
+          design_data: { source: 'design_draft' },
+        })
+        if (!okProduct) {
+          setCreateError('Failed to update product. Please try again.')
+          return
+        }
+        const catOk = await setProductCategories(
+          existingProductId,
+          categoryId !== '' ? [categoryId as number] : []
+        )
+        if (!catOk) {
+          setCreateError('Product updated but categories could not be saved.')
+          return
+        }
+        try {
+          await fetch(`/api/design-drafts/${draftId}/preview-mockups`, { method: 'POST' })
+        } catch {
+          /* listing may fall back until user regenerates mockups */
+        }
+        router.push('/profile')
+        return
+      }
+
       const res = await fetch(`/api/design-drafts/${draftId}/create-product`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -539,7 +601,6 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.productId) {
-        // Persist Printful mockups to design_draft.mockup_urls so item cards / PDP use left-shoe imagery
         try {
           await fetch(`/api/design-drafts/${draftId}/preview-mockups`, { method: 'POST' })
         } catch {
@@ -554,7 +615,16 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     } finally {
       setCreateLoading(false)
     }
-  }, [draftId, name, price, categoryId, router, pricingEstimate])
+  }, [
+    draftId,
+    name,
+    price,
+    categoryId,
+    router,
+    pricingEstimate,
+    localDraft?.final_product_id,
+    designData,
+  ])
 
   const handleCreate = useCallback(
     async (status: 'draft' | 'active') => {
@@ -606,7 +676,11 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             <span className="design-tool-step-sep" aria-hidden="true">›</span>
             <span className="design-tool-step design-tool-step--active" aria-current="step">Design</span>
             <span className="design-tool-step-sep" aria-hidden="true">›</span>
-            <span className="design-tool-step">Publish</span>
+            <span
+              className={`design-tool-step${isEditingPublishedProduct ? ' design-tool-step--done' : ''}`}
+            >
+              {isEditingPublishedProduct ? 'Published' : 'Publish'}
+            </span>
           </div>
           {autoSaveState !== 'idle' && (
             <span className="design-tool-autosave" aria-live="polite">
@@ -687,7 +761,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   className="design-tool-btn design-tool-btn-publish"
                   onClick={() => setIsCreateDrawerOpen(true)}
                 >
-                  Create product
+                  {isEditingPublishedProduct ? 'Update product' : 'Create product'}
                 </button>
               </div>
             ) : (
@@ -838,10 +912,12 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             className="design-tool-drawer"
             role="dialog"
             aria-modal="true"
-            aria-label="Create product"
+            aria-label={isEditingPublishedProduct ? 'Update product' : 'Create product'}
           >
             <div className="design-tool-drawer-header">
-              <h3 className="design-tool-drawer-title">Create product</h3>
+              <h3 className="design-tool-drawer-title">
+                {isEditingPublishedProduct ? 'Update product' : 'Create product'}
+              </h3>
               <button
                 type="button"
                 className="design-tool-drawer-close"
@@ -926,7 +1002,13 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   disabled={createLoading}
                   onClick={handleCreateProductFromDraft}
                 >
-                  {createLoading ? 'Creating…' : 'Create product'}
+                  {createLoading
+                    ? isEditingPublishedProduct
+                      ? 'Saving…'
+                      : 'Creating…'
+                    : isEditingPublishedProduct
+                      ? 'Save changes'
+                      : 'Create product'}
                 </button>
               </div>
             </div>
