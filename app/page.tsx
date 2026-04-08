@@ -15,6 +15,8 @@ import './homepage.css'
 
 export default function HomePage() {
   const [products, setProducts] = useState<HomeItem[]>([])
+  /** Ranked by likes + saves (all users); from /api/home-products popularProducts. */
+  const [popularItems, setPopularItems] = useState<HomeItem[]>([])
   const [heroSections, setHeroSections] = useState<HeroSectionData[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -32,6 +34,19 @@ export default function HomePage() {
         const featuredCreators = data?.featuredCreators ?? []
         const homeItems = productRows.map(productToHomeItem)
         setProducts(homeItems)
+
+        type ProductRow = Parameters<typeof productToHomeItem>[0]
+        const popRows = (data?.popularProducts ?? []) as ProductRow[]
+        const engagement = (data?.popularEngagement ?? {}) as Record<string, number>
+        setPopularItems(
+          popRows.map((row) => {
+            const base = productToHomeItem(row)
+            const key = String(row.id)
+            const n = engagement[key]
+            const likes = typeof n === 'number' && n >= 0 ? n : base.likes
+            return { ...base, likes }
+          })
+        )
         if (featuredCreators.length > 0) {
           setHeroSections(
             featuredCreators.map((creator: { profile: HeroSectionData['profile']; products: unknown[] }) => ({
@@ -88,7 +103,10 @@ export default function HomePage() {
         }
       })
       .catch(() => {
-        if (!cancelled) setProducts([])
+        if (!cancelled) {
+          setProducts([])
+          setPopularItems([])
+        }
       })
       .finally(() => {
         clearTimeout(timeoutId)
@@ -102,7 +120,6 @@ export default function HomePage() {
   }, [])
 
   const trendingItems = products.slice(0, 12)
-  const popularItems = products.slice(0, 12)
   /** Only listings with the "New" badge (created within the last 7 days). */
   const newItems = products.filter((p) => p.badge === 'New').slice(0, 12)
   const digitalItems = products.slice(0, 8)
