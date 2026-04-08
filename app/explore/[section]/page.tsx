@@ -31,6 +31,35 @@ export default function ExploreSectionPage() {
       return
     }
     let cancelled = false
+    setLoading(true)
+
+    if (sectionSlug === 'most-popular') {
+      fetch('/api/most-popular-products', { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((data: { products?: unknown[]; popularEngagement?: Record<string, number> }) => {
+          if (cancelled) return
+          const rows = data?.products ?? []
+          const engagement = data?.popularEngagement ?? {}
+          const list = rows.map((row) => {
+            const base = productToHomeItem(row as Parameters<typeof productToHomeItem>[0])
+            const id = String((row as { id: number }).id)
+            const n = engagement[id]
+            const likes = typeof n === 'number' && n >= 0 ? n : base.likes
+            return { ...base, likes }
+          })
+          setItems(list)
+        })
+        .catch(() => {
+          if (!cancelled) setItems([])
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+      return () => {
+        cancelled = true
+      }
+    }
+
     getActiveProducts()
       .then((rows) => {
         if (cancelled) return
@@ -46,7 +75,9 @@ export default function ExploreSectionPage() {
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [isValid, sectionSlug])
 
   if (!sectionSlug || !isValid) {

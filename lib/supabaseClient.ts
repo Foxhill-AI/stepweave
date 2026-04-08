@@ -401,6 +401,83 @@ export const supabase =
     )
   }
 
+  export type PopularProductsResult = {
+    products: ProductListingRow[]
+    /** Total interactions (likes + saves) per product id — for UI badges. */
+    engagementByProductId: Record<number, number>
+  }
+
+  /**
+   * Active products ranked by total engagement: likes + saves (product_interaction).
+   * Uses service role to aggregate counts across all users. Falls back to newest products
+   * when SERVICE_ROLE_KEY is missing or no interactions exist.
+   */
+  export async function getPopularProductsWithEngagement(limit = 12): Promise<PopularProductsResult> {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    if (!url || !serviceKey) {
+      const fallback = await getActiveProducts()
+      const products = fallback.slice(0, limit)
+      const engagementByProductId: Record<number, number> = {}
+      return { products, engagementByProductId }
+    }
+
+    const admin = createClient(url, serviceKey)
+    const { data: interactions, error } = await admin
+      .from('product_interaction')
+      .select('product_id')
+      .in('interaction_type', ['like', 'save'])
+
+    if (error) {
+      console.error('getPopularProductsWithEngagement interactions:', error)
+      const fallback = await getActiveProducts()
+      return { products: fallback.slice(0, limit), engagementByProductId: {} }
+    }
+
+    const counts = new Map<number, number>()
+    for (const row of interactions ?? []) {
+      const pid = Number((row as { product_id: number }).product_id)
+      if (!Number.isFinite(pid)) continue
+      counts.set(pid, (counts.get(pid) ?? 0) + 1)
+    }
+
+    const sortedIds = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([id]) => id)
+      .slice(0, limit)
+
+    if (sortedIds.length === 0) {
+      const fallback = await getActiveProducts()
+      return { products: fallback.slice(0, limit), engagementByProductId: {} }
+    }
+
+    const { data: productRows, error: productError } = await admin
+      .from('product')
+      .select(productListingSelect)
+      .eq('status', 'active')
+      .in('id', sortedIds)
+
+    if (productError || !productRows?.length) {
+      const fallback = await getActiveProducts()
+      return { products: fallback.slice(0, limit), engagementByProductId: {} }
+    }
+
+    const rows = productRows as unknown as ProductListingRow[]
+    const byId = new Map(rows.map((p) => [p.id as number, p]))
+    const ordered = sortedIds
+      .map((id) => byId.get(id))
+      .filter((p): p is ProductListingRow => p != null)
+      .slice(0, limit)
+
+    const engagementByProductId: Record<number, number> = {}
+    for (const p of ordered) {
+      const id = p.id as number
+      engagementByProductId[id] = counts.get(id) ?? 0
+    }
+
+    return { products: ordered, engagementByProductId }
+  }
+
   /** Search active products by name and optional filters. For homepage browse / search. */
   export type SearchProductsFilters = {
     categorySlug?: string

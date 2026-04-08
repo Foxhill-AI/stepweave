@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
-import { getActiveProducts, buildFeaturedCreatorsFromProductRows } from '@/lib/supabaseClient'
+import {
+  getActiveProducts,
+  buildFeaturedCreatorsFromProductRows,
+  getPopularProductsWithEngagement,
+} from '@/lib/supabaseClient'
 
 /** Always fresh data so new publishes show on the homepage without stale cache. */
 export const dynamic = 'force-dynamic'
@@ -13,13 +17,21 @@ export const revalidate = 0
  */
 export async function GET() {
   try {
-    const products = await getActiveProducts()
+    const [products, popular] = await Promise.all([
+      getActiveProducts(),
+      getPopularProductsWithEngagement(12),
+    ])
     const featuredCreators = await buildFeaturedCreatorsFromProductRows(products)
-    return NextResponse.json({ products, featuredCreators })
+    return NextResponse.json({
+      products,
+      featuredCreators,
+      popularProducts: popular.products,
+      popularEngagement: popular.engagementByProductId,
+    })
   } catch (e) {
     console.error('[api/home-products]', e)
     return NextResponse.json(
-      { products: [], featuredCreators: [] },
+      { products: [], featuredCreators: [], popularProducts: [], popularEngagement: {} },
       { status: 200 }
     )
   }
