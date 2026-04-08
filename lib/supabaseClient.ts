@@ -289,7 +289,11 @@ export const supabase =
 
     const [publicProfiles, statsList] = await Promise.all([
       Promise.all(creatorIds.map((id) => getPublicProfileByUserAccountId(id))),
-      Promise.all(creatorIds.map((id) => getProfileStats(id).catch(() => ({ followers: 0, following: 0, products: 0, likesReceived: 0 })))),
+      Promise.all(creatorIds.map((id) =>
+        fetch(`/api/profile-stats/${id}`)
+          .then((r) => (r.ok ? r.json() : { followers: 0, following: 0, products: 0, likesReceived: 0 }))
+          .catch(() => ({ followers: 0, following: 0, products: 0, likesReceived: 0 }))
+      )),
     ])
     const sections: FeaturedCreatorForHero[] = creatorIds.map((id, i) => {
       const products = byOwner.get(id) ?? []
@@ -2751,6 +2755,7 @@ export type ProductCommentRow = {
   user_account_id: number
   parent_id: number | null
   body: string
+  rating?: number | null
   created_at: string
   updated_at: string
   author_username?: string | null
@@ -2771,6 +2776,7 @@ export async function getProductComments(productId: number): Promise<ProductComm
       user_account_id,
       parent_id,
       body,
+      rating,
       created_at,
       updated_at,
       user_account ( username, user_public_profile ( avatar_url ) )
@@ -2783,13 +2789,14 @@ export async function getProductComments(productId: number): Promise<ProductComm
   }
   type RawRow = {
     id: number; product_id: number; user_account_id: number; parent_id: number | null
-    body: string; created_at: string; updated_at: string
+    body: string; rating: number | null; created_at: string; updated_at: string
     user_account: { username: string; user_public_profile: { avatar_url: string | null } | null } | null
   }
   const rows = (data ?? []) as unknown as RawRow[]
   const all: ProductCommentRow[] = rows.map((r) => ({
     id: r.id, product_id: r.product_id, user_account_id: r.user_account_id,
-    parent_id: r.parent_id, body: r.body, created_at: r.created_at, updated_at: r.updated_at,
+    parent_id: r.parent_id, body: r.body, rating: r.rating ?? null,
+    created_at: r.created_at, updated_at: r.updated_at,
     author_username: r.user_account?.username ?? null,
     author_avatar_url: r.user_account?.user_public_profile?.avatar_url ?? null,
     replies: [],
@@ -2806,16 +2813,23 @@ export async function getProductComments(productId: number): Promise<ProductComm
   return topLevel
 }
 
-/** Inserts a new comment. Returns new comment id or null on failure. */
+/** Inserts a new review/comment. Returns new comment id or null on failure. */
 export async function addProductComment(
   productId: number,
   userAccountId: number,
   body: string,
-  parentId?: number | null
+  parentId?: number | null,
+  rating?: number | null
 ): Promise<number | null> {
   const { data, error } = await supabase
     .from('product_comment')
-    .insert({ product_id: productId, user_account_id: userAccountId, body: body.trim(), parent_id: parentId ?? null })
+    .insert({
+      product_id: productId,
+      user_account_id: userAccountId,
+      body: body.trim(),
+      parent_id: parentId ?? null,
+      ...(rating != null ? { rating } : {}),
+    })
     .select('id')
     .single()
   if (error) { console.error('addProductComment:', error); return null }

@@ -7,7 +7,6 @@ import Subnavbar from '@/components/Subnavbar'
 import Footer from '@/components/Footer'
 import ProfilePage from '@/components/ProfilePage'
 import { useAuth } from '@/components/AuthProvider'
-import { getProfileStats } from '@/lib/supabaseClient'
 
 export default function Profile() {
   const router = useRouter()
@@ -30,13 +29,10 @@ export default function Profile() {
       return
     }
     let cancelled = false
-    getProfileStats(userAccount.id)
-      .then((stats) => {
-        if (!cancelled) setProfileStats(stats)
-      })
-      .catch(() => {
-        if (!cancelled) setProfileStats(null)
-      })
+    fetch(`/api/profile-stats/${userAccount.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((stats) => { if (!cancelled) setProfileStats(stats) })
+      .catch(() => { if (!cancelled) setProfileStats(null) })
     return () => { cancelled = true }
   }, [userAccount?.id])
 
