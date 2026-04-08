@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import {
+  compareMockupPlacementsForGallery,
+  pickPrimaryMockupUrl,
+} from '@/lib/printful/pickPrimaryMockupForCard'
 
 type MockupPlacement = {
   placement: string
@@ -22,7 +26,7 @@ function isBranding(title: string): boolean {
  * GET /api/products/[id]/mockups
  * Returns all available Printful mockup images for a product as a flat ordered list,
  * suitable for the product gallery. Branding extra_mockups are excluded.
- * Main placement mockups come first (right > left > others), then extras per placement.
+ * Placement order matches item-card priority (left shoe first, then left shoe quarter, etc.).
  * Public for active products; owner-only for drafts.
  */
 export async function GET(
@@ -77,17 +81,9 @@ export async function GET(
   const rawPlacements = (draft?.mockup_urls ?? []) as MockupPlacement[]
   const productName = (product as { name: string }).name
 
-  // Sort placements: left first, left_quarter second, right third, rest after
-  const sorted = [...rawPlacements].sort((a, b) => {
-    const rank = (p: MockupPlacement) =>
-      p.placement === 'left' ? 0
-      : p.placement === 'left_quarter' ? 1
-      : p.placement.startsWith('left') ? 2
-      : p.placement === 'right' ? 3
-      : p.placement.startsWith('right') ? 4
-      : 5
-    return rank(a) - rank(b)
-  })
+  const cardPrimaryUrl = pickPrimaryMockupUrl(rawPlacements)
+
+  const sorted = [...rawPlacements].sort(compareMockupPlacementsForGallery)
 
   const images: MockupImageEntry[] = []
   for (const p of sorted) {
@@ -98,6 +94,14 @@ export async function GET(
       if (extra.mockup_url?.trim() && !isBranding(extra.title ?? '')) {
         images.push({ url: extra.mockup_url, alt: `${productName} — ${extra.title}` })
       }
+    }
+  }
+
+  if (cardPrimaryUrl?.trim() && images.length > 0) {
+    const idx = images.findIndex((i) => i.url === cardPrimaryUrl.trim())
+    if (idx > 0) {
+      const [lead] = images.splice(idx, 1)
+      images.unshift(lead)
     }
   }
 

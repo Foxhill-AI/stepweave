@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { pickPrimaryMockupUrl } from '@/lib/printful/pickPrimaryMockupForCard'
 
 type MockupPlacement = {
   placement: string
@@ -11,8 +12,8 @@ type MockupPlacement = {
 
 /**
  * GET /api/products/[id]/mockup-image
- * Returns the best single Printful mockup URL for the product, suitable for item cards.
- * Priority: right placement > left placement > any placement with a URL.
+ * Returns the best single Printful mockup URL for the product (item cards).
+ * Priority: left shoe → left shoe quarter → other left views → rest (see pickPrimaryMockupUrl).
  * Public for active products; owner-only for drafts.
  * design_draft is queried with service-role client to bypass RLS.
  */
@@ -66,20 +67,7 @@ export async function GET(
     .maybeSingle()
 
   const placements = (draft?.mockup_urls ?? []) as MockupPlacement[]
-  const withUrl = placements.filter((p) => p.mockup_url?.trim())
+  const url = pickPrimaryMockupUrl(placements)
 
-  if (withUrl.length === 0) {
-    return NextResponse.json({ url: null })
-  }
-
-  // Priority: left > left_quarter > right > any
-  const pick =
-    withUrl.find((p) => p.placement === 'left') ??
-    withUrl.find((p) => p.placement === 'left_quarter') ??
-    withUrl.find((p) => p.placement.startsWith('left')) ??
-    withUrl.find((p) => p.placement === 'right') ??
-    withUrl.find((p) => p.placement.startsWith('right')) ??
-    withUrl[0]
-
-  return NextResponse.json({ url: pick.mockup_url })
+  return NextResponse.json({ url: url ?? null })
 }

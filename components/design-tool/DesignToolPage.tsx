@@ -514,6 +514,12 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.productId) {
+        // Persist Printful mockups to design_draft.mockup_urls so item cards / PDP use left-shoe imagery
+        try {
+          await fetch(`/api/design-drafts/${draftId}/preview-mockups`, { method: 'POST' })
+        } catch {
+          /* listing may fall back to pattern image until user opens design tool preview */
+        }
         router.push('/profile')
       } else {
         setCreateError((data.error as string) || 'Failed to create product. Please try again.')
