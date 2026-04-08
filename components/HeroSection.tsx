@@ -174,9 +174,11 @@ export default function HeroSection({ sections }: HeroSectionProps) {
                 Become a member
               </Link>
             </div>
-            <p className="profile-description">
-              {sections[currentIndex]?.profile.description || 'Bringing beautiful creatures to life with 3D printing. Explore unique designs and join our creative community.'}
-            </p>
+            {sections[currentIndex]?.profile.description?.trim() ? (
+              <p className="profile-description">
+                {sections[currentIndex]?.profile.description}
+              </p>
+            ) : null}
           </div>
         </div>
 
