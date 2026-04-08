@@ -311,23 +311,19 @@ export const supabase =
     products: ProductListingRow[]
   }
 
-  /** Fetch up to 3 creators with active products, each with up to 3 products, for the homepage hero carousel.
-   * Uses user_public_profile for username, avatar_url, and bio so that any visitor (including not signed in) can see them. */
-  export async function getFeaturedCreatorsForHero(): Promise<FeaturedCreatorForHero[]> {
-    const { data, error } = await supabase
-      .from('product')
-      .select(productListingSelectForHero)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('getFeaturedCreatorsForHero:', error)
-      return []
-    }
-    const rows = (data ?? []) as unknown as ProductListingRow[]
+  /**
+   * Build hero carousel sections from the same product rows as the homepage list
+   * (avoids a second DB query that could disagree with getActiveProducts).
+   */
+  export async function buildFeaturedCreatorsFromProductRows(
+    rows: ProductListingRow[]
+  ): Promise<FeaturedCreatorForHero[]> {
     const byOwner = new Map<number, ProductListingRow[]>()
     for (const row of rows) {
-      const id = row.user_account_id
+      const rawId = row.user_account_id
+      if (rawId == null) continue
+      const id = typeof rawId === 'number' ? rawId : Number(rawId)
+      if (!Number.isFinite(id)) continue
       const list = byOwner.get(id) ?? []
       if (list.length < 3) list.push(row)
       byOwner.set(id, list)
@@ -335,7 +331,7 @@ export const supabase =
     const creatorIds = Array.from(byOwner.entries())
       .filter(([, products]) => products.length > 0)
       .slice(0, 3)
-      .map(([id]) => id)
+      .map(([ownerId]) => ownerId)
 
     if (creatorIds.length === 0) return []
 
@@ -366,6 +362,23 @@ export const supabase =
       }
     })
     return sections
+  }
+
+  /** Fetch up to 3 creators with active products, each with up to 3 products, for the homepage hero carousel.
+   * Uses user_public_profile for username, avatar_url, and bio so that any visitor (including not signed in) can see them. */
+  export async function getFeaturedCreatorsForHero(): Promise<FeaturedCreatorForHero[]> {
+    const { data, error } = await supabase
+      .from('product')
+      .select(productListingSelectForHero)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('getFeaturedCreatorsForHero:', error)
+      return []
+    }
+    const rows = (data ?? []) as unknown as ProductListingRow[]
+    return buildFeaturedCreatorsFromProductRows(rows)
   }
 
   export async function getActiveProducts(categorySlug?: string): Promise<ProductListingRow[]> {
