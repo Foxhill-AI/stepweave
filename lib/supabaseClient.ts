@@ -2135,6 +2135,8 @@ export const supabase =
     status: DesignDraftStatus
     finalized_at: string | null
     final_product_id: number | null
+    /** Per-placement mockup URLs (JSON); used for storefront imagery. */
+    mockup_urls?: unknown
     created_at: string
     updated_at: string
   }
@@ -2242,6 +2244,28 @@ export const supabase =
       .maybeSingle()
     if (error) {
       console.error('getDesignDraftById:', error)
+      return null
+    }
+    return data as DesignDraftRow | null
+  }
+
+  /**
+   * Draft linked to a published product (design_draft.final_product_id).
+   * RLS: design_draft_select_own — only the owner can read.
+   */
+  export async function getDesignDraftByFinalProductId(
+    productId: number
+  ): Promise<DesignDraftRow | null> {
+    if (!Number.isFinite(productId)) return null
+    const { data, error } = await supabase
+      .from('design_draft')
+      .select('*')
+      .eq('final_product_id', productId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      console.error('getDesignDraftByFinalProductId:', error)
       return null
     }
     return data as DesignDraftRow | null
