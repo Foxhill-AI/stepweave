@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 type MockupPlacement = {
@@ -13,6 +14,7 @@ type MockupPlacement = {
  * Returns the best single Printful mockup URL for the product, suitable for item cards.
  * Priority: right placement > left placement > any placement with a URL.
  * Public for active products; owner-only for drafts.
+ * design_draft is queried with service-role client to bypass RLS.
  */
 export async function GET(
   _request: NextRequest,
@@ -23,6 +25,13 @@ export async function GET(
   if (Number.isNaN(productId)) {
     return NextResponse.json({ error: 'Invalid product id' }, { status: 400 })
   }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !serviceRoleKey) {
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  }
+  const admin = createClient(supabaseUrl, serviceRoleKey)
 
   const supabase = await createServerSupabaseClient()
   const { data: product, error: productError } = await supabase
@@ -50,7 +59,7 @@ export async function GET(
     }
   }
 
-  const { data: draft } = await supabase
+  const { data: draft } = await admin
     .from('design_draft')
     .select('mockup_urls')
     .eq('final_product_id', productId)
