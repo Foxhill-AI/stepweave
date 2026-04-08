@@ -24,6 +24,8 @@ import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import { useAuth } from '@/components/AuthProvider'
 import { getCategories, createProduct, updateDesignDraft } from '@/lib/supabaseClient'
 import type { CategoryRow, DesignDraftRow } from '@/lib/supabaseClient'
+import PricingEstimatePanel, { formatPricingMoney } from './PricingEstimatePanel'
+import type { PricingEstimateOk } from '@/lib/printful/pricingEstimate'
 import '../../styles/DesignTool.css'
 
 interface DesignToolPageProps {
@@ -56,8 +58,16 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [placementMockups, setPlacementMockups] = useState<PlacementTab[]>([])
   const [catalogFallbackUrl, setCatalogFallbackUrl] = useState<string>('')
   const [variantOptions, setVariantOptions] = useState<
-    Array<{ id: number; name: string; color: string; size: string; image: string }>
+    Array<{
+      id: number
+      name: string
+      color: string
+      size: string
+      image: string
+      catalogPrice?: string | null
+    }>
   >([])
+  const [pricingEstimate, setPricingEstimate] = useState<PricingEstimateOk | null>(null)
   const [printfulVariantId, setPrintfulVariantId] = useState<number | null>(null)
   /** Name of the currently selected shoe model (e.g. "Men's Athletic Shoes"). */
   const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
@@ -196,12 +206,14 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         (productBody: {
           name?: string
           image?: string
+          currency?: string
           variants?: Array<{
             id: number
             name: string
             color: string
             size: string
             image: string
+            catalogPrice?: string | null
           }>
         }) => {
           if (cancelled) return
@@ -500,6 +512,19 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       setCreateError('Please enter a valid price (0 or greater).')
       return
     }
+    if (
+      pricingEstimate &&
+      Number.isFinite(priceNum) &&
+      priceNum + 1e-9 < pricingEstimate.totalCost
+    ) {
+      setCreateError(
+        `Price must be at least ${formatPricingMoney(
+          pricingEstimate.totalCost,
+          pricingEstimate.currency
+        )} to cover estimated Printful costs (fulfillment + shipping + estimated tax).`
+      )
+      return
+    }
     setCreateError(null)
     setCreateLoading(true)
     try {
@@ -529,7 +554,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     } finally {
       setCreateLoading(false)
     }
-  }, [draftId, name, price, categoryId, router])
+  }, [draftId, name, price, categoryId, router, pricingEstimate])
 
   const handleCreate = useCallback(
     async (status: 'draft' | 'active') => {
@@ -853,6 +878,17 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                 onChange={(e) => setPrice(e.target.value)}
                 aria-required
               />
+              {localDraft?.base_model_id &&
+                typeof localDraft.base_model_id === 'string' &&
+                printfulVariantId != null && (
+                  <PricingEstimatePanel
+                    productId={localDraft.base_model_id.trim()}
+                    variantId={printfulVariantId}
+                    quantity={1}
+                    listPriceInput={price}
+                    onEstimate={setPricingEstimate}
+                  />
+                )}
               <label htmlFor="dt-drawer-category" className="design-tool-label">
                 Category
               </label>

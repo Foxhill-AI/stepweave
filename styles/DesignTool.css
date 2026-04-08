@@ -2618,3 +2618,131 @@
   gap: 0.5rem;
   justify-content: flex-end;
 }
+
+/* ── Printful pricing estimate (create product drawer) ─────────────────────── */
+
+.design-tool-pricing-estimate {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--color-surface, #f9fafb);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--border-radius, 8px);
+  font-size: 0.875rem;
+}
+
+.design-tool-pricing-estimate-title {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text, #111827);
+}
+
+.design-tool-pricing-estimate-recipient {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.75rem;
+  color: var(--color-text-light, #6b7280);
+  line-height: 1.35;
+}
+
+.design-tool-pricing-estimate-status {
+  margin: 0;
+  color: var(--color-text-light, #6b7280);
+}
+
+.design-tool-pricing-estimate-error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #b91c1c;
+}
+
+.design-tool-pricing-estimate-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.design-tool-pricing-estimate-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.design-tool-pricing-estimate-row:last-of-type {
+  border-bottom: none;
+}
+
+.design-tool-pricing-estimate-row--total {
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border, #d1d5db);
+  border-bottom: none;
+  font-weight: 600;
+}
+
+.design-tool-pricing-estimate-row--recommend {
+  border-bottom: none;
+  padding-top: 0.15rem;
+  font-weight: 500;
+}
+
+.design-tool-pricing-estimate-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  color: var(--color-text, #374151);
+  min-width: 0;
+}
+
+.design-tool-pricing-estimate-detail {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--color-text-light, #6b7280);
+  line-height: 1.3;
+}
+
+.design-tool-pricing-estimate-amount {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.design-tool-pricing-estimate-amount--highlight {
+  color: var(--color-primary, #2563eb);
+  font-weight: 700;
+}
+
+.design-tool-pricing-estimate-note {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.7rem;
+  color: var(--color-text-light, #6b7280);
+  line-height: 1.35;
+}
+
+.design-tool-pricing-estimate-note--muted {
+  opacity: 0.9;
+}
+
+.design-tool-pricing-estimate-block {
+  margin: 0.65rem 0 0 0;
+  padding: 0.5rem 0.6rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: #991b1b;
+}
+
+.design-tool-pricing-estimate-warn {
+  margin: 0.65rem 0 0 0;
+  padding: 0.5rem 0.6rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: #92400e;
+}
