@@ -34,7 +34,10 @@ export default function ExploreSectionPage() {
     getActiveProducts()
       .then((rows) => {
         if (cancelled) return
-        const list = rows.map(productToHomeItem)
+        let list = rows.map(productToHomeItem)
+        if (sectionSlug === 'brand-new') {
+          list = list.filter((item) => item.badge === 'New')
+        }
         setItems(list)
       })
       .catch(() => {
@@ -44,7 +47,7 @@ export default function ExploreSectionPage() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [isValid])
+  }, [isValid, sectionSlug])
 
   if (!sectionSlug || !isValid) {
     return (
