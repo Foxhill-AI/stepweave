@@ -289,11 +289,7 @@ export const supabase =
 
     const [publicProfiles, statsList] = await Promise.all([
       Promise.all(creatorIds.map((id) => getPublicProfileByUserAccountId(id))),
-      Promise.all(creatorIds.map((id) =>
-        fetch(`/api/profile-stats/${id}`)
-          .then((r) => (r.ok ? r.json() : { followers: 0, following: 0, products: 0, likesReceived: 0 }))
-          .catch(() => ({ followers: 0, following: 0, products: 0, likesReceived: 0 }))
-      )),
+      Promise.all(creatorIds.map((id) => getProfileStatsWithServiceRole(id))),
     ])
     const sections: FeaturedCreatorForHero[] = creatorIds.map((id, i) => {
       const products = byOwner.get(id) ?? []
@@ -303,13 +299,15 @@ export const supabase =
       const avatar = avatarUrl || username.charAt(0).toUpperCase()
       const bio = publicProfile?.bio?.trim() || ''
       const stats = statsList[i]
-      const followers = stats ? (stats.followers >= 1000 ? `${(stats.followers / 1000).toFixed(1)}k` : String(stats.followers)) : '0'
+      const fc = stats?.followers ?? 0
+      const followersNumStr = fc >= 1000 ? `${(fc / 1000).toFixed(1)}k` : String(fc)
+      const followersLabel = fc === 1 ? '1 follower' : `${followersNumStr} followers`
       return {
         profile: {
           userAccountId: id,
           avatar,
           name: username,
-          followers: `${followers} followers`,
+          followers: followersLabel,
           description: bio || 'Explore unique designs and join our creative community.',
         },
         products,
@@ -1615,6 +1613,57 @@ export const supabase =
     let likesReceived = 0
     if (productIds.length > 0) {
       const { count } = await supabase
+        .from('product_interaction')
+        .select('id', { count: 'exact', head: true })
+        .eq('interaction_type', 'like')
+        .in('product_id', productIds)
+      likesReceived = count ?? 0
+    }
+
+    return {
+      followers: followersRes.count ?? 0,
+      following: followingRes.count ?? 0,
+      products: productsRes.count ?? 0,
+      likesReceived,
+    }
+  }
+
+  /**
+   * Same numbers as GET /api/profile-stats/[id]: uses service role when
+   * SUPABASE_SERVICE_ROLE_KEY is set so counts match public profile pages
+   * (bypasses RLS on user_follow). Used by server-side hero data — do not use
+   * fetch('/api/profile-stats/...') from Node (relative URLs fail).
+   */
+  export async function getProfileStatsWithServiceRole(
+    userAccountId: number
+  ): Promise<ProfileStats> {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !serviceRoleKey) {
+      return getProfileStats(userAccountId)
+    }
+    const admin = createClient(url, serviceRoleKey)
+    const [followersRes, followingRes, productsRes, productIdsRes] = await Promise.all([
+      admin
+        .from('user_follow')
+        .select('follower_id', { count: 'exact', head: true })
+        .eq('following_id', userAccountId),
+      admin
+        .from('user_follow')
+        .select('following_id', { count: 'exact', head: true })
+        .eq('follower_id', userAccountId),
+      admin
+        .from('product')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_account_id', userAccountId)
+        .eq('status', 'active'),
+      admin.from('product').select('id').eq('user_account_id', userAccountId),
+    ])
+
+    const productIds = (productIdsRes.data ?? []).map((p) => p.id)
+    let likesReceived = 0
+    if (productIds.length > 0) {
+      const { count } = await admin
         .from('product_interaction')
         .select('id', { count: 'exact', head: true })
         .eq('interaction_type', 'like')
