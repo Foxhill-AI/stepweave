@@ -72,12 +72,13 @@ export async function GET(
     return NextResponse.json({ url: null })
   }
 
-  // Priority: right > left > any
+  // Priority: left > left_quarter > right > any
   const pick =
+    withUrl.find((p) => p.placement === 'left') ??
+    withUrl.find((p) => p.placement === 'left_quarter') ??
+    withUrl.find((p) => p.placement.startsWith('left')) ??
     withUrl.find((p) => p.placement === 'right') ??
     withUrl.find((p) => p.placement.startsWith('right')) ??
-    withUrl.find((p) => p.placement === 'left') ??
-    withUrl.find((p) => p.placement.startsWith('left')) ??
     withUrl[0]
 
   return NextResponse.json({ url: pick.mockup_url })

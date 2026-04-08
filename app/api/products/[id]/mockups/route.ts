@@ -77,14 +77,15 @@ export async function GET(
   const rawPlacements = (draft?.mockup_urls ?? []) as MockupPlacement[]
   const productName = (product as { name: string }).name
 
-  // Sort placements: right first, left second, rest after
+  // Sort placements: left first, left_quarter second, right third, rest after
   const sorted = [...rawPlacements].sort((a, b) => {
     const rank = (p: MockupPlacement) =>
-      p.placement === 'right' ? 0
-      : p.placement.startsWith('right') ? 1
-      : p.placement === 'left' ? 2
-      : p.placement.startsWith('left') ? 3
-      : 4
+      p.placement === 'left' ? 0
+      : p.placement === 'left_quarter' ? 1
+      : p.placement.startsWith('left') ? 2
+      : p.placement === 'right' ? 3
+      : p.placement.startsWith('right') ? 4
+      : 5
     return rank(a) - rank(b)
   })
 

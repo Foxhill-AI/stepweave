@@ -1016,3 +1016,66 @@
   background: transparent;
   padding: var(--spacing-xs) 0;
 }
+
+/* Review star rating display */
+.product-review-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
+}
+
+.product-review-stars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: #f59e0b;
+}
+
+.product-review-stars .star-empty {
+  color: var(--color-border);
+}
+
+/* Review star rating input */
+.product-review-rating-input {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.product-review-rating-label {
+  font-size: 0.875rem;
+  color: var(--color-text-light);
+  white-space: nowrap;
+}
+
+.product-review-stars-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.product-review-star-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #f59e0b;
+  line-height: 1;
+  transition: transform 0.1s;
+}
+
+.product-review-star-btn:hover {
+  transform: scale(1.2);
+}
+
+.product-review-star-btn .star-empty {
+  color: var(--color-border);
+}
+
+.product-review-star-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

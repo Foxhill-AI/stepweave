@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
-import { Heart, Share2, Bookmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Clock, Download, Eye } from 'lucide-react'
+import { Heart, Share2, Bookmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Clock, Download, Eye, Star } from 'lucide-react'
 import ItemCard from './ItemCard'
 import Carousel from './Carousel'
 import { useAuth } from '@/components/AuthProvider'
@@ -231,9 +231,11 @@ export default function Product({
   const [localLiked, setLocalLiked] = useState(false)
   const [isFollowing, setIsFollowing] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
-  // Discussions
+  // Reviews
   const [comments, setComments] = useState<ProductCommentRow[]>([])
   const [commentBody, setCommentBody] = useState('')
+  const [commentRating, setCommentRating] = useState<number>(0)
+  const [hoverRating, setHoverRating] = useState<number>(0)
   const [commentSubmitting, setCommentSubmitting] = useState(false)
   const [commentError, setCommentError] = useState<string | null>(null)
   const isLiked = onLikeToggle !== undefined && isLikedProp !== undefined ? isLikedProp : localLiked
@@ -289,15 +291,21 @@ export default function Product({
   const handleCommentSubmit = async () => {
     const body = commentBody.trim()
     if (!body || !userAccount?.id || !productNumericId) return
+    if (commentRating === 0) {
+      setCommentError('Please select a star rating before submitting.')
+      return
+    }
     setCommentSubmitting(true)
     setCommentError(null)
-    const newId = await addProductComment(productNumericId, userAccount.id, body)
+    const newId = await addProductComment(productNumericId, userAccount.id, body, null, commentRating)
     if (newId) {
       setCommentBody('')
+      setCommentRating(0)
+      setHoverRating(0)
       // Re-fetch to get author info attached
       getProductComments(productNumericId).then(setComments)
     } else {
-      setCommentError('Could not post comment. Please try again.')
+      setCommentError('Could not post review. Please try again.')
     }
     setCommentSubmitting(false)
   }
@@ -938,16 +946,30 @@ export default function Product({
             </div>
           )}
 
-          {/* Discussions Section */}
+          {/* Reviews Section */}
           <div className="product-discussions">
-            <h2 className="product-section-title">Discussions</h2>
+            <h2 className="product-section-title">Reviews</h2>
             <div className="product-discussions-content">
               {comments.length > 0 ? (
                 <div className="product-discussions-list">
                   {comments.map((c) => (
                     <div key={c.id} className="product-discussion-item">
-                      <div className="product-discussion-author">
-                        {c.author_username ?? 'User'}
+                      <div className="product-review-header">
+                        <span className="product-discussion-author">
+                          {c.author_username ?? 'User'}
+                        </span>
+                        {c.rating != null && c.rating > 0 && (
+                          <span className="product-review-stars" aria-label={`${c.rating} out of 5 stars`}>
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Star
+                                key={s}
+                                size={14}
+                                className={s <= c.rating! ? 'star-full' : 'star-empty'}
+                                fill={s <= c.rating! ? 'currentColor' : 'none'}
+                              />
+                            ))}
+                          </span>
+                        )}
                       </div>
                       <div className="product-discussion-text">{c.body}</div>
                       {userAccount?.id === c.user_account_id && (
@@ -955,7 +977,7 @@ export default function Product({
                           type="button"
                           className="product-discussion-delete"
                           onClick={() => handleCommentDelete(c.id)}
-                          aria-label="Delete comment"
+                          aria-label="Delete review"
                         >
                           ✕
                         </button>
@@ -964,7 +986,9 @@ export default function Product({
                         <div className="product-discussion-replies">
                           {c.replies.map((r) => (
                             <div key={r.id} className="product-discussion-item product-discussion-item--reply">
-                              <div className="product-discussion-author">{r.author_username ?? 'User'}</div>
+                              <div className="product-review-header">
+                                <span className="product-discussion-author">{r.author_username ?? 'User'}</span>
+                              </div>
                               <div className="product-discussion-text">{r.body}</div>
                               {userAccount?.id === r.user_account_id && (
                                 <button
@@ -985,14 +1009,38 @@ export default function Product({
                 </div>
               ) : (
                 <p className="product-discussions-message">
-                  No comments yet. Be the first to start the conversation!
+                  No reviews yet. Be the first to leave a review!
                 </p>
               )}
 
               {userAccount ? (
                 <div className="product-discussions-input">
+                  <div className="product-review-rating-input">
+                    <span className="product-review-rating-label">Your rating:</span>
+                    <div className="product-review-stars-input" role="radiogroup" aria-label="Rating">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          className="product-review-star-btn"
+                          onClick={() => setCommentRating(s)}
+                          onMouseEnter={() => setHoverRating(s)}
+                          onMouseLeave={() => setHoverRating(0)}
+                          aria-label={`${s} star${s > 1 ? 's' : ''}`}
+                          aria-pressed={commentRating === s}
+                          disabled={commentSubmitting}
+                        >
+                          <Star
+                            size={22}
+                            className={s <= (hoverRating || commentRating) ? 'star-full' : 'star-empty'}
+                            fill={s <= (hoverRating || commentRating) ? 'currentColor' : 'none'}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <textarea
-                    placeholder="Add a comment…"
+                    placeholder="Share your experience with this product…"
                     value={commentBody}
                     onChange={(e) => setCommentBody(e.target.value)}
                     className="product-discussions-textarea"
@@ -1008,12 +1056,12 @@ export default function Product({
                     onClick={handleCommentSubmit}
                     disabled={!commentBody.trim() || commentSubmitting}
                   >
-                    {commentSubmitting ? 'Posting…' : 'Comment'}
+                    {commentSubmitting ? 'Posting…' : 'Submit Review'}
                   </button>
                 </div>
               ) : (
                 <p className="product-discussions-message">
-                  <a href="/sign-in">Sign in</a> to join the conversation.
+                  <a href="/sign-in">Sign in</a> to leave a review.
                 </p>
               )}
             </div>

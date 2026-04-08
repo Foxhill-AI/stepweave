@@ -12,6 +12,7 @@ export interface HomeItem {
   likes?: number
   downloads?: number
   author?: string
+  authorProfileUrl?: string
   price?: string
   rating?: number
   badge?: string
@@ -34,6 +35,7 @@ export function productToHomeItem(row: ProductListingRow): HomeItem {
     likes: 0,
     downloads: 0,
     author: row.user_account?.username ?? undefined,
+    authorProfileUrl: row.user_account?.username ? `/profile/${encodeURIComponent(row.user_account.username)}` : undefined,
     price: `$${Number(row.price).toFixed(2)}`,
     rating: 0,
     badge: isNew ? 'New' : undefined,

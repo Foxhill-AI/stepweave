@@ -14,6 +14,8 @@ interface ItemCardProps {
   likes?: number
   downloads?: number
   author?: string
+  /** When set, the author name links to this profile URL. */
+  authorProfileUrl?: string
   price?: string
   rating?: number
   badge?: string
@@ -32,6 +34,7 @@ export default function ItemCard({
   likes = 0,
   downloads = 0,
   author,
+  authorProfileUrl,
   price,
   rating = 0,
   badge,
@@ -102,7 +105,20 @@ export default function ItemCard({
         <div className="item-card-content">
           <h3 className="item-card-title">{title}</h3>
           {author && (
-            <p className="item-card-author">by {author}</p>
+            <p className="item-card-author">
+              by{' '}
+              {authorProfileUrl ? (
+                <Link
+                  href={authorProfileUrl}
+                  className="item-card-author-link"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {author}
+                </Link>
+              ) : (
+                author
+              )}
+            </p>
           )}
           {rating > 0 && renderStars(rating)}
           <div className="item-card-meta">
