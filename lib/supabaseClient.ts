@@ -115,6 +115,58 @@ export const supabase =
     return data as { username: string; avatar_url: string | null; bio: string | null } | null
   }
 
+  /**
+   * Public username, avatar, and bio for the homepage hero. Uses service role when
+   * available so counts/text match what visitors should see (RLS-safe). Merges
+   * user_public_profile with user_account so bio/avatar/username still appear if
+   * one table is missing a value the other has.
+   */
+  export async function getPublicProfileForHero(userAccountId: number): Promise<{
+    username: string
+    avatar_url: string | null
+    bio: string
+  }> {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const fallback = async () => {
+      const p = await getPublicProfileByUserAccountId(userAccountId)
+      if (!p) return { username: 'Creator', avatar_url: null, bio: '' }
+      return {
+        username: p.username?.trim() || 'Creator',
+        avatar_url: p.avatar_url,
+        bio: p.bio?.trim() ?? '',
+      }
+    }
+    if (!url || !serviceRoleKey) {
+      return fallback()
+    }
+    const admin = createClient(url, serviceRoleKey)
+    const [{ data: pub }, { data: acc }] = await Promise.all([
+      admin
+        .from('user_public_profile')
+        .select('username, avatar_url, bio')
+        .eq('user_account_id', userAccountId)
+        .maybeSingle(),
+      admin.from('user_account').select('username, avatar_url, bio').eq('id', userAccountId).maybeSingle(),
+    ])
+
+    const username =
+      (pub?.username && String(pub.username).trim()) ||
+      (acc?.username && String(acc.username).trim()) ||
+      'Creator'
+
+    const avatarRaw =
+      (pub?.avatar_url && String(pub.avatar_url).trim()) ||
+      (acc?.avatar_url && String(acc.avatar_url).trim()) ||
+      ''
+    const avatar_url = avatarRaw || null
+
+    let bio = (pub?.bio && String(pub.bio).trim()) || ''
+    if (!bio && acc?.bio) bio = String(acc.bio).trim()
+
+    return { username, avatar_url, bio }
+  }
+
   /** Update profile (bio, avatar_url, username) in user_account and user_public_profile. */
   export async function updateUserProfile(
     userAccountId: number,
@@ -288,16 +340,16 @@ export const supabase =
     if (creatorIds.length === 0) return []
 
     const [publicProfiles, statsList] = await Promise.all([
-      Promise.all(creatorIds.map((id) => getPublicProfileByUserAccountId(id))),
+      Promise.all(creatorIds.map((id) => getPublicProfileForHero(id))),
       Promise.all(creatorIds.map((id) => getProfileStatsWithServiceRole(id))),
     ])
     const sections: FeaturedCreatorForHero[] = creatorIds.map((id, i) => {
       const products = byOwner.get(id) ?? []
-      const publicProfile = publicProfiles[i]
-      const username = publicProfile?.username?.trim() || 'Creator'
-      const avatarUrl = publicProfile?.avatar_url?.trim()
+      const heroProfile = publicProfiles[i]
+      const username = heroProfile.username
+      const avatarUrl = heroProfile.avatar_url?.trim()
       const avatar = avatarUrl || username.charAt(0).toUpperCase()
-      const bio = publicProfile?.bio?.trim() || ''
+      const bio = heroProfile.bio
       const stats = statsList[i]
       const fc = stats?.followers ?? 0
       const followersNumStr = fc >= 1000 ? `${(fc / 1000).toFixed(1)}k` : String(fc)
@@ -308,7 +360,7 @@ export const supabase =
           avatar,
           name: username,
           followers: followersLabel,
-          description: bio || 'Explore unique designs and join our creative community.',
+          description: bio,
         },
         products,
       }
