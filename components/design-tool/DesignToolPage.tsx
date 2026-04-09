@@ -41,6 +41,20 @@ interface DesignToolPageProps {
   draft?: DesignDraftRow
 }
 
+/** Distinct Printful placement keys from loaded template rows (preserves order). */
+function uniqueTemplatePlacements(rows: PlacementTemplateRow[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const r of rows) {
+    const p = r.placement
+    if (typeof p !== 'string' || !p.trim()) continue
+    if (seen.has(p)) continue
+    seen.add(p)
+    out.push(p)
+  }
+  return out
+}
+
 export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) {
   const router = useRouter()
   const { user, userAccount } = useAuth()
@@ -414,36 +428,43 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     async (storagePath: string, previewUrl?: string) => {
       if (!draftId) return
 
-      // Mirror file upload: add a placement image layer so the template canvas and
-      // preview-mockups see the pattern (global pattern alone did not populate layers).
-      const placement = activePlacement || templateRows[0]?.placement || ''
+      // One image layer per Printful placement so template tabs + mockups all show the pattern.
+      const placementsList = uniqueTemplatePlacements(templateRows)
       let nextDesignState = designDataRef.current
-      if (placement) {
-        const newLayer: PlacementImageLayer = {
-          id: crypto.randomUUID(),
-          path: storagePath,
-          s: 1,
-          dx: 0,
-          dy: 0,
+      if (placementsList.length > 0) {
+        let current = parsePlacementImages(nextDesignState)
+        const selectedPatch: Record<string, string> = {}
+        const localPatch: Record<string, string> = {}
+
+        for (const placement of placementsList) {
+          const newLayer: PlacementImageLayer = {
+            id: crypto.randomUUID(),
+            path: storagePath,
+            s: 1,
+            dx: 0,
+            dy: 0,
+          }
+          current = addPlacementImageLayer(current, placement, newLayer)
+          selectedPatch[placement] = newLayer.id
+          if (previewUrl) localPatch[newLayer.id] = previewUrl
         }
-        const current = parsePlacementImages(nextDesignState)
-        nextDesignState = mergePlacementImagesIntoDesignState(
-          nextDesignState,
-          addPlacementImageLayer(current, placement, newLayer)
-        )
+
+        nextDesignState = mergePlacementImagesIntoDesignState(nextDesignState, current)
         designDataRef.current = nextDesignState
         setDesignData(nextDesignState)
-        setSelectedLayerByPlacement((prev) => ({ ...prev, [placement]: newLayer.id }))
-        if (!activePlacement) setActivePlacement(placement)
-        if (previewUrl) {
-          setLocalLayerUrls((prev) => ({ ...prev, [newLayer.id]: previewUrl }))
+        setSelectedLayerByPlacement((prev) => ({ ...prev, ...selectedPatch }))
+        if (!activePlacement) {
+          setActivePlacement(placementsList[0])
+        }
+        if (Object.keys(localPatch).length > 0) {
+          setLocalLayerUrls((prev) => ({ ...prev, ...localPatch }))
         }
       }
 
       const ok = await updateDesignDraft(draftId, {
         pattern_image_url: storagePath,
         pattern_source_type: 'ai_generated',
-        ...(placement ? { design_state: nextDesignState } : {}),
+        ...(placementsList.length > 0 ? { design_state: nextDesignState } : {}),
       })
       if (ok) {
         setLocalDraft((prev) =>
@@ -452,7 +473,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                 ...prev,
                 pattern_image_url: storagePath,
                 pattern_source_type: 'ai_generated',
-                ...(placement ? { design_state: nextDesignState } : {}),
+                ...(placementsList.length > 0 ? { design_state: nextDesignState } : {}),
               }
             : null
         )
@@ -466,25 +487,36 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
 
   const handlePatternUploaded = useCallback(
     (path: string, localUrl?: string) => {
-      const placement = activePlacement || templateRows[0]?.placement || ''
-      if (!placement) return
-      const newLayer: PlacementImageLayer = {
-        id: crypto.randomUUID(),
-        path,
-        s: 1,
-        dx: 0,
-        dy: 0,
+      const placementsList = uniqueTemplatePlacements(templateRows)
+      if (placementsList.length === 0) return
+
+      let current = parsePlacementImages(designDataRef.current)
+      const selectedPatch: Record<string, string> = {}
+      const localPatch: Record<string, string> = {}
+
+      for (const placement of placementsList) {
+        const newLayer: PlacementImageLayer = {
+          id: crypto.randomUUID(),
+          path,
+          s: 1,
+          dx: 0,
+          dy: 0,
+        }
+        current = addPlacementImageLayer(current, placement, newLayer)
+        selectedPatch[placement] = newLayer.id
+        if (localUrl) localPatch[newLayer.id] = localUrl
       }
-      setDesignData((prev) => {
-        const current = parsePlacementImages(prev)
-        return mergePlacementImagesIntoDesignState(prev, addPlacementImageLayer(current, placement, newLayer))
-      })
-      // Store the object URL so the canvas can render immediately before signed URL arrives
-      if (localUrl) setLocalLayerUrls((prev) => ({ ...prev, [newLayer.id]: localUrl }))
-      // Auto-select the newly added layer
-      setSelectedLayerByPlacement((prev) => ({ ...prev, [placement]: newLayer.id }))
-      // Ensure the active placement is set so the canvas shows the new layer immediately
-      if (!activePlacement) setActivePlacement(placement)
+
+      const next = mergePlacementImagesIntoDesignState(designDataRef.current, current)
+      designDataRef.current = next
+      setDesignData(next)
+      if (Object.keys(localPatch).length > 0) {
+        setLocalLayerUrls((prev) => ({ ...prev, ...localPatch }))
+      }
+      setSelectedLayerByPlacement((prev) => ({ ...prev, ...selectedPatch }))
+      if (!activePlacement) {
+        setActivePlacement(placementsList[0])
+      }
     },
     [activePlacement, templateRows]
   )
