@@ -14,31 +14,54 @@ import {
   getServerCanvasFontKind,
 } from '@/lib/fonts'
 
-const FONTS_DIR = path.join(process.cwd(), 'lib/printful/fonts')
+/**
+ * Resolve the fonts directory. Primary: process.cwd()/lib/printful/fonts
+ * (works when Next.js outputFileTracingIncludes copies the TTFs correctly).
+ * Fallback: path relative to __dirname — useful if the route is compiled inside
+ * .next/server/... and the fonts end up alongside.
+ */
+function resolveFontsDir(): string {
+  const cwdPath = path.join(process.cwd(), 'lib', 'printful', 'fonts')
+  if (fs.existsSync(path.join(cwdPath, 'NotoSans-Regular.ttf'))) return cwdPath
+  // __dirname in a compiled Next.js App Router handler is typically
+  // .next/server/chunks/ or .next/server/app/api/.../  — walk up until found.
+  let dir = __dirname
+  for (let i = 0; i < 8; i++) {
+    const candidate = path.join(dir, 'lib', 'printful', 'fonts')
+    if (fs.existsSync(path.join(candidate, 'NotoSans-Regular.ttf'))) return candidate
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  // Last resort: return cwd path anyway (will log missing below)
+  return cwdPath
+}
 
 let canvasFontsRegistered = false
 function ensureCanvasFontsRegistered(): void {
   if (canvasFontsRegistered) return
-  const sans = path.join(FONTS_DIR, 'NotoSans-Regular.ttf')
-  const serif = path.join(FONTS_DIR, 'NotoSerif-Regular.ttf')
-  const mono = path.join(FONTS_DIR, 'NotoSansMono-Regular.ttf')
-  if (fs.existsSync(sans)) {
-    const k = GlobalFonts.registerFromPath(sans, getServerCanvasFontFamilyName('sans'))
-    if (k == null) console.warn('[compositeImages] failed to register Noto Sans', sans)
-  } else {
-    console.warn('[compositeImages] missing font file', sans)
-  }
-  if (fs.existsSync(serif)) {
-    const k = GlobalFonts.registerFromPath(serif, getServerCanvasFontFamilyName('serif'))
-    if (k == null) console.warn('[compositeImages] failed to register Noto Serif', serif)
-  } else {
-    console.warn('[compositeImages] missing font file', serif)
-  }
-  if (fs.existsSync(mono)) {
-    const k = GlobalFonts.registerFromPath(mono, getServerCanvasFontFamilyName('mono'))
-    if (k == null) console.warn('[compositeImages] failed to register Noto Mono', mono)
-  } else {
-    console.warn('[compositeImages] missing font file', mono)
+  const fontsDir = resolveFontsDir()
+  console.info('[compositeImages] registering fonts from', fontsDir)
+  const entries: Array<[string, 'sans' | 'serif' | 'mono']> = [
+    ['NotoSans-Regular.ttf', 'sans'],
+    ['NotoSerif-Regular.ttf', 'serif'],
+    ['NotoSansMono-Regular.ttf', 'mono'],
+  ]
+  for (const [file, kind] of entries) {
+    const fullPath = path.join(fontsDir, file)
+    if (!fs.existsSync(fullPath)) {
+      console.error('[compositeImages] MISSING font file — tofu likely:', fullPath,
+        '| cwd:', process.cwd(), '| __dirname:', __dirname)
+      continue
+    }
+    const familyName = getServerCanvasFontFamilyName(kind)
+    const result = GlobalFonts.registerFromPath(fullPath, familyName)
+    if (result == null) {
+      console.error('[compositeImages] registerFromPath returned null for', file,
+        '— @napi-rs/canvas may have loaded wrong platform binary')
+    } else {
+      console.info('[compositeImages] registered', file, 'as', familyName)
+    }
   }
   canvasFontsRegistered = true
 }
