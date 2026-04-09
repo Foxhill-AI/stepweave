@@ -23,7 +23,7 @@ interface AIPromptPanelProps {
   /** Required for generation (draft from /design-tool/[id]). */
   draftId?: number
   /** Called when user confirms "Apply to shoe"; should persist `pattern_image_url` on the draft. */
-  onPatternApplied?: (storagePath: string) => Promise<void>
+  onPatternApplied?: (storagePath: string, previewUrl?: string) => Promise<void>
 }
 
 const ACCEPT_IMAGES = 'image/jpeg,image/png,image/webp,image/gif'
@@ -198,7 +198,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
     setApplying(true)
     setError(null)
     try {
-      await onPatternApplied(selectedVariant.storagePath)
+      await onPatternApplied(selectedVariant.storagePath, selectedVariant.previewUrl)
     } catch {
       setError('Could not apply pattern. Try again.')
     } finally {
