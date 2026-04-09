@@ -11,4 +11,7 @@ CREATE POLICY design_draft_ai_message_delete_own ON public.design_draft_ai_messa
       WHERE d.id = design_draft_ai_message.design_draft_id
         AND u.auth_user_id = auth.uid()
     )
+
+
+  
   );
