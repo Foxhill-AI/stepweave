@@ -13,7 +13,10 @@ import {
   buildPrintfileById,
   resolvePlacementKeys,
 } from '@/lib/printful/buildMockupFiles'
-import { compositeLayersToBuffer, type CompositeInput } from '@/lib/printful/compositeImages'
+import {
+  compositeLayersToBuffer,
+  placementLayersToCompositeInputs,
+} from '@/lib/printful/compositeImages'
 import type { FileEntry } from '@/lib/printful/mockupTask'
 
 const BUCKET = 'design-patterns'
@@ -178,25 +181,7 @@ export async function prepareOrderPrintFilesFromSnapshot(
         const areaWidth = pf?.width ?? 1800
         const areaHeight = pf?.height ?? 1800
 
-        const layerInputs: CompositeInput[] = []
-        for (const l of layers) {
-          if (isTextLayer(l)) {
-            layerInputs.push({
-              kind: 'text',
-              text: l.text,
-              fontFamily: l.fontFamily,
-              fontSize: l.fontSize,
-              color: l.color,
-              dx: l.dx,
-              dy: l.dy,
-            })
-          } else {
-            const url = signedByPath.get(l.path)
-            if (url) {
-              layerInputs.push({ kind: 'image', signedUrl: url, s: l.s, dx: l.dx, dy: l.dy })
-            }
-          }
-        }
+        const layerInputs = placementLayersToCompositeInputs(layers, signedByPath)
         if (layerInputs.length === 0) return
 
         try {
