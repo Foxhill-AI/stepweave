@@ -478,9 +478,10 @@ export default function Product({
     }
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
+        // Pass url only via `url` — including it in `text` too makes many targets show the link twice.
         await navigator.share({
           title: sharePageTitle,
-          text: `${sharePageText}\n${url}`,
+          text: sharePageText,
           url,
         })
         return
