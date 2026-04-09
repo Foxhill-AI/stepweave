@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { Heart, Share2, Bookmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Clock, Download, Eye, Star } from 'lucide-react'
 import ItemCard from './ItemCard'
 import Carousel from './Carousel'
@@ -226,6 +227,7 @@ export default function Product({
   productNumericId,
 }: ProductProps) {
   const { userAccount } = useAuth()
+  const pathname = usePathname()
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false)
   const [localLiked, setLocalLiked] = useState(false)
@@ -319,6 +321,14 @@ export default function Product({
   /** One option per attribute (attributeId -> optionId) for variant selection */
   const [selectedOptionByAttribute, setSelectedOptionByAttribute] = useState<Record<number, number>>({})
   const [addToCartQuantity, setAddToCartQuantity] = useState(1)
+  const [shareFallbackOpen, setShareFallbackOpen] = useState(false)
+  const [productPageUrl, setProductPageUrl] = useState('')
+  const [copyLinkDone, setCopyLinkDone] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setProductPageUrl(`${window.location.origin}${pathname}`)
+  }, [pathname])
 
   const selectedVariantId = variants.length > 0 && attributes.length > 0
     ? findVariantIdFromSelection(variants, selectedOptionByAttribute)
@@ -446,6 +456,67 @@ export default function Product({
     setSelectedImageIndex(index)
   }
 
+  const sharePageTitle = productData.title || `Product ${id}`
+  const sharePageText = `Check out ${sharePageTitle}`
+
+  const getShareUrl = useCallback(
+    () => productPageUrl || (typeof window !== 'undefined' ? window.location.href : ''),
+    [productPageUrl]
+  )
+
+  const openShareFallback = () => setShareFallbackOpen(true)
+  const closeShareFallback = () => {
+    setShareFallbackOpen(false)
+    setCopyLinkDone(false)
+  }
+
+  const handleShareClick = async () => {
+    const url = getShareUrl()
+    if (!url) {
+      openShareFallback()
+      return
+    }
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: sharePageTitle,
+          text: `${sharePageText}\n${url}`,
+          url,
+        })
+        return
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return
+      }
+    }
+    openShareFallback()
+  }
+
+  const handleCopyProductLink = async () => {
+    const url = getShareUrl()
+    if (!url) return
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopyLinkDone(true)
+      window.setTimeout(() => setCopyLinkDone(false), 2500)
+    } catch {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = url
+        ta.setAttribute('readonly', '')
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+        setCopyLinkDone(true)
+        window.setTimeout(() => setCopyLinkDone(false), 2500)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   if ('_isMissing' in productData && productData._isMissing) {
     return (
       <div className="product-page product-missing">
@@ -461,6 +532,8 @@ export default function Product({
       </div>
     )
   }
+
+  const shareUrlForModal = getShareUrl()
 
   return (
     <div className="product-page">
@@ -608,8 +681,12 @@ export default function Product({
                 </button>
               )}
               <button
+                type="button"
                 className="product-action-button"
                 aria-label="Share"
+                aria-expanded={shareFallbackOpen}
+                aria-haspopup="dialog"
+                onClick={() => void handleShareClick()}
               >
                 <Share2 size={20} />
               </button>
@@ -1068,6 +1145,97 @@ export default function Product({
           </div>
         </div>
       </div>
+
+      {shareFallbackOpen && (
+        <>
+          <button
+            type="button"
+            className="product-share-backdrop"
+            aria-label="Close share menu"
+            onClick={closeShareFallback}
+          />
+          <div
+            className="product-share-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-share-title"
+          >
+            <div className="product-share-sheet-header">
+              <h2 id="product-share-title" className="product-share-sheet-title">
+                Share
+              </h2>
+              <button
+                type="button"
+                className="product-share-sheet-close"
+                onClick={closeShareFallback}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <p className="product-share-sheet-hint">
+              Your device may also offer more apps if sharing isn’t available above.
+            </p>
+            <div className="product-share-sheet-actions">
+              <button
+                type="button"
+                className="product-share-action"
+                onClick={() => void handleCopyProductLink()}
+              >
+                {copyLinkDone ? 'Link copied' : 'Copy link'}
+              </button>
+              <a
+                className="product-share-action"
+                href={
+                  shareUrlForModal
+                    ? `https://wa.me/?text=${encodeURIComponent(`${sharePageText} ${shareUrlForModal}`)}`
+                    : '#'
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={!shareUrlForModal ? (e) => e.preventDefault() : undefined}
+              >
+                WhatsApp
+              </a>
+              <a
+                className="product-share-action"
+                href={
+                  shareUrlForModal
+                    ? `sms:?body=${encodeURIComponent(`${sharePageText} ${shareUrlForModal}`)}`
+                    : '#'
+                }
+                onClick={!shareUrlForModal ? (e) => e.preventDefault() : undefined}
+              >
+                Messages / SMS
+              </a>
+              <a
+                className="product-share-action"
+                href={
+                  shareUrlForModal
+                    ? `mailto:?subject=${encodeURIComponent(sharePageTitle)}&body=${encodeURIComponent(`${sharePageText}\n\n${shareUrlForModal}`)}`
+                    : '#'
+                }
+                onClick={!shareUrlForModal ? (e) => e.preventDefault() : undefined}
+              >
+                Email
+              </a>
+              <a
+                className="product-share-action"
+                href={
+                  shareUrlForModal
+                    ? `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrlForModal)}`
+                    : '#'
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={!shareUrlForModal ? (e) => e.preventDefault() : undefined}
+              >
+                Facebook
+              </a>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
