@@ -1,0 +1,2 @@
+Bundled fonts: Noto Sans, Noto Serif, Noto Sans Mono (Google Fonts / Noto project).
+License: SIL Open Font License 1.1 — https://openfontlicense.org

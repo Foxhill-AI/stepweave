@@ -75,6 +75,31 @@ export const FONTS: FontDefinition[] = [
 
 export const DEFAULT_FONT = FONTS[0]
 
+/** Bundled Noto TTF families registered for @napi-rs/canvas (server composites). */
+export type ServerCanvasFontKind = 'sans' | 'serif' | 'mono'
+
+const CANVAS_FAMILY_BY_KIND: Record<ServerCanvasFontKind, string> = {
+  sans: 'StepweaveNotoSans',
+  serif: 'StepweaveNotoSerif',
+  mono: 'StepweaveNotoMono',
+}
+
+/**
+ * Maps editor font to bundled Noto (OFL) used when rasterizing text for Printful composites.
+ * UI still uses Google Fonts; server avoids missing system fonts / tofu glyphs on Vercel/Linux.
+ */
+export function getServerCanvasFontKind(fontValue: string): ServerCanvasFontKind {
+  const serif = new Set(['Playfair Display', 'Merriweather', 'Georgia'])
+  const mono = new Set(['Courier New'])
+  if (mono.has(fontValue)) return 'mono'
+  if (serif.has(fontValue)) return 'serif'
+  return 'sans'
+}
+
+export function getServerCanvasFontFamilyName(kind: ServerCanvasFontKind): string {
+  return CANVAS_FAMILY_BY_KIND[kind]
+}
+
 /** Returns the server-side font stack for a given font value. Falls back to Arial. */
 export function getServerFamily(fontValue: string): string {
   return FONTS.find((f) => f.value === fontValue)?.serverFamily ?? 'Arial, Helvetica, sans-serif'
