@@ -320,7 +320,8 @@ export default function Product({
 
   /** One option per attribute (attributeId -> optionId) for variant selection */
   const [selectedOptionByAttribute, setSelectedOptionByAttribute] = useState<Record<number, number>>({})
-  const [addToCartQuantity, setAddToCartQuantity] = useState(1)
+  /** String state so manual typing (e.g. clearing the field, entering "12") works; clamp on blur / submit. */
+  const [quantityInput, setQuantityInput] = useState('1')
   const [shareFallbackOpen, setShareFallbackOpen] = useState(false)
   const [productPageUrl, setProductPageUrl] = useState('')
   const [copyLinkDone, setCopyLinkDone] = useState(false)
@@ -329,6 +330,10 @@ export default function Product({
     if (typeof window === 'undefined') return
     setProductPageUrl(`${window.location.origin}${pathname}`)
   }, [pathname])
+
+  useEffect(() => {
+    setQuantityInput('1')
+  }, [id])
 
   const selectedVariantId = variants.length > 0 && attributes.length > 0
     ? findVariantIdFromSelection(variants, selectedOptionByAttribute)
@@ -815,8 +820,23 @@ export default function Product({
                     id="product-quantity"
                     type="number"
                     min={1}
-                    value={addToCartQuantity}
-                    onChange={(e) => setAddToCartQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    step={1}
+                    inputMode="numeric"
+                    value={quantityInput}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v === '') {
+                        setQuantityInput('')
+                        return
+                      }
+                      if (!/^\d+$/.test(v)) return
+                      setQuantityInput(v)
+                    }}
+                    onBlur={() => {
+                      const n = parseInt(quantityInput, 10)
+                      if (!Number.isFinite(n) || n < 1) setQuantityInput('1')
+                      else setQuantityInput(String(n))
+                    }}
                     className="product-quantity-input"
                   />
                 </div>
@@ -833,7 +853,8 @@ export default function Product({
                       return
                     }
                     if (variantIdForCart != null) {
-                      onAddToCart?.(variantIdForCart, addToCartQuantity, unitPriceForCart, selectedVariantLabel || undefined)
+                      const qty = Math.max(1, parseInt(quantityInput, 10) || 1)
+                      onAddToCart?.(variantIdForCart, qty, unitPriceForCart, selectedVariantLabel || undefined)
                     }
                   }}
                 >
