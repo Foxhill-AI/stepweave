@@ -169,7 +169,8 @@ export default function PreviewWorkspace({
 
   // After upload / new layer, show template editor (user may have been on Preview tab).
   useEffect(() => {
-    const hasImage = activeLayers.length > 0 || Boolean(imageUrl?.trim())
+    const hasImage =
+      activeLayers.length > 0 || Boolean(imageUrl?.trim()) || Boolean(hasPatternImage)
     const n = activeLayers.length
     const gainedFirstImage = !prevHadImageRef.current && hasImage
     const addedLayer = n > prevActiveLayerCountRef.current && n > 0
@@ -178,7 +179,7 @@ export default function PreviewWorkspace({
     }
     prevHadImageRef.current = hasImage
     prevActiveLayerCountRef.current = n
-  }, [activeLayers.length, imageUrl])
+  }, [activeLayers.length, imageUrl, hasPatternImage])
 
   useEffect(() => {
     if (!mockupImagesLoading) {
@@ -288,7 +289,8 @@ export default function PreviewWorkspace({
   const selectedMockupUrl = galleryItems[clampedIndex]?.mockup_url ?? ''
   const referenceUrl = selectedMockupUrl || catalogFallbackUrl || ''
 
-  const hasImage = activeLayers.length > 0 || Boolean(imageUrl?.trim())
+  const hasImage =
+    activeLayers.length > 0 || Boolean(imageUrl?.trim()) || Boolean(hasPatternImage)
   const layerCount = activeLayers.length
   // Only count real generated mockups — not the catalog fallback — so the toggle
   // only appears after the user explicitly clicks "See preview".
@@ -464,7 +466,7 @@ export default function PreviewWorkspace({
               className="preview-image-bar-btn preview-image-bar-btn--remove"
               onClick={onImageClear}
               aria-label="Remove selected layer"
-              disabled={layerCount === 0}
+              disabled={layerCount === 0 && !hasPatternImage}
             >
               <X size={13} aria-hidden /> Remove
             </button>

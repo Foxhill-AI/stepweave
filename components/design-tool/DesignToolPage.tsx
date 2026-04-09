@@ -411,11 +411,39 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   }, [draftId])
 
   const handleAiPatternApplied = useCallback(
-    async (storagePath: string) => {
+    async (storagePath: string, previewUrl?: string) => {
       if (!draftId) return
+
+      // Mirror file upload: add a placement image layer so the template canvas and
+      // preview-mockups see the pattern (global pattern alone did not populate layers).
+      const placement = activePlacement || templateRows[0]?.placement || ''
+      let nextDesignState = designDataRef.current
+      if (placement) {
+        const newLayer: PlacementImageLayer = {
+          id: crypto.randomUUID(),
+          path: storagePath,
+          s: 1,
+          dx: 0,
+          dy: 0,
+        }
+        const current = parsePlacementImages(nextDesignState)
+        nextDesignState = mergePlacementImagesIntoDesignState(
+          nextDesignState,
+          addPlacementImageLayer(current, placement, newLayer)
+        )
+        designDataRef.current = nextDesignState
+        setDesignData(nextDesignState)
+        setSelectedLayerByPlacement((prev) => ({ ...prev, [placement]: newLayer.id }))
+        if (!activePlacement) setActivePlacement(placement)
+        if (previewUrl) {
+          setLocalLayerUrls((prev) => ({ ...prev, [newLayer.id]: previewUrl }))
+        }
+      }
+
       const ok = await updateDesignDraft(draftId, {
         pattern_image_url: storagePath,
         pattern_source_type: 'ai_generated',
+        ...(placement ? { design_state: nextDesignState } : {}),
       })
       if (ok) {
         setLocalDraft((prev) =>
@@ -424,6 +452,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                 ...prev,
                 pattern_image_url: storagePath,
                 pattern_source_type: 'ai_generated',
+                ...(placement ? { design_state: nextDesignState } : {}),
               }
             : null
         )
@@ -432,7 +461,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         throw new Error('update failed')
       }
     },
-    [draftId, handleRefreshPrintfulPreview]
+    [draftId, handleRefreshPrintfulPreview, activePlacement, templateRows]
   )
 
   const handlePatternUploaded = useCallback(
