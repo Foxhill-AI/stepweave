@@ -1,5 +1,10 @@
 import sharp from 'sharp'
-import { compactToPrintfulPosition } from '@/lib/designDraftState'
+import {
+  compactToPrintfulPosition,
+  isImageLayer,
+  isTextLayer,
+  type PlacementLayer,
+} from '@/lib/designDraftState'
 import { getServerFamily } from '@/lib/fonts'
 
 export type CompositeLayerInput = {
@@ -21,6 +26,38 @@ export type CompositeTextInput = {
 }
 
 export type CompositeInput = CompositeLayerInput | CompositeTextInput
+
+/**
+ * Build composite inputs from design_state layers. All image layers are drawn first (bottom),
+ * then all text layers (top). This avoids mockups missing text when array order is [text, image] —
+ * the in-editor canvas can show the selected layer on top regardless of array order.
+ */
+export function placementLayersToCompositeInputs(
+  layers: PlacementLayer[],
+  signedByPath: Map<string, string>
+): CompositeInput[] {
+  const inputs: CompositeInput[] = []
+  for (const l of layers) {
+    if (!isImageLayer(l)) continue
+    const url = signedByPath.get(l.path)
+    if (url) {
+      inputs.push({ kind: 'image', signedUrl: url, s: l.s, dx: l.dx, dy: l.dy })
+    }
+  }
+  for (const l of layers) {
+    if (!isTextLayer(l)) continue
+    inputs.push({
+      kind: 'text',
+      text: l.text,
+      fontFamily: l.fontFamily,
+      fontSize: l.fontSize,
+      color: l.color,
+      dx: l.dx,
+      dy: l.dy,
+    })
+  }
+  return inputs
+}
 
 /** Escape special XML characters for use inside SVG text content. */
 function escapeXml(str: string): string {

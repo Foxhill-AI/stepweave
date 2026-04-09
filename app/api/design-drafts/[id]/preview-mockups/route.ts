@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import {
-  parsePrintfulPlacements,
-  parsePlacementImages,
-  isTextLayer,
-  isImageLayer,
-} from '@/lib/designDraftState'
+import { parsePrintfulPlacements, parsePlacementImages, isTextLayer, isImageLayer } from '@/lib/designDraftState'
 import {
   createTaskAndPoll,
   mergeMockups,
@@ -18,7 +13,10 @@ import {
   buildPrintfileById,
   resolvePlacementKeys,
 } from '@/lib/printful/buildMockupFiles'
-import { compositeLayersToBuffer, type CompositeInput } from '@/lib/printful/compositeImages'
+import {
+  compositeLayersToBuffer,
+  placementLayersToCompositeInputs,
+} from '@/lib/printful/compositeImages'
 
 const BUCKET = 'design-patterns'
 /** Long enough for Printful to fetch the pattern image during mockup generation */
@@ -248,26 +246,7 @@ export async function POST(
         const areaWidth = pf?.width ?? 1800
         const areaHeight = pf?.height ?? 1800
 
-        // Build composite inputs: image layers (need signed URL) + text layers (no URL)
-        const layerInputs: CompositeInput[] = []
-        for (const l of layers) {
-          if (isTextLayer(l)) {
-            layerInputs.push({
-              kind: 'text',
-              text: l.text,
-              fontFamily: l.fontFamily,
-              fontSize: l.fontSize,
-              color: l.color,
-              dx: l.dx,
-              dy: l.dy,
-            })
-          } else {
-            const url = signedByPath.get(l.path)
-            if (url) {
-              layerInputs.push({ kind: 'image', signedUrl: url, s: l.s, dx: l.dx, dy: l.dy })
-            }
-          }
-        }
+        const layerInputs = placementLayersToCompositeInputs(layers, signedByPath)
         if (layerInputs.length === 0) return
 
         try {
