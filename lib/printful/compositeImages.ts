@@ -22,13 +22,22 @@ function ensureCanvasFontsRegistered(): void {
   const serif = path.join(FONTS_DIR, 'NotoSerif-Regular.ttf')
   const mono = path.join(FONTS_DIR, 'NotoSansMono-Regular.ttf')
   if (fs.existsSync(sans)) {
-    GlobalFonts.registerFromPath(sans, getServerCanvasFontFamilyName('sans'))
+    const k = GlobalFonts.registerFromPath(sans, getServerCanvasFontFamilyName('sans'))
+    if (k == null) console.warn('[compositeImages] failed to register Noto Sans', sans)
+  } else {
+    console.warn('[compositeImages] missing font file', sans)
   }
   if (fs.existsSync(serif)) {
-    GlobalFonts.registerFromPath(serif, getServerCanvasFontFamilyName('serif'))
+    const k = GlobalFonts.registerFromPath(serif, getServerCanvasFontFamilyName('serif'))
+    if (k == null) console.warn('[compositeImages] failed to register Noto Serif', serif)
+  } else {
+    console.warn('[compositeImages] missing font file', serif)
   }
   if (fs.existsSync(mono)) {
-    GlobalFonts.registerFromPath(mono, getServerCanvasFontFamilyName('mono'))
+    const k = GlobalFonts.registerFromPath(mono, getServerCanvasFontFamilyName('mono'))
+    if (k == null) console.warn('[compositeImages] failed to register Noto Mono', mono)
+  } else {
+    console.warn('[compositeImages] missing font file', mono)
   }
   canvasFontsRegistered = true
 }
@@ -86,6 +95,24 @@ export function placementLayersToCompositeInputs(
 }
 
 /**
+ * Keep text anchor inside the printfile canvas. The editor allows unbounded dx/dy for text,
+ * but a fixed PNG cannot draw outside its bounds — large dy would clip the entire glyph (invisible).
+ */
+function clampTextAnchor(
+  w: number,
+  h: number,
+  x: number,
+  y: number,
+  fontSize: number
+): { x: number; y: number } {
+  const rawPad = Math.max(4, Math.ceil(fontSize * 0.55))
+  const pad = Math.min(rawPad, Math.max(0, Math.floor(w / 2) - 1), Math.max(0, Math.floor(h / 2) - 1))
+  const px = pad > 0 ? Math.max(pad, Math.min(w - pad, x)) : w / 2
+  const py = pad > 0 ? Math.max(pad, Math.min(h - pad, y)) : h / 2
+  return { x: px, y: py }
+}
+
+/**
  * Renders a text layer as a PNG buffer using @napi-rs/canvas + bundled Noto TTFs
  * (reliable on Vercel/Linux; Sharp+SVG relied on missing system fonts → tofu rectangles).
  */
@@ -101,9 +128,19 @@ function renderTextToBuffer(
   const ctx = canvas.getContext('2d')
   const kind = getServerCanvasFontKind(input.fontFamily)
   const family = getServerCanvasFontFamilyName(kind)
-  const x = w / 2 + input.dx
-  const y = h / 2 + input.dy
   const size = Math.max(1, Math.round(input.fontSize))
+  let x = w / 2 + input.dx
+  let y = h / 2 + input.dy
+  const clamped = clampTextAnchor(w, h, x, y, size)
+  if (clamped.x !== x || clamped.y !== y) {
+    console.warn('[compositeImages] text anchor clamped to print area', {
+      before: { x, y },
+      after: clamped,
+      printfile: { w, h },
+    })
+  }
+  x = clamped.x
+  y = clamped.y
   ctx.font = `${size}px ${family}`
   ctx.fillStyle = input.color
   ctx.textAlign = 'center'
