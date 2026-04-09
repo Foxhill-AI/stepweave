@@ -1,7 +1,12 @@
 'use client'
 
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react'
-import { mergeAndClampPlacement, isTextLayer, isImageLayer } from '@/lib/designDraftState'
+import {
+  mergeAndClampPlacement,
+  clampTextDxDyInPrintArea,
+  isTextLayer,
+  isImageLayer,
+} from '@/lib/designDraftState'
 import type { ResolvedPlacementLayer, PlacementLayerPatch } from '@/lib/designDraftState'
 
 export type PlacementCanvasPreviewProps = {
@@ -88,11 +93,21 @@ export default function PlacementCanvasPreview({
       if (!layer) return
 
       if (isTextLayer(layer)) {
-        // Scroll changes fontSize for text layers
+        // Scroll changes fontSize for text layers; re-clamp dx/dy (padding depends on font size)
         const factor = e.deltaY > 0 ? 0.94 : 1.06
         const nextSize = Math.max(10, Math.round(layer.fontSize * factor))
         if (nextSize !== layer.fontSize) {
-          onLayerChangeRef.current(layerId, { fontSize: nextSize })
+          const clamped = clampTextDxDyInPrintArea(
+            areaWidth,
+            areaHeight,
+            layer.dx,
+            layer.dy,
+            nextSize
+          )
+          const patch: PlacementLayerPatch = { fontSize: nextSize }
+          if (clamped.dx !== layer.dx) patch.dx = clamped.dx
+          if (clamped.dy !== layer.dy) patch.dy = clamped.dy
+          onLayerChangeRef.current(layerId, patch)
         }
       } else {
         // Scroll changes scale for image layers
@@ -164,9 +179,15 @@ export default function PlacementCanvasPreview({
         if (merged.dx !== layer.dx) out.dx = merged.dx
         if (merged.dy !== layer.dy) out.dy = merged.dy
       } else {
-        // Text layers — no clamping, free positioning
-        if (Math.abs(newDx - layer.dx) > 0.5) out.dx = newDx
-        if (Math.abs(newDy - layer.dy) > 0.5) out.dy = newDy
+        const merged = clampTextDxDyInPrintArea(
+          areaWidth,
+          areaHeight,
+          newDx,
+          newDy,
+          layer.fontSize
+        )
+        if (Math.abs(merged.dx - layer.dx) > 0.5) out.dx = merged.dx
+        if (Math.abs(merged.dy - layer.dy) > 0.5) out.dy = merged.dy
       }
       if (Object.keys(out).length > 0) onLayerChangeRef.current(layer.id, out)
     },
@@ -205,9 +226,16 @@ export default function PlacementCanvasPreview({
           const isSelected = layer.id === effectiveSelectedId
 
           if (isTextLayer(layer)) {
-            // Text layer: centered at (areaWidth/2 + dx, areaHeight/2 + dy)
-            const centerX = (areaWidth / 2 + layer.dx) * displayScale
-            const centerY = (areaHeight / 2 + layer.dy) * displayScale
+            // Same bounds as server composite (clampTextDxDyInPrintArea)
+            const td = clampTextDxDyInPrintArea(
+              areaWidth,
+              areaHeight,
+              layer.dx,
+              layer.dy,
+              layer.fontSize
+            )
+            const centerX = (areaWidth / 2 + td.dx) * displayScale
+            const centerY = (areaHeight / 2 + td.dy) * displayScale
             const fontSizeDisplay = layer.fontSize * displayScale
             return (
               <div
