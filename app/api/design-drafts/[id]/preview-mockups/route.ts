@@ -115,6 +115,14 @@ export async function POST(
     )
   }
 
+  console.log('[preview-mockups]', {
+    draftId,
+    productId,
+    variantId,
+    globalPatternPath: globalPatternPath || null,
+    patternImagePlacements: Object.keys(perPlacementPaths),
+  })
+
   const placementTransforms = parsePrintfulPlacements(designState)
 
   const apiKey = process.env.PRINTFUL_API_KEY
@@ -184,6 +192,20 @@ export async function POST(
     }
   }
 
+  console.log(
+    '[preview-mockups] routing',
+    Object.entries(perPlacementPaths).map(([p, layers]) => ({
+      placement: p,
+      hasText: layers.some(isTextLayer),
+      nImages: layers.filter(isImageLayer).length,
+      mode: imageUrlByPlacement[`__pending__${p}`]
+        ? 'pending_composite'
+        : imageUrlByPlacement[p]
+          ? 'direct_image'
+          : 'none',
+    }))
+  )
+
   const headers: HeadersInit = {
     Authorization: `Bearer ${apiKey.trim()}`,
     'Content-Type': 'application/json',
@@ -215,6 +237,17 @@ export async function POST(
   const printfilesResult = printfilesData.result ?? {}
   const availablePlacements = printfilesResult.available_placements ?? {}
   const { placementKeys, variantMapping } = resolvePlacementKeys(printfilesResult, variantId)
+
+  const designPlacementKeys = Object.keys(perPlacementPaths)
+  const missingOnPrintful = designPlacementKeys.filter((k) => !placementKeys.includes(k))
+  const missingInDesign = placementKeys.filter((k) => !designPlacementKeys.includes(k))
+  console.log('[preview-mockups] placement alignment', {
+    placementKeys,
+    designPlacementKeys,
+    missingOnPrintful,
+    missingInDesign,
+    variantHasMapping: Boolean(variantMapping?.placements),
+  })
 
   if (!variantMapping || placementKeys.length === 0) {
     return NextResponse.json({
@@ -294,6 +327,15 @@ export async function POST(
     placementTransforms: finalTransforms,
   })
 
+  console.log(
+    '[preview-mockups] files',
+    files.map((f) => ({
+      placement: f.placement,
+      urlPresent: f.image_url.trim().length > 0,
+      urlLength: f.image_url.length,
+    }))
+  )
+
   if (files.length === 0) {
     return NextResponse.json({
       product_id: productId,
@@ -323,8 +365,10 @@ export async function POST(
       status: 'status' in batch ? batch.status : undefined,
       productId,
       variantId,
-      placements: files.map((f) => f.placement),
-      files,
+      fileSummary: files.map((f) => ({
+        placement: f.placement,
+        urlPresent: f.image_url.trim().length > 0,
+      })),
     })
   }
 
