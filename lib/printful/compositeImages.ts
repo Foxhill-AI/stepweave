@@ -1,11 +1,37 @@
+import path from 'path'
+import fs from 'fs'
 import sharp from 'sharp'
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
 import {
   compactToPrintfulPosition,
   isImageLayer,
   isTextLayer,
   type PlacementLayer,
 } from '@/lib/designDraftState'
-import { getServerFamily } from '@/lib/fonts'
+import {
+  getServerCanvasFontFamilyName,
+  getServerCanvasFontKind,
+} from '@/lib/fonts'
+
+const FONTS_DIR = path.join(process.cwd(), 'lib/printful/fonts')
+
+let canvasFontsRegistered = false
+function ensureCanvasFontsRegistered(): void {
+  if (canvasFontsRegistered) return
+  const sans = path.join(FONTS_DIR, 'NotoSans-Regular.ttf')
+  const serif = path.join(FONTS_DIR, 'NotoSerif-Regular.ttf')
+  const mono = path.join(FONTS_DIR, 'NotoSansMono-Regular.ttf')
+  if (fs.existsSync(sans)) {
+    GlobalFonts.registerFromPath(sans, getServerCanvasFontFamilyName('sans'))
+  }
+  if (fs.existsSync(serif)) {
+    GlobalFonts.registerFromPath(serif, getServerCanvasFontFamilyName('serif'))
+  }
+  if (fs.existsSync(mono)) {
+    GlobalFonts.registerFromPath(mono, getServerCanvasFontFamilyName('mono'))
+  }
+  canvasFontsRegistered = true
+}
 
 export type CompositeLayerInput = {
   kind: 'image'
@@ -59,40 +85,31 @@ export function placementLayersToCompositeInputs(
   return inputs
 }
 
-/** Escape special XML characters for use inside SVG text content. */
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
-}
-
 /**
- * Renders a text layer as a PNG buffer using SVG + sharp.
- * The text is centered at (areaWidth/2 + dx, areaHeight/2 + dy).
+ * Renders a text layer as a PNG buffer using @napi-rs/canvas + bundled Noto TTFs
+ * (reliable on Vercel/Linux; Sharp+SVG relied on missing system fonts → tofu rectangles).
  */
-async function renderTextToBuffer(
+function renderTextToBuffer(
   areaWidth: number,
   areaHeight: number,
   input: CompositeTextInput
-): Promise<Buffer> {
-  const x = Math.round(areaWidth / 2 + input.dx)
-  const y = Math.round(areaHeight / 2 + input.dy)
-  const serverFamily = getServerFamily(input.fontFamily)
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${areaWidth}" height="${areaHeight}">
-    <text
-      x="${x}"
-      y="${y}"
-      font-family="${escapeXml(serverFamily)}"
-      font-size="${input.fontSize}"
-      fill="${escapeXml(input.color)}"
-      text-anchor="middle"
-      dominant-baseline="central"
-    >${escapeXml(input.text)}</text>
-  </svg>`
-  return sharp(Buffer.from(svg)).png().toBuffer()
+): Buffer {
+  ensureCanvasFontsRegistered()
+  const w = Math.max(1, Math.round(areaWidth))
+  const h = Math.max(1, Math.round(areaHeight))
+  const canvas = createCanvas(w, h)
+  const ctx = canvas.getContext('2d')
+  const kind = getServerCanvasFontKind(input.fontFamily)
+  const family = getServerCanvasFontFamilyName(kind)
+  const x = w / 2 + input.dx
+  const y = h / 2 + input.dy
+  const size = Math.max(1, Math.round(input.fontSize))
+  ctx.font = `${size}px ${family}`
+  ctx.fillStyle = input.color
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(input.text, x, y)
+  return canvas.toBuffer('image/png')
 }
 
 /**
@@ -112,8 +129,11 @@ export async function compositeLayersToBuffer(
   const compositeInputs = await Promise.all(
     layers.map(async (layer) => {
       if (layer.kind === 'text') {
-        const buf = await renderTextToBuffer(areaWidth, areaHeight, layer)
-        return { input: buf, left: 0, top: 0 }
+        return {
+          input: renderTextToBuffer(areaWidth, areaHeight, layer),
+          left: 0,
+          top: 0,
+        }
       }
 
       // Image layer: fetch → resize → position
