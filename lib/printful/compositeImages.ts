@@ -3,6 +3,7 @@ import fs from 'fs'
 import sharp from 'sharp'
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
 import {
+  clampTextAnchorInPrintfile,
   compactToPrintfulPosition,
   isImageLayer,
   isTextLayer,
@@ -131,7 +132,7 @@ function renderTextToBuffer(
   const size = Math.max(1, Math.round(input.fontSize))
   let x = w / 2 + input.dx
   let y = h / 2 + input.dy
-  const clamped = clampTextAnchor(w, h, x, y, size)
+  const clamped = clampTextAnchorInPrintfile(w, h, x, y, size)
   if (clamped.x !== x || clamped.y !== y) {
     console.warn('[compositeImages] text anchor clamped to print area', {
       before: { x, y },

@@ -82,6 +82,40 @@ export function clampCompactTransformInArea(
   return { s, dx, dy }
 }
 
+/**
+ * Absolute anchor (center of text) in printfile pixels, clamped so glyphs stay inside the canvas.
+ * Must match `lib/printful/compositeImages.ts` (renderTextToBuffer).
+ */
+export function clampTextAnchorInPrintfile(
+  w: number,
+  h: number,
+  x: number,
+  y: number,
+  fontSize: number
+): { x: number; y: number } {
+  const rawPad = Math.max(4, Math.ceil(fontSize * 0.55))
+  const pad = Math.min(rawPad, Math.max(0, Math.floor(w / 2) - 1), Math.max(0, Math.floor(h / 2) - 1))
+  const px = pad > 0 ? Math.max(pad, Math.min(w - pad, x)) : w / 2
+  const py = pad > 0 ? Math.max(pad, Math.min(h - pad, y)) : h / 2
+  return { x: px, y: py }
+}
+
+/**
+ * Compact text offsets (dx/dy from center) clamped to the same bounds as server composites.
+ */
+export function clampTextDxDyInPrintArea(
+  areaWidth: number,
+  areaHeight: number,
+  dx: number,
+  dy: number,
+  fontSize: number
+): { dx: number; dy: number } {
+  const w = Math.max(1, Math.round(areaWidth))
+  const h = Math.max(1, Math.round(areaHeight))
+  const c = clampTextAnchorInPrintfile(w, h, w / 2 + dx, h / 2 + dy, fontSize)
+  return { dx: c.x - w / 2, dy: c.y - h / 2 }
+}
+
 /** Merge a patch then clamp so the box stays inside the print area. */
 export function mergeAndClampPlacement(
   areaWidth: number,
