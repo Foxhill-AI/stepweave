@@ -2,6 +2,16 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Paperclip, X } from 'lucide-react'
+import {
+  appendDesignDraftAiMessages,
+  deleteDesignDraftAiMessages,
+  getDesignDraftAiMessages,
+  type DesignDraftAiMessageRow,
+} from '@/lib/supabaseClient'
+
+const AI_MSG_V = 1
+const KIND_USER = 'generation_user'
+const KIND_ASSISTANT = 'generation_assistant'
 
 export type AiGeneratedVariant = {
   id: string
@@ -17,6 +27,70 @@ type GenerationTurn = {
   variants: AiGeneratedVariant[]
   /** true when this turn used a reference image */
   usedReference: boolean
+}
+
+function buildTurnsFromDbMessages(rows: DesignDraftAiMessageRow[]): GenerationTurn[] {
+  const sorted = [...rows].sort((a, b) => a.message_index - b.message_index)
+  const turns: GenerationTurn[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    const row = sorted[i]
+    if (row.role !== 'user') continue
+    const uc = row.content
+    if (uc.kind !== KIND_USER || typeof uc.prompt !== 'string') continue
+    const next = sorted[i + 1]
+    if (!next || next.role !== 'assistant') continue
+    const ac = next.content
+    if (ac.kind !== KIND_ASSISTANT || !Array.isArray(ac.variants)) continue
+    const variantsRaw = ac.variants as unknown[]
+    const variants: AiGeneratedVariant[] = []
+    for (const item of variantsRaw) {
+      if (!item || typeof item !== 'object') continue
+      const o = item as Record<string, unknown>
+      if (
+        typeof o.id === 'string' &&
+        typeof o.storagePath === 'string' &&
+        typeof o.seed === 'number'
+      ) {
+        variants.push({
+          id: o.id,
+          storagePath: o.storagePath,
+          previewUrl: '',
+          seed: o.seed,
+        })
+      }
+    }
+    if (variants.length === 0) continue
+    const styleSummary = typeof ac.styleSummary === 'string' ? ac.styleSummary : null
+    turns.push({
+      id: `db-${row.id}-${next.id}`,
+      prompt: uc.prompt,
+      styleSummary,
+      variants,
+      usedReference: Boolean(uc.usedReference),
+    })
+    i++
+  }
+  return turns
+}
+
+function collectStoragePaths(turns: GenerationTurn[]): string[] {
+  const set = new Set<string>()
+  for (const t of turns) {
+    for (const v of t.variants) {
+      if (v.storagePath?.trim()) set.add(v.storagePath.trim())
+    }
+  }
+  return Array.from(set)
+}
+
+function applySignedUrls(turns: GenerationTurn[], urls: Record<string, string>): GenerationTurn[] {
+  return turns.map((turn) => ({
+    ...turn,
+    variants: turn.variants.map((v) => ({
+      ...v,
+      previewUrl: urls[v.storagePath] ?? v.previewUrl,
+    })),
+  }))
 }
 
 interface AIPromptPanelProps {
@@ -37,6 +111,8 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
   const [history, setHistory] = useState<GenerationTurn[]>([])
   const [selectedVariant, setSelectedVariant] = useState<AiGeneratedVariant | null>(null)
   const [applying, setApplying] = useState(false)
+  /** Loading persisted rows from design_draft_ai_message */
+  const [chatLoading, setChatLoading] = useState(false)
 
   // Reference image state
   const [referencePreviewUrl, setReferencePreviewUrl] = useState<string | null>(null)
@@ -51,6 +127,45 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [history, loading])
+
+  useEffect(() => {
+    if (!draftId) {
+      setHistory([])
+      setSelectedVariant(null)
+      setChatLoading(false)
+      return
+    }
+    let cancelled = false
+    setChatLoading(true)
+    ;(async () => {
+      try {
+        const rows = await getDesignDraftAiMessages(draftId)
+        if (cancelled) return
+        let turns = buildTurnsFromDbMessages(rows)
+        const paths = collectStoragePaths(turns)
+        if (paths.length > 0) {
+          const res = await fetch(`/api/design-drafts/${draftId}/sign-storage-paths`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paths }),
+          })
+          const body = (await res.json().catch(() => ({}))) as {
+            urls?: Record<string, string>
+          }
+          if (res.ok && body.urls && typeof body.urls === 'object') {
+            turns = applySignedUrls(turns, body.urls)
+          }
+        }
+        if (cancelled) return
+        setHistory(turns)
+      } finally {
+        if (!cancelled) setChatLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [draftId])
 
   // Revoke blob URL on unmount
   useEffect(() => {
@@ -175,17 +290,42 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
         setError('No images were returned. Try again.')
         return
       }
-      setHistory((prev) => [
-        ...prev,
+      const newTurn: GenerationTurn = {
+        id: crypto.randomUUID(),
+        prompt: trimmed,
+        styleSummary: body.style_summary ?? null,
+        variants: body.variants!,
+        usedReference: isI2I,
+      }
+      setHistory((prev) => [...prev, newTurn])
+      setPrompt('')
+      const persistOk = await appendDesignDraftAiMessages(draftId, [
         {
-          id: crypto.randomUUID(),
-          prompt: trimmed,
-          styleSummary: body.style_summary ?? null,
-          variants: body.variants!,
-          usedReference: isI2I,
+          role: 'user',
+          content: {
+            v: AI_MSG_V,
+            kind: KIND_USER,
+            prompt: trimmed,
+            usedReference: isI2I,
+          },
+        },
+        {
+          role: 'assistant',
+          content: {
+            v: AI_MSG_V,
+            kind: KIND_ASSISTANT,
+            styleSummary: body.style_summary ?? null,
+            variants: body.variants!.map((v) => ({
+              id: v.id,
+              storagePath: v.storagePath,
+              seed: v.seed,
+            })),
+          },
         },
       ])
-      setPrompt('')
+      if (!persistOk) {
+        console.warn('[AIPromptPanel] Failed to persist AI chat; history may reset on reload')
+      }
     } catch {
       setError('Network error. Please try again.')
     } finally {
@@ -219,7 +359,12 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
 
       {/* ── Conversation history ── */}
       <div className="ai-prompt-messages" aria-label="AI design conversation" aria-live="polite">
-        {history.length === 0 && !loading && (
+        {chatLoading && (
+          <div className="ai-prompt-message placeholder" role="status">
+            Loading conversation…
+          </div>
+        )}
+        {history.length === 0 && !loading && !chatLoading && (
           <div className="ai-prompt-message placeholder">
             Describe your pattern or graphic — or attach a reference image for style inspiration.
           </div>
@@ -401,19 +546,32 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
             type="button"
             className="ai-prompt-btn primary"
             onClick={() => void handleGenerate()}
-            disabled={loading || noDraft || !prompt.trim() || referenceUploading}
+            disabled={loading || chatLoading || noDraft || !prompt.trim() || referenceUploading}
           >
             {loading ? 'Generating…' : 'Generate'}
           </button>
           {history.length > 0 && (
-            <button
-              type="button"
-              className="ai-prompt-btn secondary"
-              onClick={() => { setHistory([]); setSelectedVariant(null); setError(null) }}
-              disabled={loading}
-            >
-              Clear history
-            </button>
+          <button
+            type="button"
+            className="ai-prompt-btn secondary"
+            onClick={() => {
+              void (async () => {
+                if (draftId) {
+                  const ok = await deleteDesignDraftAiMessages(draftId)
+                  if (!ok) {
+                    setError('Could not clear saved chat. Try again.')
+                    return
+                  }
+                }
+                setHistory([])
+                setSelectedVariant(null)
+                setError(null)
+              })()
+            }}
+            disabled={loading || chatLoading}
+          >
+            Clear history
+          </button>
           )}
         </div>
         {history.length > 0 && (

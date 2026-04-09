@@ -2326,6 +2326,56 @@ export const supabase =
     return true
   }
 
+  /** Append messages after the current max `message_index` (for chat history). RLS: design_draft_ai_message_insert_own. */
+  export async function appendDesignDraftAiMessages(
+    designDraftId: number,
+    messages: DesignDraftAiMessageInsert[]
+  ): Promise<boolean> {
+    if (messages.length === 0) return true
+    const { data: maxRow, error: maxErr } = await supabase
+      .from('design_draft_ai_message')
+      .select('message_index')
+      .eq('design_draft_id', designDraftId)
+      .order('message_index', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (maxErr) {
+      console.error('appendDesignDraftAiMessages (max index):', maxErr)
+      return false
+    }
+    const start =
+      typeof maxRow?.message_index === 'number' && Number.isFinite(maxRow.message_index)
+        ? maxRow.message_index + 1
+        : 0
+    const rows = messages.map((msg, i) => ({
+      design_draft_id: designDraftId,
+      message_index: start + i,
+      role: msg.role,
+      content: msg.content,
+    }))
+    const { error } = await supabase.from('design_draft_ai_message').insert(rows)
+    if (error) {
+      console.error('appendDesignDraftAiMessages:', error)
+      return false
+    }
+    return true
+  }
+
+  /** Remove all AI chat rows for a draft. Requires DELETE RLS (e.g. design_draft_ai_message_delete_own). */
+  export async function deleteDesignDraftAiMessages(
+    designDraftId: number
+  ): Promise<boolean> {
+    const { error } = await supabase
+      .from('design_draft_ai_message')
+      .delete()
+      .eq('design_draft_id', designDraftId)
+    if (error) {
+      console.error('deleteDesignDraftAiMessages:', error)
+      return false
+    }
+    return true
+  }
+
   /** Get all AI messages for a draft, ordered by message_index. RLS: design_draft_ai_message_select_own. */
   export async function getDesignDraftAiMessages(
     designDraftId: number
