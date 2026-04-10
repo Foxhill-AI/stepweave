@@ -5,6 +5,9 @@ import {
   parsePlacementImages,
   isTextLayer,
   isImageLayer,
+  placementLayersNeedServerComposite,
+  enrichDirectImagePlacementOverrides,
+  type PlacementCompactTransform,
   type PrintfulPosition,
 } from '@/lib/designDraftState'
 import { PRINTFUL_BASE, type PrintfulPrintfilesResult } from '@/lib/printful/mockupTask'
@@ -108,12 +111,11 @@ export async function prepareOrderPrintFilesFromSnapshot(
   const defaultImageUrl = globalPatternPath ? signedByPath.get(globalPatternPath) : undefined
 
   const imageUrlByPlacement: Record<string, string> = {}
-  const placementTransformOverrides: Record<string, { s: number; dx: number; dy: number }> = {}
+  const placementTransformOverrides: Record<string, PlacementCompactTransform> = {}
 
   for (const [placement, layers] of Object.entries(perPlacementPaths)) {
-    const hasText = layers.some(isTextLayer)
     const imageLayers = layers.filter(isImageLayer)
-    if (!hasText && imageLayers.length === 1) {
+    if (!placementLayersNeedServerComposite(layers) && imageLayers.length === 1) {
       const url = signedByPath.get(imageLayers[0].path)
       if (url) {
         imageUrlByPlacement[placement] = url
@@ -165,6 +167,16 @@ export async function prepareOrderPrintFilesFromSnapshot(
 
   const printfileById = buildPrintfileById(printfilesResult)
 
+  const placementTransformOverridesEnriched = enrichDirectImagePlacementOverrides(
+    placementTransformOverrides,
+    perPlacementPaths,
+    (placement) => {
+      const printfileId = variantMapping?.placements[placement]
+      const pf = printfileId != null ? printfileById.get(printfileId) : null
+      return { width: pf?.width ?? 1800, height: pf?.height ?? 1800 }
+    }
+  )
+
   const pendingPlacements = Object.keys(imageUrlByPlacement)
     .filter((k) => k.startsWith('__pending__'))
     .map((k) => k.slice('__pending__'.length))
@@ -181,7 +193,12 @@ export async function prepareOrderPrintFilesFromSnapshot(
         const areaWidth = pf?.width ?? 1800
         const areaHeight = pf?.height ?? 1800
 
-        const layerInputs = placementLayersToCompositeInputs(layers, signedByPath)
+        const layerInputs = placementLayersToCompositeInputs(
+          layers,
+          signedByPath,
+          areaWidth,
+          areaHeight
+        )
         if (layerInputs.length === 0) return
 
         try {
@@ -212,7 +229,7 @@ export async function prepareOrderPrintFilesFromSnapshot(
       finalTransforms[placement] = { s: 1, dx: 0, dy: 0 }
     }
   }
-  for (const [placement, t] of Object.entries(placementTransformOverrides)) {
+  for (const [placement, t] of Object.entries(placementTransformOverridesEnriched)) {
     finalTransforms[placement] = t
   }
 

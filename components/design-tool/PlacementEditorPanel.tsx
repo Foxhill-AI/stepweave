@@ -49,6 +49,7 @@ interface PlacementEditorPanelProps {
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
   onLayerChange?: (layerId: string, patch: PlacementLayerPatch) => void
+  onLayerDelete?: (layerId: string) => void
 }
 
 export default function PlacementEditorPanel({
@@ -72,6 +73,7 @@ export default function PlacementEditorPanel({
   selectedLayerId,
   onLayerSelect,
   onLayerChange,
+  onLayerDelete,
 }: PlacementEditorPanelProps) {
   const [meta, setMeta] = useState<PlacementMeta[]>([])
   const [metaLoading, setMetaLoading] = useState(false)
@@ -305,6 +307,7 @@ export default function PlacementEditorPanel({
               selectedLayerId={effectiveSelectedId}
               onLayerSelect={onLayerSelect}
               onLayerChange={onLayerChange ?? (() => {})}
+              onLayerDelete={onLayerDelete}
             />
           )}
 
@@ -316,6 +319,7 @@ export default function PlacementEditorPanel({
               selectedLayerId={effectiveSelectedId}
               onLayerSelect={onLayerSelect}
               onLayerChange={onLayerChange ?? (() => {})}
+              onLayerDelete={onLayerDelete}
             />
           )}
 

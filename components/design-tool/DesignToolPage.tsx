@@ -561,6 +561,14 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     []
   )
 
+  const handleCanvasLayerDelete = useCallback(
+    (layerId: string) => {
+      if (!activePlacement) return
+      handleLayerRemove(activePlacement, layerId)
+    },
+    [activePlacement, handleLayerRemove]
+  )
+
   const handlePatternClear = useCallback(async () => {
     if (!draftId) return
     await updateDesignDraft(draftId, { pattern_image_url: null })
@@ -803,6 +811,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
                   onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
                   onLayerChange={handleLayerChange}
+                  onLayerDelete={handleCanvasLayerDelete}
                 />
               )}
           </div>
@@ -947,6 +956,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
             onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
             onLayerChange={handleLayerChange}
+            onLayerDelete={handleCanvasLayerDelete}
             onAddTextLayer={isDraftEditor ? handleAddTextLayer : undefined}
             onSaveLayout={isDraftEditor ? handleSavePlacementLayout : undefined}
             onRefreshPrintfulPreview={isDraftEditor ? handleRefreshPrintfulPreview : undefined}

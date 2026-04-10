@@ -1,9 +1,13 @@
 'use client'
 
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react'
+import Moveable from 'react-moveable'
 import {
   mergeAndClampPlacement,
-  clampTextDxDyInPrintArea,
+  clampImageLayerDxDy,
+  clampTextLayerDxDy,
+  getImageLayerDimensions,
+  estimateTextLayerBox,
   isTextLayer,
   isImageLayer,
 } from '@/lib/designDraftState'
@@ -12,26 +16,20 @@ import type { ResolvedPlacementLayer, PlacementLayerPatch } from '@/lib/designDr
 export type PlacementCanvasPreviewProps = {
   areaWidth: number
   areaHeight: number
-  /** Layers to render (image + text). Each layer has its own position. */
   layers: ResolvedPlacementLayer[]
-  /** ID of the currently selected layer. Auto-selects the only layer when there is exactly one. */
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
   onLayerChange: (layerId: string, patch: PlacementLayerPatch) => void
+  /** Remove layer (e.g. × on selection chrome). */
+  onLayerDelete?: (layerId: string) => void
   disabled?: boolean
-  /**
-   * `overlay`: transparent stage, dashed border — for shoe template composite.
-   * `default`: standalone print-area preview.
-   */
   variant?: 'default' | 'overlay'
-  /** Hide instruction paragraph (e.g. when parent provides context). */
   hideHint?: boolean
 }
 
 /**
- * Visual print-area canvas: drag/scroll each layer independently.
- * Image layers: scroll changes scale, drag repositions.
- * Text layers: scroll changes fontSize, drag repositions.
+ * Print-area canvas: Moveable handles drag, resize, rotate (pointer + touch).
+ * State stays in design_state (dx, dy, w/h or s, rotation).
  */
 export default function PlacementCanvasPreview({
   areaWidth,
@@ -40,18 +38,19 @@ export default function PlacementCanvasPreview({
   selectedLayerId: externalSelectedId,
   onLayerSelect,
   onLayerChange,
+  onLayerDelete,
   disabled = false,
   variant = 'default',
   hideHint = false,
 }: PlacementCanvasPreviewProps) {
-  const stageRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const [moveContainer, setMoveContainer] = useState<HTMLDivElement | null>(null)
   const [displayScale, setDisplayScale] = useState(1)
+  const [moveableTarget, setMoveableTarget] = useState<HTMLDivElement | null>(null)
 
-  // When there is exactly one layer, always treat it as selected for seamless UX
   const effectiveSelectedId =
     layers.length === 1 ? layers[0].id : (externalSelectedId ?? null)
 
-  // Refs to avoid stale closures in event handlers
   const layersRef = useRef(layers)
   layersRef.current = layers
   const effectiveSelectedIdRef = useRef(effectiveSelectedId)
@@ -59,15 +58,11 @@ export default function PlacementCanvasPreview({
   const onLayerChangeRef = useRef(onLayerChange)
   onLayerChangeRef.current = onLayerChange
 
-  const dragRef = useRef<{
-    layerId: string
-    sx: number
-    sy: number
-    dx0: number
-    dy0: number
-  } | null>(null)
+  const stageCallbackRef = useCallback((el: HTMLDivElement | null) => {
+    stageRef.current = el
+    setMoveContainer(el)
+  }, [])
 
-  // Track displayScale via ResizeObserver
   useEffect(() => {
     const el = stageRef.current
     if (!el || areaWidth <= 0) return
@@ -81,7 +76,11 @@ export default function PlacementCanvasPreview({
     return () => ro.disconnect()
   }, [areaWidth])
 
-  // Wheel → scale image layer / change fontSize for text layer
+  useEffect(() => {
+    if (!effectiveSelectedId) setMoveableTarget(null)
+  }, [effectiveSelectedId])
+
+  // Wheel → scale selected layer
   useEffect(() => {
     const el = stageRef.current
     if (!el || disabled) return
@@ -92,46 +91,59 @@ export default function PlacementCanvasPreview({
       const layer = layersRef.current.find((l) => l.id === layerId)
       if (!layer) return
 
+      const factor = e.deltaY > 0 ? 0.94 : 1.06
+
       if (isTextLayer(layer)) {
-        // Scroll changes fontSize for text layers; re-clamp dx/dy (padding depends on font size)
-        const factor = e.deltaY > 0 ? 0.94 : 1.06
         const nextSize = Math.max(10, Math.round(layer.fontSize * factor))
         if (nextSize !== layer.fontSize) {
-          const clamped = clampTextDxDyInPrintArea(
-            areaWidth,
-            areaHeight,
-            layer.dx,
-            layer.dy,
-            nextSize
-          )
+          const clamped = clampTextLayerDxDy(areaWidth, areaHeight, {
+            ...layer,
+            fontSize: nextSize,
+          })
           const patch: PlacementLayerPatch = { fontSize: nextSize }
           if (clamped.dx !== layer.dx) patch.dx = clamped.dx
           if (clamped.dy !== layer.dy) patch.dy = clamped.dy
           onLayerChangeRef.current(layerId, patch)
         }
       } else {
-        // Scroll changes scale for image layers
-        const factor = e.deltaY > 0 ? 0.94 : 1.06
-        const nextS = Math.min(1, Math.max(0.05, layer.s * factor))
-        if (Math.abs(nextS - layer.s) < 1e-6) return
-        const merged = mergeAndClampPlacement(
-          areaWidth,
-          areaHeight,
-          { s: nextS, dx: layer.dx, dy: layer.dy },
-          { s: nextS }
-        )
-        const out: PlacementLayerPatch = {}
-        if (merged.s !== layer.s) out.s = merged.s
-        if (merged.dx !== layer.dx) out.dx = merged.dx
-        if (merged.dy !== layer.dy) out.dy = merged.dy
-        if (Object.keys(out).length > 0) onLayerChangeRef.current(layerId, out)
+        const hasWh =
+          typeof layer.w === 'number' &&
+          typeof layer.h === 'number' &&
+          layer.w > 0 &&
+          layer.h > 0
+        if (hasWh) {
+          const { w: cw, h: ch } = getImageLayerDimensions(layer, areaWidth, areaHeight)
+          let nw = Math.max(24, Math.round(cw * factor))
+          let nh = Math.max(24, Math.round(ch * factor))
+          nw = Math.min(Math.round(areaWidth * 1.5), nw)
+          nh = Math.min(Math.round(areaHeight * 1.5), nh)
+          const c = clampImageLayerDxDy(areaWidth, areaHeight, {
+            ...layer,
+            w: nw,
+            h: nh,
+          })
+          onLayerChangeRef.current(layerId, { w: nw, h: nh, dx: c.dx, dy: c.dy })
+        } else {
+          const nextS = Math.min(1, Math.max(0.05, layer.s * factor))
+          if (Math.abs(nextS - layer.s) < 1e-6) return
+          const merged = mergeAndClampPlacement(
+            areaWidth,
+            areaHeight,
+            { s: nextS, dx: layer.dx, dy: layer.dy },
+            { s: nextS }
+          )
+          const out: PlacementLayerPatch = {}
+          if (merged.s !== layer.s) out.s = merged.s
+          if (merged.dx !== layer.dx) out.dx = merged.dx
+          if (merged.dy !== layer.dy) out.dy = merged.dy
+          if (Object.keys(out).length > 0) onLayerChangeRef.current(layerId, out)
+        }
       }
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
   }, [disabled, areaWidth, areaHeight])
 
-  // Render selected layer on top
   const orderedLayers = useMemo(() => {
     if (!effectiveSelectedId) return layers
     return [
@@ -146,71 +158,37 @@ export default function PlacementCanvasPreview({
       : 'placement-canvas-stage'
   const hintId = 'placement-canvas-desc'
 
-  const handleLayerPointerDown = useCallback(
+  const handleSelectPointerDown = useCallback(
     (e: React.PointerEvent, layer: ResolvedPlacementLayer) => {
       if (disabled) return
-      e.preventDefault()
+      if (layer.id === effectiveSelectedIdRef.current) return
       e.stopPropagation()
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
       onLayerSelect?.(layer.id)
-      dragRef.current = { layerId: layer.id, sx: e.clientX, sy: e.clientY, dx0: layer.dx, dy0: layer.dy }
     },
     [disabled, onLayerSelect]
   )
 
-  const handleLayerPointerMove = useCallback(
-    (e: React.PointerEvent, layer: ResolvedPlacementLayer, ds: number) => {
-      if (!dragRef.current || dragRef.current.layerId !== layer.id || disabled) return
-      const d = dragRef.current
-      const dPrintX = (e.clientX - d.sx) / ds
-      const dPrintY = (e.clientY - d.sy) / ds
-      const newDx = d.dx0 + dPrintX
-      const newDy = d.dy0 + dPrintY
-
-      const out: PlacementLayerPatch = {}
-      if (isImageLayer(layer)) {
-        // Clamp image layers within print area
-        const merged = mergeAndClampPlacement(
-          areaWidth,
-          areaHeight,
-          { s: layer.s, dx: newDx, dy: newDy },
-          { dx: newDx, dy: newDy }
-        )
-        if (merged.dx !== layer.dx) out.dx = merged.dx
-        if (merged.dy !== layer.dy) out.dy = merged.dy
-      } else {
-        const merged = clampTextDxDyInPrintArea(
-          areaWidth,
-          areaHeight,
-          newDx,
-          newDy,
-          layer.fontSize
-        )
-        if (Math.abs(merged.dx - layer.dx) > 0.5) out.dx = merged.dx
-        if (Math.abs(merged.dy - layer.dy) > 0.5) out.dy = merged.dy
-      }
-      if (Object.keys(out).length > 0) onLayerChangeRef.current(layer.id, out)
-    },
-    [disabled, areaWidth, areaHeight]
+  const selectedLayer = useMemo(
+    () => layers.find((l) => l.id === effectiveSelectedId) ?? null,
+    [layers, effectiveSelectedId]
   )
 
-  const endDrag = useCallback((e: React.PointerEvent, layerId: string) => {
-    if (dragRef.current?.layerId === layerId) {
-      dragRef.current = null
-      try { ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* ignore */ }
-    }
-  }, [])
-
   return (
-    <div className={variant === 'overlay' ? 'placement-canvas-root placement-canvas-root--embedded' : 'placement-canvas-root'}>
+    <div
+      className={
+        variant === 'overlay'
+          ? 'placement-canvas-root placement-canvas-root--embedded'
+          : 'placement-canvas-root'
+      }
+    >
       {!hideHint && (
         <p className="placement-canvas-hint" id={hintId}>
-          Click a layer to select it, then drag to move or scroll to resize.
-          Values match Printful pixels ({areaWidth}×{areaHeight}).
+          Select a layer to drag, resize, or rotate. Scroll wheel scales. Printful pixels{' '}
+          {areaWidth}×{areaHeight}.
         </p>
       )}
       <div
-        ref={stageRef}
+        ref={stageCallbackRef}
         className={stageClass}
         style={variant === 'overlay' ? undefined : { aspectRatio: `${areaWidth} / ${areaHeight}` }}
         aria-describedby={hideHint ? undefined : hintId}
@@ -224,78 +202,134 @@ export default function PlacementCanvasPreview({
 
         {orderedLayers.map((layer) => {
           const isSelected = layer.id === effectiveSelectedId
+          const ds = displayScale > 0 ? displayScale : 1
+          const rot = layer.rotation ?? 0
+          const pointerPassthrough = isSelected && !disabled ? 'none' as const : undefined
 
           if (isTextLayer(layer)) {
-            // Same bounds as server composite (clampTextDxDyInPrintArea)
-            const td = clampTextDxDyInPrintArea(
-              areaWidth,
-              areaHeight,
-              layer.dx,
-              layer.dy,
-              layer.fontSize
-            )
-            const centerX = (areaWidth / 2 + td.dx) * displayScale
-            const centerY = (areaHeight / 2 + td.dy) * displayScale
-            const fontSizeDisplay = layer.fontSize * displayScale
+            const td = clampTextLayerDxDy(areaWidth, areaHeight, layer)
+            const { w: tw, h: th } = estimateTextLayerBox(layer.text, layer.fontSize)
+            const leftPrint = areaWidth / 2 + td.dx - tw / 2
+            const topPrint = areaHeight / 2 + td.dy - th / 2
+
             return (
               <div
                 key={layer.id}
-                className={`placement-canvas-text${isSelected ? ' placement-canvas-art--selected' : ''}`}
+                ref={(el) => {
+                  if (layer.id === effectiveSelectedId) setMoveableTarget(el)
+                }}
+                className={`placement-canvas-text-target placement-canvas-text${
+                  isSelected ? ' placement-canvas-art--selected' : ''
+                }`}
                 style={{
                   position: 'absolute',
-                  left: centerX,
-                  top: centerY,
-                  transform: 'translate(-50%, -50%)',
-                  fontSize: fontSizeDisplay,
-                  fontFamily: layer.fontFamily,
-                  color: layer.color,
-                  whiteSpace: 'nowrap',
-                  cursor: 'move',
-                  userSelect: 'none',
+                  left: leftPrint * ds,
+                  top: topPrint * ds,
+                  width: tw * ds,
+                  height: th * ds,
+                  transform: `rotate(${rot}deg)`,
+                  transformOrigin: 'center center',
                   zIndex: isSelected ? 2 : 1,
-                  lineHeight: 1,
+                  cursor: disabled ? 'default' : isSelected ? 'move' : 'pointer',
+                  userSelect: 'none',
                 }}
-                onPointerDown={(e) => handleLayerPointerDown(e, layer)}
-                onPointerMove={(e) => handleLayerPointerMove(e, layer, displayScale)}
-                onPointerUp={(e) => endDrag(e, layer.id)}
-                onPointerCancel={(e) => endDrag(e, layer.id)}
+                onPointerDown={(e) => handleSelectPointerDown(e, layer)}
                 role="img"
-                aria-label={`Text layer: "${layer.text}"${isSelected ? ' (selected)' : ''} — drag to reposition`}
+                aria-label={`Text layer: "${layer.text}"${isSelected ? ' (selected)' : ''}`}
               >
-                {layer.text || <span style={{ opacity: 0.4 }}>Text…</span>}
+                {isSelected && !disabled && onLayerDelete && (
+                  <button
+                    type="button"
+                    className="placement-canvas-delete"
+                    aria-label="Remove text layer"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onLayerDelete(layer.id)
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+                <div
+                  className="placement-canvas-text-inner"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: pointerPassthrough,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: layer.fontSize * ds,
+                      fontFamily: layer.fontFamily,
+                      color: layer.color,
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {layer.text || <span style={{ opacity: 0.4 }}>Text…</span>}
+                  </span>
+                </div>
                 <span className="placement-canvas-art-outline" aria-hidden />
               </div>
             )
           }
 
-          // Image layer
-          const sClamped = Math.min(1, Math.max(0.05, layer.s))
-          const wPrint = areaWidth * sClamped
-          const hPrint = areaHeight * sClamped
-          const leftPrint = (areaWidth - wPrint) / 2 + layer.dx
-          const topPrint = (areaHeight - hPrint) / 2 + layer.dy
+          const { w: iw, h: ih } = getImageLayerDimensions(layer, areaWidth, areaHeight)
+          const leftPrint = (areaWidth - iw) / 2 + layer.dx
+          const topPrint = (areaHeight - ih) / 2 + layer.dy
 
           return (
             <div
               key={layer.id}
-              className={`placement-canvas-art${isSelected ? ' placement-canvas-art--selected' : ''}`}
-              style={{
-                left: leftPrint * displayScale,
-                top: topPrint * displayScale,
-                width: wPrint * displayScale,
-                height: hPrint * displayScale,
-                zIndex: isSelected ? 2 : 1,
+              ref={(el) => {
+                if (layer.id === effectiveSelectedId) setMoveableTarget(el)
               }}
-              onPointerDown={(e) => handleLayerPointerDown(e, layer)}
-              onPointerMove={(e) => handleLayerPointerMove(e, layer, displayScale)}
-              onPointerUp={(e) => endDrag(e, layer.id)}
-              onPointerCancel={(e) => endDrag(e, layer.id)}
+              className={`placement-canvas-art-target placement-canvas-art${
+                isSelected ? ' placement-canvas-art--selected' : ''
+              }`}
+              style={{
+                position: 'absolute',
+                left: leftPrint * ds,
+                top: topPrint * ds,
+                width: iw * ds,
+                height: ih * ds,
+                transform: `rotate(${rot}deg)`,
+                transformOrigin: 'center center',
+                zIndex: isSelected ? 2 : 1,
+                cursor: disabled ? 'default' : isSelected ? 'move' : 'pointer',
+              }}
+              onPointerDown={(e) => handleSelectPointerDown(e, layer)}
               role="img"
-              aria-label={`Image layer${isSelected ? ' (selected)' : ''} — drag to reposition`}
+              aria-label={`Image layer${isSelected ? ' (selected)' : ''}`}
             >
+              {isSelected && !disabled && onLayerDelete && (
+                <button
+                  type="button"
+                  className="placement-canvas-delete"
+                  aria-label="Remove image layer"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onLayerDelete(layer.id)
+                  }}
+                >
+                  ×
+                </button>
+              )}
               {layer.signedUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={layer.signedUrl} alt="" className="placement-canvas-img" draggable={false} />
+                <img
+                  src={layer.signedUrl}
+                  alt=""
+                  className="placement-canvas-img"
+                  draggable={false}
+                  style={{ pointerEvents: pointerPassthrough }}
+                />
               ) : (
                 <div className="placement-canvas-placeholder" aria-hidden>
                   <span>Loading…</span>
@@ -305,6 +339,102 @@ export default function PlacementCanvasPreview({
             </div>
           )
         })}
+
+        {moveableTarget && moveContainer && !disabled && selectedLayer && (
+          <Moveable
+            target={moveableTarget}
+            container={moveContainer}
+            origin={false}
+            draggable
+            resizable
+            rotatable
+            keepRatio={isTextLayer(selectedLayer)}
+            throttleDrag={1}
+            renderDirections={['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se']}
+            rotationPosition="top"
+            onDrag={({ left, top }) => {
+              const ds = displayScale > 0 ? displayScale : 1
+              const leftPrint = left / ds
+              const topPrint = top / ds
+              if (isTextLayer(selectedLayer)) {
+                const { w: tw, h: th } = estimateTextLayerBox(
+                  selectedLayer.text,
+                  selectedLayer.fontSize
+                )
+                const dx = leftPrint - (areaWidth - tw) / 2
+                const dy = topPrint - (areaHeight - th) / 2
+                const c = clampTextLayerDxDy(areaWidth, areaHeight, {
+                  ...selectedLayer,
+                  dx,
+                  dy,
+                })
+                const patch: PlacementLayerPatch = {}
+                if (Math.abs(c.dx - selectedLayer.dx) > 0.25) patch.dx = c.dx
+                if (Math.abs(c.dy - selectedLayer.dy) > 0.25) patch.dy = c.dy
+                if (Object.keys(patch).length > 0) {
+                  onLayerChange(selectedLayer.id, patch)
+                }
+              } else {
+                const { w: iw, h: ih } = getImageLayerDimensions(
+                  selectedLayer,
+                  areaWidth,
+                  areaHeight
+                )
+                const dx = leftPrint - (areaWidth - iw) / 2
+                const dy = topPrint - (areaHeight - ih) / 2
+                const c = clampImageLayerDxDy(areaWidth, areaHeight, {
+                  ...selectedLayer,
+                  dx,
+                  dy,
+                })
+                const patch: PlacementLayerPatch = {}
+                if (Math.abs(c.dx - selectedLayer.dx) > 0.25) patch.dx = c.dx
+                if (Math.abs(c.dy - selectedLayer.dy) > 0.25) patch.dy = c.dy
+                if (Object.keys(patch).length > 0) {
+                  onLayerChange(selectedLayer.id, patch)
+                }
+              }
+            }}
+            onResize={({ width, height }) => {
+              const ds = displayScale > 0 ? displayScale : 1
+              const wPrint = Math.max(24, Math.round(width / ds))
+              const hPrint = Math.max(24, Math.round(height / ds))
+              if (isTextLayer(selectedLayer)) {
+                const nextFs = Math.max(
+                  10,
+                  Math.min(800, Math.round(hPrint / 1.35))
+                )
+                const c = clampTextLayerDxDy(areaWidth, areaHeight, {
+                  ...selectedLayer,
+                  fontSize: nextFs,
+                })
+                onLayerChange(selectedLayer.id, {
+                  fontSize: nextFs,
+                  dx: c.dx,
+                  dy: c.dy,
+                })
+              } else {
+                const c = clampImageLayerDxDy(areaWidth, areaHeight, {
+                  ...selectedLayer,
+                  w: wPrint,
+                  h: hPrint,
+                })
+                onLayerChange(selectedLayer.id, {
+                  w: wPrint,
+                  h: hPrint,
+                  dx: c.dx,
+                  dy: c.dy,
+                })
+              }
+            }}
+            onRotate={({ rotation }) => {
+              const r = Math.round(rotation * 10) / 10
+              if (r !== (selectedLayer.rotation ?? 0)) {
+                onLayerChange(selectedLayer.id, { rotation: r })
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   )
