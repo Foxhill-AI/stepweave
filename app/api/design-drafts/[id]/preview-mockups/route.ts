@@ -25,6 +25,11 @@ import {
   compositeLayersToBuffer,
   placementLayersToCompositeInputs,
 } from '@/lib/printful/compositeImages'
+import {
+  PRINTFUL_SLOT_BUSY_CODE,
+  tryAcquirePrintfulMockupSlot,
+  releasePrintfulMockupSlot,
+} from '@/lib/printful/mockupSlot'
 
 const BUCKET = 'design-patterns'
 /** Long enough for Printful to fetch the pattern image during mockup generation */
@@ -367,7 +372,27 @@ export async function POST(
     })
   }
 
-  const batch = await createTaskAndPoll(productId, variantId, files, headers)
+  const slotHolder = crypto.randomUUID()
+  const slot = await tryAcquirePrintfulMockupSlot(admin, slotHolder)
+  if (slot === 'busy') {
+    return NextResponse.json(
+      {
+        error: 'Another preview is generating. Please wait a moment and try again.',
+        code: PRINTFUL_SLOT_BUSY_CODE,
+        retry_after_ms: 2000,
+      },
+      { status: 503 }
+    )
+  }
+
+  let batch: Awaited<ReturnType<typeof createTaskAndPoll>>
+  try {
+    batch = await createTaskAndPoll(productId, variantId, files, headers)
+  } finally {
+    if (slot === 'granted') {
+      await releasePrintfulMockupSlot(admin, slotHolder)
+    }
+  }
   const urlByPlacement = new Map<string, string>()
   const extrasByPlacement = new Map<string, PreviewMockupExtra[]>()
   let mockupErrorReason: string | undefined
