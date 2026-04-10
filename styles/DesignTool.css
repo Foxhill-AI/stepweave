@@ -1152,12 +1152,12 @@
   flex-wrap: nowrap;
   align-items: center;
   gap: 0;
-  padding: 3px 4px;
+  padding: 1px 2px;
   background: #fff;
-  border-radius: 8px;
+  border-radius: 5px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   box-shadow:
-    0 3px 10px rgba(0, 0, 0, 0.1),
+    0 2px 6px rgba(0, 0, 0, 0.08),
     0 0 0 1px rgba(0, 0, 0, 0.04);
   max-width: 100%;
   overflow-x: auto;
@@ -1167,7 +1167,7 @@
 }
 
 .placement-layer-toolbar__inner::-webkit-scrollbar {
-  height: 4px;
+  height: 3px;
 }
 
 .placement-layer-toolbar__inner::-webkit-scrollbar-thumb {
@@ -1184,26 +1184,30 @@
 .placement-layer-toolbar__sep {
   width: 1px;
   align-self: stretch;
-  min-height: 22px;
-  background: rgba(0, 0, 0, 0.1);
-  margin: 0 2px;
+  min-height: 18px;
+  background: rgba(0, 0, 0, 0.08);
+  margin: 0 1px;
   flex-shrink: 0;
 }
 
 .placement-layer-toolbar__btn {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 4px 6px;
+  justify-content: center;
+  gap: 0;
+  padding: 2px;
+  min-width: 22px;
+  min-height: 22px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: #1a1a1a;
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
+  position: relative;
 }
 
 .placement-layer-toolbar__btn:hover:not(:disabled) {
@@ -1219,33 +1223,23 @@
   background: rgba(37, 99, 235, 0.12);
 }
 
-.placement-layer-toolbar__btn--split .placement-layer-toolbar__chev {
-  opacity: 0.55;
-  margin-left: -1px;
-  flex-shrink: 0;
-}
-
 .placement-layer-toolbar__btn-icon {
   display: flex;
   color: #334155;
   flex-shrink: 0;
-}
-
-.placement-layer-toolbar__btn-label {
-  max-width: 52px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  align-items: center;
+  justify-content: center;
 }
 
 .placement-layer-toolbar__icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: #334155;
   cursor: pointer;
@@ -1263,19 +1257,19 @@
 
 .placement-layer-toolbar__popover {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 3px);
   left: 0;
-  min-width: min(200px, 85vw);
-  padding: 4px;
+  min-width: min(180px, 85vw);
+  padding: 3px;
   background: #fff;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid rgba(0, 0, 0, 0.1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
   z-index: 50;
 }
 
 .placement-layer-toolbar__popover--wide {
-  min-width: min(200px, 85vw);
+  min-width: min(176px, 85vw);
 }
 
 .placement-layer-toolbar__popover--right {
@@ -1284,21 +1278,21 @@
 }
 
 .placement-layer-toolbar__popover--menu {
-  min-width: min(240px, 90vw);
+  min-width: min(220px, 90vw);
 }
 
 .placement-layer-toolbar__popover button[role='menuitem'] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   text-align: left;
-  padding: 6px 8px;
+  padding: 5px 6px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 500;
   color: #1a1a1a;
   cursor: pointer;
@@ -1324,9 +1318,9 @@
 .placement-layer-toolbar__slider-label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px 8px;
-  font-size: 0.6875rem;
+  gap: 3px;
+  padding: 5px 6px;
+  font-size: 0.625rem;
   font-weight: 600;
   color: #475569;
 }
@@ -1336,23 +1330,23 @@
 }
 
 .placement-layer-toolbar__menu-slider {
-  padding: 6px 8px;
-  font-size: 0.6875rem;
+  padding: 5px 6px;
+  font-size: 0.625rem;
   font-weight: 600;
   color: #475569;
 }
 
 .placement-layer-toolbar__menu-slider input[type='range'] {
   width: 100%;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .placement-layer-toolbar__kbd {
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   font-weight: 600;
   font-family: ui-monospace, monospace;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
   background: #f1f5f9;
   color: #64748b;
 }
