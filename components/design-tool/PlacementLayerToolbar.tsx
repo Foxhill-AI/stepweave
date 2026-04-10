@@ -26,6 +26,8 @@ export type PlacementLayerToolbarProps = {
   layerCount: number
   /** Anchor box in CSS px, relative to the placement stage (offsetParent) */
   anchor: { left: number; top: number; width: number; height: number } | null
+  /** Horizontal center for the bar (px), clamped to stage — keeps toolbar visible */
+  centerX: number
   disabled?: boolean
   onFlip: (axis: 'h' | 'v') => void
   onOpacityChange: (opacity01: number) => void
@@ -43,6 +45,7 @@ export default function PlacementLayerToolbar({
   layerIndex,
   layerCount,
   anchor,
+  centerX,
   disabled = false,
   onFlip,
   onOpacityChange,
@@ -83,8 +86,8 @@ export default function PlacementLayerToolbar({
   const canForward = canReorder && layerIndex < layerCount - 1
   const canBackward = canReorder && layerIndex > 0
 
-  const barLeft = anchor.left + anchor.width / 2
-  const barTop = anchor.top + anchor.height + 8
+  const barLeft = centerX
+  const barTop = anchor.top + anchor.height + 6
 
   const run = (fn: () => void) => {
     fn()
@@ -108,13 +111,14 @@ export default function PlacementLayerToolbar({
             type="button"
             className={`placement-layer-toolbar__btn placement-layer-toolbar__btn--split${open === 'flip' ? ' placement-layer-toolbar__btn--active' : ''}`}
             aria-expanded={open === 'flip'}
+            title="Flip"
             onClick={() => setOpen((v) => (v === 'flip' ? null : 'flip'))}
           >
             <span className="placement-layer-toolbar__btn-icon" aria-hidden>
-              <FlipHorizontal size={18} strokeWidth={1.75} />
+              <FlipHorizontal size={14} strokeWidth={2} />
             </span>
             <span className="placement-layer-toolbar__btn-label">Flip</span>
-            <ChevronDown size={14} className="placement-layer-toolbar__chev" aria-hidden />
+            <ChevronDown size={12} className="placement-layer-toolbar__chev" aria-hidden />
           </button>
           {open === 'flip' && (
             <div className="placement-layer-toolbar__popover" role="menu">
@@ -124,7 +128,7 @@ export default function PlacementLayerToolbar({
                 className={flipH ? 'is-on' : undefined}
                 onClick={() => run(() => onFlip('h'))}
               >
-                <FlipHorizontal size={16} aria-hidden />
+                <FlipHorizontal size={14} aria-hidden />
                 <span>Flip horizontal</span>
               </button>
               <button
@@ -133,7 +137,7 @@ export default function PlacementLayerToolbar({
                 className={flipV ? 'is-on' : undefined}
                 onClick={() => run(() => onFlip('v'))}
               >
-                <FlipVertical size={16} aria-hidden />
+                <FlipVertical size={14} aria-hidden />
                 <span>Flip vertical</span>
               </button>
             </div>
@@ -147,13 +151,14 @@ export default function PlacementLayerToolbar({
             type="button"
             className={`placement-layer-toolbar__btn placement-layer-toolbar__btn--split${open === 'opacity' ? ' placement-layer-toolbar__btn--active' : ''}`}
             aria-expanded={open === 'opacity'}
+            title="Transparency / opacity"
             onClick={() => setOpen((v) => (v === 'opacity' ? null : 'opacity'))}
           >
             <span className="placement-layer-toolbar__btn-icon" aria-hidden>
-              <Droplets size={18} strokeWidth={1.75} />
+              <Droplets size={14} strokeWidth={2} />
             </span>
-            <span className="placement-layer-toolbar__btn-label">Transparency</span>
-            <ChevronDown size={14} className="placement-layer-toolbar__chev" aria-hidden />
+            <span className="placement-layer-toolbar__btn-label">Opacity</span>
+            <ChevronDown size={12} className="placement-layer-toolbar__chev" aria-hidden />
           </button>
           {open === 'opacity' && (
             <div className="placement-layer-toolbar__popover placement-layer-toolbar__popover--wide" role="menu">
@@ -179,14 +184,14 @@ export default function PlacementLayerToolbar({
             className={`placement-layer-toolbar__btn placement-layer-toolbar__btn--split${open === 'position' ? ' placement-layer-toolbar__btn--active' : ''}`}
             aria-expanded={open === 'position'}
             disabled={!canReorder}
-            title={!canReorder ? 'Layer order not available' : undefined}
+            title={!canReorder ? 'Layer order not available' : 'Layer order (front / back)'}
             onClick={() => canReorder && setOpen((v) => (v === 'position' ? null : 'position'))}
           >
             <span className="placement-layer-toolbar__btn-icon" aria-hidden>
-              <Layers size={18} strokeWidth={1.75} />
+              <Layers size={14} strokeWidth={2} />
             </span>
-            <span className="placement-layer-toolbar__btn-label">Position</span>
-            <ChevronDown size={14} className="placement-layer-toolbar__chev" aria-hidden />
+            <span className="placement-layer-toolbar__btn-label">Order</span>
+            <ChevronDown size={12} className="placement-layer-toolbar__chev" aria-hidden />
           </button>
           {open === 'position' && (
             <div className="placement-layer-toolbar__popover" role="menu">
@@ -239,7 +244,7 @@ export default function PlacementLayerToolbar({
             title={`Duplicate (${mod}+D)`}
             onClick={onDuplicate}
           >
-            <CopyPlus size={20} strokeWidth={1.75} />
+            <CopyPlus size={15} strokeWidth={2} />
           </button>
         )}
         {onDelete && (
@@ -250,7 +255,7 @@ export default function PlacementLayerToolbar({
             title="Delete"
             onClick={onDelete}
           >
-            <Trash2 size={20} strokeWidth={1.75} />
+            <Trash2 size={15} strokeWidth={2} />
           </button>
         )}
 
@@ -262,7 +267,7 @@ export default function PlacementLayerToolbar({
             aria-expanded={open === 'more'}
             onClick={() => setOpen((v) => (v === 'more' ? null : 'more'))}
           >
-            <MoreHorizontal size={22} strokeWidth={1.75} />
+            <MoreHorizontal size={16} strokeWidth={2} />
           </button>
           {open === 'more' && (
             <div

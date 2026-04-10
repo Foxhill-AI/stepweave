@@ -66,6 +66,7 @@ export default function PlacementCanvasPreview({
   const stageRef = useRef<HTMLDivElement | null>(null)
   const [moveContainer, setMoveContainer] = useState<HTMLDivElement | null>(null)
   const [displayScale, setDisplayScale] = useState(1)
+  const [stageClientWidth, setStageClientWidth] = useState(0)
   const [moveableTarget, setMoveableTarget] = useState<HTMLDivElement | null>(null)
 
   const effectiveSelectedId =
@@ -98,7 +99,10 @@ export default function PlacementCanvasPreview({
     if (!el || areaWidth <= 0) return
     const update = () => {
       const w = el.clientWidth
-      if (w > 0) setDisplayScale(w / areaWidth)
+      if (w > 0) {
+        setDisplayScale(w / areaWidth)
+        setStageClientWidth(w)
+      }
     }
     update()
     const ro = new ResizeObserver(update)
@@ -230,6 +234,20 @@ export default function PlacementCanvasPreview({
     if (!effectiveSelectedId) return -1
     return layers.findIndex((l) => l.id === effectiveSelectedId)
   }, [layers, effectiveSelectedId])
+
+  /** Keep toolbar centered on the layer but inside the stage. */
+  const toolbarCenterX = useMemo(() => {
+    if (!toolbarAnchor) return 0
+    const cx = toolbarAnchor.left + toolbarAnchor.width / 2
+    const sw = stageClientWidth
+    if (sw <= 0) return cx
+    const m = 3
+    const half = Math.min(96, Math.max(32, sw * 0.22))
+    const lo = half + m
+    const hi = sw - half - m
+    if (hi <= lo) return sw / 2
+    return Math.min(Math.max(cx, lo), hi)
+  }, [toolbarAnchor, stageClientWidth])
 
   useEffect(() => {
     if (disabled) return
@@ -607,6 +625,7 @@ export default function PlacementCanvasPreview({
                 layerIndex={layerStackIndex}
                 layerCount={layers.length}
                 anchor={toolbarAnchor}
+                centerX={toolbarCenterX}
                 disabled={disabled}
                 onFlip={(axis) => {
                   if (axis === 'h') {
