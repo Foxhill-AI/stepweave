@@ -1257,11 +1257,18 @@
 
 .shoe-design-overlay {
   position: absolute;
-  inset: 0;
+  /* Slightly inset vs .shoe-design-composite so the print UI doesn’t sit flush on the silhouette edge */
+  inset: 1.25%;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+}
+
+/* Print area from template metadata: same idea, subtle shrink around the box’s center */
+.shoe-design-overlay--exact-bounds {
+  transform: scale(0.988);
+  transform-origin: center center;
 }
 
 .shoe-design-overlay-inner {
