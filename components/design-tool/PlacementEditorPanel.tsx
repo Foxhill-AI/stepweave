@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, type MutableRefObject } from 'react'
 import type { PlacementMeta } from '@/app/api/printful/products/[id]/placements/route'
 import type {
   PrintfulPlacementsState,
   ResolvedPlacementLayer,
   PlacementLayerPatch,
+  PlacementLayer,
+  PlacementLayerReorderOp,
 } from '@/lib/designDraftState'
 import { mergeAndClampPlacement, updatePlacementTransform, isTextLayer } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
@@ -50,6 +52,10 @@ interface PlacementEditorPanelProps {
   onLayerSelect?: (id: string) => void
   onLayerChange?: (layerId: string, patch: PlacementLayerPatch) => void
   onLayerDelete?: (layerId: string) => void
+  onLayerReorder?: (layerId: string, op: PlacementLayerReorderOp) => void
+  onLayerDuplicate?: (layerId: string) => void
+  onPasteLayer?: (layer: PlacementLayer) => void
+  layerClipboardRef?: MutableRefObject<PlacementLayer | null>
 }
 
 export default function PlacementEditorPanel({
@@ -74,6 +80,10 @@ export default function PlacementEditorPanel({
   onLayerSelect,
   onLayerChange,
   onLayerDelete,
+  onLayerReorder,
+  onLayerDuplicate,
+  onPasteLayer,
+  layerClipboardRef,
 }: PlacementEditorPanelProps) {
   const [meta, setMeta] = useState<PlacementMeta[]>([])
   const [metaLoading, setMetaLoading] = useState(false)
@@ -308,6 +318,10 @@ export default function PlacementEditorPanel({
               onLayerSelect={onLayerSelect}
               onLayerChange={onLayerChange ?? (() => {})}
               onLayerDelete={onLayerDelete}
+              onLayerReorder={onLayerReorder}
+              onLayerDuplicate={onLayerDuplicate}
+              onPasteLayer={onPasteLayer}
+              layerClipboardRef={layerClipboardRef}
             />
           )}
 
@@ -320,6 +334,10 @@ export default function PlacementEditorPanel({
               onLayerSelect={onLayerSelect}
               onLayerChange={onLayerChange ?? (() => {})}
               onLayerDelete={onLayerDelete}
+              onLayerReorder={onLayerReorder}
+              onLayerDuplicate={onLayerDuplicate}
+              onPasteLayer={onPasteLayer}
+              layerClipboardRef={layerClipboardRef}
             />
           )}
 

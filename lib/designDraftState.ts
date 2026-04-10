@@ -205,6 +205,12 @@ export type PlacementImageLayer = {
   rotation?: number
   /** When true, tile this image on a grid (tile size = w×h) to cover the print area; forces server composite. */
   repeat?: boolean
+  /** Mirror horizontally (after rotation, in layer-local space). */
+  flipH?: boolean
+  /** Mirror vertically. */
+  flipV?: boolean
+  /** 0–1; forces server composite when below 1. */
+  opacity?: number
 }
 
 /** Same as PlacementImageLayer but with the signed URL resolved for display. */
@@ -224,6 +230,9 @@ export type PlacementTextLayer = {
   dy: number
   /** Degrees, clockwise */
   rotation?: number
+  flipH?: boolean
+  flipV?: boolean
+  opacity?: number
 }
 
 /** Resolved text layer — same structure (no async resolution needed). */
@@ -248,7 +257,13 @@ export type PlacementLayerPatch = Partial<{
   fontFamily: string
   color: string
   repeat: boolean
+  flipH: boolean
+  flipV: boolean
+  opacity: number
 }>
+
+/** Stack order change for a layer within its placement (array index:0 = back, length-1 = front). */
+export type PlacementLayerReorderOp = 'forward' | 'backward' | 'front' | 'back'
 
 export function isTextLayer(l: PlacementLayer): l is PlacementTextLayer {
   return (l as PlacementTextLayer).type === 'text'
@@ -328,13 +343,21 @@ export function clampTextLayerDxDy(
 }
 
 /** Single-image direct URL to Printful is only valid without text, a single bitmap, and no rotation. */
+function singleImageNeedsComposite(img: PlacementImageLayer): boolean {
+  if ((img.rotation ?? 0) !== 0) return true
+  if (img.repeat === true) return true
+  if (img.flipH === true || img.flipV === true) return true
+  const o = img.opacity
+  if (typeof o === 'number' && o < 1 - 1e-6) return true
+  return false
+}
+
 export function placementLayersNeedServerComposite(layers: PlacementLayer[]): boolean {
   if (layers.length === 0) return false
   const hasText = layers.some(isTextLayer)
   const imageLayers = layers.filter(isImageLayer)
   if (hasText || imageLayers.length > 1) return true
-  if (imageLayers.length === 1 && (imageLayers[0].rotation ?? 0) !== 0) return true
-  if (imageLayers.some((l) => l.repeat === true)) return true
+  if (imageLayers.length === 1 && singleImageNeedsComposite(imageLayers[0])) return true
   return false
 }
 
@@ -388,6 +411,9 @@ function parseLayer(v: unknown): PlacementLayer | null {
   if (o.type === 'text') {
     if (typeof o.text !== 'string') return null
     const rot = typeof o.rotation === 'number' && Number.isFinite(o.rotation) ? o.rotation : undefined
+    const opRaw = typeof o.opacity === 'number' && Number.isFinite(o.opacity) ? o.opacity : undefined
+    const opacity =
+      opRaw !== undefined ? Math.min(1, Math.max(0, opRaw)) : undefined
     return {
       id: typeof o.id === 'string' && o.id.trim() ? o.id : crypto.randomUUID(),
       type: 'text',
@@ -398,6 +424,9 @@ function parseLayer(v: unknown): PlacementLayer | null {
       dx: typeof o.dx === 'number' ? o.dx : 0,
       dy: typeof o.dy === 'number' ? o.dy : 0,
       ...(rot !== undefined ? { rotation: rot } : {}),
+      ...(o.flipH === true ? { flipH: true } : {}),
+      ...(o.flipV === true ? { flipV: true } : {}),
+      ...(opacity !== undefined && opacity < 1 ? { opacity } : {}),
     }
   }
   // Image layer (no type field, or type !== 'text')
@@ -405,6 +434,9 @@ function parseLayer(v: unknown): PlacementLayer | null {
   const w = typeof o.w === 'number' && o.w > 0 ? o.w : undefined
   const h = typeof o.h === 'number' && o.h > 0 ? o.h : undefined
   const rot = typeof o.rotation === 'number' && Number.isFinite(o.rotation) ? o.rotation : undefined
+  const opRaw = typeof o.opacity === 'number' && Number.isFinite(o.opacity) ? o.opacity : undefined
+  const opacity =
+    opRaw !== undefined ? Math.min(1, Math.max(0, opRaw)) : undefined
   return {
     id: typeof o.id === 'string' && o.id.trim() ? o.id : crypto.randomUUID(),
     path: o.path,
@@ -414,6 +446,9 @@ function parseLayer(v: unknown): PlacementLayer | null {
     ...(w !== undefined && h !== undefined ? { w, h } : {}),
     ...(rot !== undefined ? { rotation: rot } : {}),
     ...(o.repeat === true ? { repeat: true } : {}),
+    ...(o.flipH === true ? { flipH: true } : {}),
+    ...(o.flipV === true ? { flipV: true } : {}),
+    ...(opacity !== undefined && opacity < 1 ? { opacity } : {}),
   }
 }
 
@@ -498,6 +533,101 @@ export function removePlacementImageLayer(
   if (layers.length > 0) next[placement] = layers
   else delete next[placement]
   return next
+}
+
+/** Change z-order of one layer (forward = toward front / end of array). */
+export function reorderPlacementLayer(
+  current: PlacementImagesState,
+  placement: string,
+  layerId: string,
+  op: PlacementLayerReorderOp
+): PlacementImagesState {
+  const list = [...(current[placement] ?? [])]
+  const idx = list.findIndex((l) => l.id === layerId)
+  if (idx < 0) return current
+  const [item] = list.splice(idx, 1)
+  let insertAt: number
+  switch (op) {
+    case 'forward':
+      insertAt = Math.min(idx + 1, list.length)
+      break
+    case 'backward':
+      insertAt = Math.max(idx - 1, 0)
+      break
+    case 'front':
+      insertAt = list.length
+      break
+    case 'back':
+      insertAt = 0
+      break
+    default:
+      insertAt = idx
+  }
+  list.splice(insertAt, 0, item)
+  return { ...current, [placement]: list }
+}
+
+/** Clone the layer after its current index (slight offset). Returns null if not found. */
+export function duplicatePlacementLayer(
+  current: PlacementImagesState,
+  placement: string,
+  layerId: string,
+  offsetDx = 14,
+  offsetDy = 14
+): { next: PlacementImagesState; newId: string } | null {
+  const list = current[placement] ?? []
+  const idx = list.findIndex((l) => l.id === layerId)
+  if (idx < 0) return null
+  const layer = list[idx]
+  const newId = crypto.randomUUID()
+  const clone: PlacementLayer = isTextLayer(layer)
+    ? {
+        ...layer,
+        id: newId,
+        dx: layer.dx + offsetDx,
+        dy: layer.dy + offsetDy,
+      }
+    : {
+        ...layer,
+        id: newId,
+        dx: layer.dx + offsetDx,
+        dy: layer.dy + offsetDy,
+      }
+  const nextList = [...list.slice(0, idx + 1), clone, ...list.slice(idx + 1)]
+  return { next: { ...current, [placement]: nextList }, newId }
+}
+
+/** Strip runtime-only fields for clipboard / persistence. */
+export function placementLayerToSerializable(layer: ResolvedPlacementLayer): PlacementLayer {
+  if (isTextLayer(layer)) return { ...layer }
+  const { signedUrl: _s, ...rest } = layer
+  return rest
+}
+
+/** Append a clone of `layer` (new id, optional offset) at the top of the stack. */
+export function appendPlacementLayerClone(
+  current: PlacementImagesState,
+  placement: string,
+  layer: PlacementLayer,
+  offsetDx = 14,
+  offsetDy = 14
+): { next: PlacementImagesState; newId: string } {
+  const newId = crypto.randomUUID()
+  const nextLayer: PlacementLayer = isTextLayer(layer)
+    ? {
+        ...layer,
+        id: newId,
+        dx: layer.dx + offsetDx,
+        dy: layer.dy + offsetDy,
+      }
+    : {
+        ...layer,
+        id: newId,
+        dx: layer.dx + offsetDx,
+        dy: layer.dy + offsetDy,
+      }
+  const list = [...(current[placement] ?? []), nextLayer]
+  return { next: { ...current, [placement]: list }, newId }
 }
 
 // Keep legacy exports for callers that haven't migrated yet
