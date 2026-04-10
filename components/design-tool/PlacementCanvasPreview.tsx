@@ -242,7 +242,7 @@ export default function PlacementCanvasPreview({
     const sw = stageClientWidth
     if (sw <= 0) return cx
     const m = 3
-    const half = Math.min(96, Math.max(32, sw * 0.22))
+    const half = Math.min(64, Math.max(28, sw * 0.16))
     const lo = half + m
     const hi = sw - half - m
     if (hi <= lo) return sw / 2

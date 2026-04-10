@@ -9,7 +9,6 @@ import {
   CopyPlus,
   Trash2,
   MoreHorizontal,
-  ChevronDown,
 } from 'lucide-react'
 import { isImageLayer, type PlacementLayerReorderOp } from '@/lib/designDraftState'
 import type { ResolvedPlacementLayer } from '@/lib/designDraftState'
@@ -87,7 +86,7 @@ export default function PlacementLayerToolbar({
   const canBackward = canReorder && layerIndex > 0
 
   const barLeft = centerX
-  const barTop = anchor.top + anchor.height + 6
+  const barTop = anchor.top + anchor.height + 4
 
   const run = (fn: () => void) => {
     fn()
@@ -111,14 +110,13 @@ export default function PlacementLayerToolbar({
             type="button"
             className={`placement-layer-toolbar__btn placement-layer-toolbar__btn--split${open === 'flip' ? ' placement-layer-toolbar__btn--active' : ''}`}
             aria-expanded={open === 'flip'}
+            aria-label="Flip"
             title="Flip"
             onClick={() => setOpen((v) => (v === 'flip' ? null : 'flip'))}
           >
             <span className="placement-layer-toolbar__btn-icon" aria-hidden>
-              <FlipHorizontal size={14} strokeWidth={2} />
+              <FlipHorizontal size={11} strokeWidth={2.25} />
             </span>
-            <span className="placement-layer-toolbar__btn-label">Flip</span>
-            <ChevronDown size={12} className="placement-layer-toolbar__chev" aria-hidden />
           </button>
           {open === 'flip' && (
             <div className="placement-layer-toolbar__popover" role="menu">
@@ -128,7 +126,7 @@ export default function PlacementLayerToolbar({
                 className={flipH ? 'is-on' : undefined}
                 onClick={() => run(() => onFlip('h'))}
               >
-                <FlipHorizontal size={14} aria-hidden />
+                <FlipHorizontal size={12} aria-hidden />
                 <span>Flip horizontal</span>
               </button>
               <button
@@ -137,7 +135,7 @@ export default function PlacementLayerToolbar({
                 className={flipV ? 'is-on' : undefined}
                 onClick={() => run(() => onFlip('v'))}
               >
-                <FlipVertical size={14} aria-hidden />
+                <FlipVertical size={12} aria-hidden />
                 <span>Flip vertical</span>
               </button>
             </div>
@@ -151,14 +149,13 @@ export default function PlacementLayerToolbar({
             type="button"
             className={`placement-layer-toolbar__btn placement-layer-toolbar__btn--split${open === 'opacity' ? ' placement-layer-toolbar__btn--active' : ''}`}
             aria-expanded={open === 'opacity'}
-            title="Transparency / opacity"
+            aria-label="Opacity"
+            title="Opacity / transparency"
             onClick={() => setOpen((v) => (v === 'opacity' ? null : 'opacity'))}
           >
             <span className="placement-layer-toolbar__btn-icon" aria-hidden>
-              <Droplets size={14} strokeWidth={2} />
+              <Droplets size={11} strokeWidth={2.25} />
             </span>
-            <span className="placement-layer-toolbar__btn-label">Opacity</span>
-            <ChevronDown size={12} className="placement-layer-toolbar__chev" aria-hidden />
           </button>
           {open === 'opacity' && (
             <div className="placement-layer-toolbar__popover placement-layer-toolbar__popover--wide" role="menu">
@@ -184,14 +181,13 @@ export default function PlacementLayerToolbar({
             className={`placement-layer-toolbar__btn placement-layer-toolbar__btn--split${open === 'position' ? ' placement-layer-toolbar__btn--active' : ''}`}
             aria-expanded={open === 'position'}
             disabled={!canReorder}
+            aria-label="Layer order"
             title={!canReorder ? 'Layer order not available' : 'Layer order (front / back)'}
             onClick={() => canReorder && setOpen((v) => (v === 'position' ? null : 'position'))}
           >
             <span className="placement-layer-toolbar__btn-icon" aria-hidden>
-              <Layers size={14} strokeWidth={2} />
+              <Layers size={11} strokeWidth={2.25} />
             </span>
-            <span className="placement-layer-toolbar__btn-label">Order</span>
-            <ChevronDown size={12} className="placement-layer-toolbar__chev" aria-hidden />
           </button>
           {open === 'position' && (
             <div className="placement-layer-toolbar__popover" role="menu">
@@ -244,7 +240,7 @@ export default function PlacementLayerToolbar({
             title={`Duplicate (${mod}+D)`}
             onClick={onDuplicate}
           >
-            <CopyPlus size={15} strokeWidth={2} />
+            <CopyPlus size={11} strokeWidth={2.25} />
           </button>
         )}
         {onDelete && (
@@ -255,7 +251,7 @@ export default function PlacementLayerToolbar({
             title="Delete"
             onClick={onDelete}
           >
-            <Trash2 size={15} strokeWidth={2} />
+            <Trash2 size={11} strokeWidth={2.25} />
           </button>
         )}
 
@@ -267,7 +263,7 @@ export default function PlacementLayerToolbar({
             aria-expanded={open === 'more'}
             onClick={() => setOpen((v) => (v === 'more' ? null : 'more'))}
           >
-            <MoreHorizontal size={16} strokeWidth={2} />
+            <MoreHorizontal size={12} strokeWidth={2.25} />
           </button>
           {open === 'more' && (
             <div
