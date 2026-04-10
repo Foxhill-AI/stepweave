@@ -1142,21 +1142,37 @@
   position: absolute;
   transform: translateX(-50%);
   pointer-events: auto;
-  min-width: max-content;
+  /* Stay inside the print-area stage; center may shift via inline `left` */
+  max-width: calc(100% - 6px);
+  box-sizing: border-box;
 }
 
 .placement-layer-toolbar__inner {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 2px;
-  padding: 6px 8px;
+  gap: 0;
+  padding: 3px 4px;
   background: #fff;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.12),
+    0 3px 10px rgba(0, 0, 0, 0.1),
     0 0 0 1px rgba(0, 0, 0, 0.04);
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.placement-layer-toolbar__inner::-webkit-scrollbar {
+  height: 4px;
+}
+
+.placement-layer-toolbar__inner::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
 }
 
 .placement-layer-toolbar__group {
@@ -1168,24 +1184,26 @@
 .placement-layer-toolbar__sep {
   width: 1px;
   align-self: stretch;
-  min-height: 28px;
+  min-height: 22px;
   background: rgba(0, 0, 0, 0.1);
-  margin: 0 4px;
+  margin: 0 2px;
+  flex-shrink: 0;
 }
 
 .placement-layer-toolbar__btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: 3px;
+  padding: 4px 6px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: #1a1a1a;
-  font-size: 0.8125rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .placement-layer-toolbar__btn:hover:not(:disabled) {
@@ -1203,25 +1221,35 @@
 
 .placement-layer-toolbar__btn--split .placement-layer-toolbar__chev {
   opacity: 0.55;
-  margin-left: -2px;
+  margin-left: -1px;
+  flex-shrink: 0;
 }
 
 .placement-layer-toolbar__btn-icon {
   display: flex;
   color: #334155;
+  flex-shrink: 0;
+}
+
+.placement-layer-toolbar__btn-label {
+  max-width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .placement-layer-toolbar__icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: #334155;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .placement-layer-toolbar__icon-btn:hover {
@@ -1235,19 +1263,19 @@
 
 .placement-layer-toolbar__popover {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 4px);
   left: 0;
-  min-width: 200px;
-  padding: 6px;
+  min-width: min(200px, 85vw);
+  padding: 4px;
   background: #fff;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
   z-index: 50;
 }
 
 .placement-layer-toolbar__popover--wide {
-  min-width: 240px;
+  min-width: min(200px, 85vw);
 }
 
 .placement-layer-toolbar__popover--right {
@@ -1256,21 +1284,21 @@
 }
 
 .placement-layer-toolbar__popover--menu {
-  min-width: 260px;
+  min-width: min(240px, 90vw);
 }
 
 .placement-layer-toolbar__popover button[role='menuitem'] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
   text-align: left;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: #1a1a1a;
   cursor: pointer;
@@ -1296,9 +1324,9 @@
 .placement-layer-toolbar__slider-label {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 10px;
-  font-size: 0.75rem;
+  gap: 4px;
+  padding: 6px 8px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #475569;
 }
@@ -1308,8 +1336,8 @@
 }
 
 .placement-layer-toolbar__menu-slider {
-  padding: 8px 10px;
-  font-size: 0.75rem;
+  padding: 6px 8px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #475569;
 }
