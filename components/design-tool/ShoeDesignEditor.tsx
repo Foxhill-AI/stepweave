@@ -18,6 +18,7 @@ export type ShoeDesignEditorProps = {
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
   onLayerChange: (layerId: string, patch: PlacementLayerPatch) => void
+  onLayerDelete?: (layerId: string) => void
   disabled?: boolean
 }
 
@@ -33,6 +34,7 @@ export default function ShoeDesignEditor({
   selectedLayerId,
   onLayerSelect,
   onLayerChange,
+  onLayerDelete,
   disabled = false,
 }: ShoeDesignEditorProps) {
   const rows = useMemo(
@@ -155,6 +157,7 @@ export default function ShoeDesignEditor({
               selectedLayerId={selectedLayerId}
               onLayerSelect={onLayerSelect}
               onLayerChange={onLayerChange}
+              onLayerDelete={onLayerDelete}
               disabled={disabled}
               variant="overlay"
               hideHint

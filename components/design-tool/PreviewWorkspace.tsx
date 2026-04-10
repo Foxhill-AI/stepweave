@@ -52,6 +52,7 @@ interface PreviewWorkspaceProps {
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
   onLayerChange?: (layerId: string, patch: PlacementLayerPatch) => void
+  onLayerDelete?: (layerId: string) => void
   /** Called when the user adds a new text layer. */
   onAddTextLayer?: (layer: PlacementTextLayer) => void
   /** Placement layout actions — rendered contextually below the shoe canvas */
@@ -89,6 +90,7 @@ export default function PreviewWorkspace({
   selectedLayerId,
   onLayerSelect,
   onLayerChange,
+  onLayerDelete,
   onAddTextLayer,
   onSaveLayout,
   onRefreshPrintfulPreview,
@@ -609,6 +611,7 @@ export default function PreviewWorkspace({
             selectedLayerId={selectedLayerId}
             onLayerSelect={onLayerSelect}
             onLayerChange={onLayerChange ?? (() => {})}
+            onLayerDelete={onLayerDelete}
           />
           {(onSaveLayout || onRefreshPrintfulPreview) && (
             <div className="preview-placement-actions">

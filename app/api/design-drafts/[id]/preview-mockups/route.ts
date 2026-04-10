@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { parsePrintfulPlacements, parsePlacementImages, isTextLayer, isImageLayer } from '@/lib/designDraftState'
+import {
+  parsePrintfulPlacements,
+  parsePlacementImages,
+  isTextLayer,
+  isImageLayer,
+  placementLayersNeedServerComposite,
+  enrichDirectImagePlacementOverrides,
+  type PlacementCompactTransform,
+} from '@/lib/designDraftState'
 import {
   createTaskAndPoll,
   mergeMockups,
@@ -170,13 +178,12 @@ export async function POST(
   const imageUrlByPlacement: Record<string, string> = {}
   // Overrides for placement transforms: single-layer uses layer's own s/dx/dy;
   // composited placements use { s:1, dx:0, dy:0 } (image is pre-positioned).
-  const placementTransformOverrides: Record<string, { s: number; dx: number; dy: number }> = {}
+  const placementTransformOverrides: Record<string, PlacementCompactTransform> = {}
 
   for (const [placement, layers] of Object.entries(perPlacementPaths)) {
-    const hasText = layers.some(isTextLayer)
     const imageLayers = layers.filter(isImageLayer)
-    if (!hasText && imageLayers.length === 1) {
-      // Pure single-image placement — use signed URL directly
+    if (!placementLayersNeedServerComposite(layers) && imageLayers.length === 1) {
+      // Single raster, no text, no rotation — Printful positions the raw URL
       const url = signedByPath.get(imageLayers[0].path)
       if (url) {
         imageUrlByPlacement[placement] = url
@@ -260,6 +267,16 @@ export async function POST(
 
   const printfileById = buildPrintfileById(printfilesResult)
 
+  const placementTransformOverridesEnriched = enrichDirectImagePlacementOverrides(
+    placementTransformOverrides,
+    perPlacementPaths,
+    (placement) => {
+      const printfileId = variantMapping?.placements[placement]
+      const pf = printfileId != null ? printfileById.get(printfileId) : null
+      return { width: pf?.width ?? 1800, height: pf?.height ?? 1800 }
+    }
+  )
+
   // Resolve multi-layer placements: composite layers → upload → sign
   const pendingPlacements = Object.keys(imageUrlByPlacement)
     .filter((k) => k.startsWith('__pending__'))
@@ -279,7 +296,12 @@ export async function POST(
         const areaWidth = pf?.width ?? 1800
         const areaHeight = pf?.height ?? 1800
 
-        const layerInputs = placementLayersToCompositeInputs(layers, signedByPath)
+        const layerInputs = placementLayersToCompositeInputs(
+          layers,
+          signedByPath,
+          areaWidth,
+          areaHeight
+        )
         if (layerInputs.length === 0) return
 
         try {
@@ -314,7 +336,7 @@ export async function POST(
       finalTransforms[placement] = { s: 1, dx: 0, dy: 0 }
     }
   }
-  for (const [placement, t] of Object.entries(placementTransformOverrides)) {
+  for (const [placement, t] of Object.entries(placementTransformOverridesEnriched)) {
     finalTransforms[placement] = t
   }
 
