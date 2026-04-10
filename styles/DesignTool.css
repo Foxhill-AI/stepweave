@@ -884,11 +884,35 @@
 }
 
 .placement-editor-hint {
-  display: none;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-muted, #666);
+  margin: 0;
 }
 
-.placement-editor-hint code {
-  display: none;
+.placement-editor-field--tile {
+  margin-top: var(--spacing-sm);
+  gap: 6px;
+}
+
+.placement-editor-field--tile > .placement-editor-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--color-text, #1a1a1a);
+  margin: 0;
+}
+
+.placement-editor-field--tile > .placement-editor-checkbox input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
 .placement-editor-status,
@@ -1067,6 +1091,11 @@
   pointer-events: none;
 }
 
+/* Tiled layers extend past the “one tile” box; don’t clip the pattern preview */
+.placement-canvas-stage.placement-canvas-stage--repeat-overflow {
+  overflow: visible;
+}
+
 .placement-canvas-art {
   position: absolute;
   box-sizing: border-box;
@@ -1084,6 +1113,17 @@
   width: 100%;
   height: 100%;
   object-fit: fill;
+  pointer-events: none;
+}
+
+/* Tiled image: one Moveable box; pattern fills via background on inner layer */
+.placement-canvas-art--repeat {
+  overflow: visible;
+}
+
+.placement-canvas-repeat-tiles {
+  position: absolute;
+  z-index: 0;
   pointer-events: none;
 }
 
@@ -1258,18 +1298,14 @@
 .shoe-design-overlay {
   position: absolute;
   /* Slightly inset vs .shoe-design-composite so the print UI doesn’t sit flush on the silhouette edge */
-  inset: 1.25%;
+  inset: 0%;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
 }
 
-/* Print area from template metadata: same idea, subtle shrink around the box’s center */
-.shoe-design-overlay--exact-bounds {
-  transform: scale(0.988);
-  transform-origin: center center;
-}
+
 
 .shoe-design-overlay-inner {
   pointer-events: auto;

@@ -203,6 +203,8 @@ export type PlacementImageLayer = {
   dy: number
   /** Degrees, clockwise */
   rotation?: number
+  /** When true, tile this image on a grid (tile size = w×h) to cover the print area; forces server composite. */
+  repeat?: boolean
 }
 
 /** Same as PlacementImageLayer but with the signed URL resolved for display. */
@@ -245,6 +247,7 @@ export type PlacementLayerPatch = Partial<{
   text: string
   fontFamily: string
   color: string
+  repeat: boolean
 }>
 
 export function isTextLayer(l: PlacementLayer): l is PlacementTextLayer {
@@ -331,6 +334,7 @@ export function placementLayersNeedServerComposite(layers: PlacementLayer[]): bo
   const imageLayers = layers.filter(isImageLayer)
   if (hasText || imageLayers.length > 1) return true
   if (imageLayers.length === 1 && (imageLayers[0].rotation ?? 0) !== 0) return true
+  if (imageLayers.some((l) => l.repeat === true)) return true
   return false
 }
 
@@ -409,6 +413,7 @@ function parseLayer(v: unknown): PlacementLayer | null {
     dy: typeof o.dy === 'number' ? o.dy : 0,
     ...(w !== undefined && h !== undefined ? { w, h } : {}),
     ...(rot !== undefined ? { rotation: rot } : {}),
+    ...(o.repeat === true ? { repeat: true } : {}),
   }
 }
 

@@ -80,6 +80,8 @@ export type CompositeLayerInput = {
   dx: number
   dy: number
   rotation: number
+  /** Tile the scaled image on a grid to cover the print area */
+  repeat: boolean
 }
 
 export type CompositeTextInput = {
@@ -120,6 +122,7 @@ export function placementLayersToCompositeInputs(
         dx: l.dx,
         dy: l.dy,
         rotation: l.rotation ?? 0,
+        repeat: l.repeat === true,
       })
     }
   }
@@ -158,11 +161,51 @@ async function renderImageLayerToFullCanvas(
   const w = Math.max(1, Math.round(input.width))
   const h = Math.max(1, Math.round(input.height))
   const rad = (input.rotation * Math.PI) / 180
-  ctx.save()
-  ctx.translate(cw / 2 + input.dx, ch / 2 + input.dy)
-  ctx.rotate(rad)
-  ctx.drawImage(img, -w / 2, -h / 2, w, h)
-  ctx.restore()
+  const cx = cw / 2 + input.dx
+  const cy = ch / 2 + input.dy
+
+  if (input.repeat) {
+    const inv = (px: number, py: number): [number, number] => {
+      const ox = px - cx
+      const oy = py - cy
+      const c = Math.cos(-rad)
+      const s = Math.sin(-rad)
+      return [ox * c - oy * s, ox * s + oy * c]
+    }
+    const corners: [number, number][] = [
+      inv(0, 0),
+      inv(cw, 0),
+      inv(cw, ch),
+      inv(0, ch),
+    ]
+    const xs = corners.map((p) => p[0])
+    const ys = corners.map((p) => p[1])
+    const minX = Math.min(...xs)
+    const maxX = Math.max(...xs)
+    const minY = Math.min(...ys)
+    const maxY = Math.max(...ys)
+    const pad = Math.max(w, h) * 2
+    const i0 = Math.floor((minX - pad) / w)
+    const i1 = Math.ceil((maxX + pad) / w)
+    const j0 = Math.floor((minY - pad) / h)
+    const j1 = Math.ceil((maxY + pad) / h)
+
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        ctx.save()
+        ctx.translate(cx, cy)
+        ctx.rotate(rad)
+        ctx.drawImage(img, i * w - w / 2, j * h - h / 2, w, h)
+        ctx.restore()
+      }
+    }
+  } else {
+    ctx.save()
+    ctx.translate(cx, cy)
+    ctx.rotate(rad)
+    ctx.drawImage(img, -w / 2, -h / 2, w, h)
+    ctx.restore()
+  }
 
   return canvas.toBuffer('image/png')
 }
