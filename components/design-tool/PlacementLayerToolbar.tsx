@@ -66,8 +66,9 @@ export default function PlacementLayerToolbar({
       const el = rootRef.current
       if (el && !el.contains(e.target as Node)) close()
     }
-    document.addEventListener('mousedown', onDoc, true)
-    return () => document.removeEventListener('mousedown', onDoc, true)
+    // Use bubble-phase click so control clicks (flip menus, range, etc.) run before we evaluate “outside”.
+    document.addEventListener('click', onDoc)
+    return () => document.removeEventListener('click', onDoc)
   }, [open, close])
 
   if (!selectedLayer || !anchor || disabled) return null

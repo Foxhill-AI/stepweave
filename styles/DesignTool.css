@@ -1096,6 +1096,11 @@
   overflow: visible;
 }
 
+/* Floating toolbar + dropdowns sit below the layer; don’t clip menus (Flip / Opacity / Order / More) */
+.placement-canvas-stage:has(.placement-layer-toolbar-wrap) {
+  overflow: visible;
+}
+
 .placement-canvas-art {
   position: absolute;
   box-sizing: border-box;
@@ -1135,7 +1140,8 @@
   right: 0;
   bottom: 0;
   pointer-events: none;
-  z-index: 40;
+  /* Above react-moveable control box (z-index 40 !important) */
+  z-index: 100;
 }
 
 .placement-layer-toolbar {
@@ -1145,6 +1151,7 @@
   /* Stay inside the print-area stage; center may shift via inline `left` */
   max-width: calc(100% - 6px);
   box-sizing: border-box;
+  overflow: visible;
 }
 
 .placement-layer-toolbar__inner {
@@ -1160,19 +1167,8 @@
     0 2px 6px rgba(0, 0, 0, 0.08),
     0 0 0 1px rgba(0, 0, 0, 0.04);
   max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-}
-
-.placement-layer-toolbar__inner::-webkit-scrollbar {
-  height: 3px;
-}
-
-.placement-layer-toolbar__inner::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 2px;
+  /* Don’t clip popovers; use visible so menus aren’t cut off */
+  overflow: visible;
 }
 
 .placement-layer-toolbar__group {
@@ -1257,7 +1253,9 @@
 
 .placement-layer-toolbar__popover {
   position: absolute;
-  top: calc(100% + 3px);
+  /* Open upward so menus stay inside the print stage when it’s near the bottom */
+  top: auto;
+  bottom: calc(100% + 4px);
   left: 0;
   min-width: min(180px, 85vw);
   padding: 3px;
@@ -1265,7 +1263,7 @@
   border-radius: 6px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-  z-index: 50;
+  z-index: 110;
 }
 
 .placement-layer-toolbar__popover--wide {
