@@ -38,6 +38,7 @@ import {
 import type { CategoryRow, DesignDraftRow } from '@/lib/supabaseClient'
 import PricingEstimatePanel, { formatPricingMoney } from './PricingEstimatePanel'
 import type { PricingEstimateOk } from '@/lib/printful/pricingEstimate'
+import { fetchPreviewMockupsWithRetry } from '@/lib/design-tool/previewMockupsFetch'
 import '../../styles/DesignTool.css'
 
 interface DesignToolPageProps {
@@ -405,17 +406,9 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       setLocalDraft((prev) =>
         prev ? { ...prev, design_state: designDataRef.current } : null
       )
-      const res = await fetch(`/api/design-drafts/${draftId}/preview-mockups`, {
-        method: 'POST',
-      })
-      const body = (await res.json().catch(() => ({}))) as {
-        placements?: PlacementTab[]
-        mockup_generation_unavailable?: boolean
-        mockup_error?: string
-        error?: string
-      }
-      if (!res.ok) {
-        console.warn('[preview-mockups]', body.error ?? res.status)
+      const { ok, status, body } = await fetchPreviewMockupsWithRetry(draftId)
+      if (!ok) {
+        console.warn('[preview-mockups]', body.error ?? status)
         setPlacementMockups([])
         setMockupCatalogOnly(true)
         return
@@ -708,7 +701,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
           return
         }
         try {
-          await fetch(`/api/design-drafts/${draftId}/preview-mockups`, { method: 'POST' })
+          void fetchPreviewMockupsWithRetry(draftId, { maxAttempts: 10 })
         } catch {
           /* listing may fall back until user regenerates mockups */
         }
@@ -728,7 +721,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.productId) {
         try {
-          await fetch(`/api/design-drafts/${draftId}/preview-mockups`, { method: 'POST' })
+          void fetchPreviewMockupsWithRetry(draftId, { maxAttempts: 10 })
         } catch {
           /* listing may fall back to pattern image until user opens design tool preview */
         }
