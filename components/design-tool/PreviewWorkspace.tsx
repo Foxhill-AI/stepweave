@@ -1,11 +1,17 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type MutableRefObject } from 'react'
 import { Upload, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ShoeDesignEditor from './ShoeDesignEditor'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
-import type { ResolvedPlacementLayer, PlacementLayerPatch, PlacementTextLayer } from '@/lib/designDraftState'
+import type {
+  ResolvedPlacementLayer,
+  PlacementLayerPatch,
+  PlacementTextLayer,
+  PlacementLayer,
+  PlacementLayerReorderOp,
+} from '@/lib/designDraftState'
 import { FONTS } from '@/lib/fonts'
 
 const ACCEPT_IMAGES = 'image/*'
@@ -53,6 +59,10 @@ interface PreviewWorkspaceProps {
   onLayerSelect?: (id: string) => void
   onLayerChange?: (layerId: string, patch: PlacementLayerPatch) => void
   onLayerDelete?: (layerId: string) => void
+  onLayerReorder?: (layerId: string, op: PlacementLayerReorderOp) => void
+  onLayerDuplicate?: (layerId: string) => void
+  onPasteLayer?: (layer: PlacementLayer) => void
+  layerClipboardRef?: MutableRefObject<PlacementLayer | null>
   /** Called when the user adds a new text layer. */
   onAddTextLayer?: (layer: PlacementTextLayer) => void
   /** Placement layout actions — rendered contextually below the shoe canvas */
@@ -91,6 +101,10 @@ export default function PreviewWorkspace({
   onLayerSelect,
   onLayerChange,
   onLayerDelete,
+  onLayerReorder,
+  onLayerDuplicate,
+  onPasteLayer,
+  layerClipboardRef,
   onAddTextLayer,
   onSaveLayout,
   onRefreshPrintfulPreview,
@@ -612,6 +626,10 @@ export default function PreviewWorkspace({
             onLayerSelect={onLayerSelect}
             onLayerChange={onLayerChange ?? (() => {})}
             onLayerDelete={onLayerDelete}
+            onLayerReorder={onLayerReorder}
+            onLayerDuplicate={onLayerDuplicate}
+            onPasteLayer={onPasteLayer}
+            layerClipboardRef={layerClipboardRef}
           />
           {(onSaveLayout || onRefreshPrintfulPreview) && (
             <div className="preview-placement-actions">

@@ -14,11 +14,16 @@ import {
   addPlacementTextLayer,
   updatePlacementLayer,
   removePlacementImageLayer,
+  reorderPlacementLayer,
+  duplicatePlacementLayer,
+  appendPlacementLayerClone,
   isImageLayer,
   type PrintfulPlacementsState,
   type PlacementImageLayer,
   type PlacementTextLayer,
   type ResolvedPlacementLayer,
+  type PlacementLayer,
+  type PlacementLayerReorderOp,
 } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import { useAuth } from '@/components/AuthProvider'
@@ -113,6 +118,8 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   /** Temporary object URLs for layers uploaded in this session (before server signed URL arrives). */
   const [localLayerUrls, setLocalLayerUrls] = useState<Record<string, string>>({})
+  /** Clipboard for Cmd/Ctrl+C / V in template canvas (layer payload without signed URLs). */
+  const layerClipboardRef = useRef<PlacementLayer | null>(null)
 
   const isDraftEditor = Boolean(draftId)
   /** Draft is linked to an existing storefront product — publish flow updates that row instead of inserting. */
@@ -569,6 +576,56 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     [activePlacement, handleLayerRemove]
   )
 
+  const handleLayerReorder = useCallback(
+    (layerId: string, op: PlacementLayerReorderOp) => {
+      if (!activePlacement) return
+      setDesignData((prev) =>
+        mergePlacementImagesIntoDesignState(
+          prev,
+          reorderPlacementLayer(parsePlacementImages(prev), activePlacement, layerId, op)
+        )
+      )
+    },
+    [activePlacement]
+  )
+
+  const handleLayerDuplicate = useCallback(
+    (layerId: string) => {
+      if (!activePlacement) return
+      let newId: string | null = null
+      setDesignData((prev) => {
+        const cur = parsePlacementImages(prev)
+        const r = duplicatePlacementLayer(cur, activePlacement, layerId)
+        if (!r) return prev
+        newId = r.newId
+        return mergePlacementImagesIntoDesignState(prev, r.next)
+      })
+      if (newId) {
+        const selectId = newId
+        setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: selectId }))
+      }
+    },
+    [activePlacement]
+  )
+
+  const handlePasteLayer = useCallback(
+    (layer: PlacementLayer) => {
+      if (!activePlacement) return
+      let newId: string | null = null
+      setDesignData((prev) => {
+        const cur = parsePlacementImages(prev)
+        const r = appendPlacementLayerClone(cur, activePlacement, layer)
+        newId = r.newId
+        return mergePlacementImagesIntoDesignState(prev, r.next)
+      })
+      if (newId) {
+        const selectId = newId
+        setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: selectId }))
+      }
+    },
+    [activePlacement]
+  )
+
   const handlePatternClear = useCallback(async () => {
     if (!draftId) return
     await updateDesignDraft(draftId, { pattern_image_url: null })
@@ -812,6 +869,10 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                   onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
                   onLayerChange={handleLayerChange}
                   onLayerDelete={handleCanvasLayerDelete}
+                  onLayerReorder={handleLayerReorder}
+                  onLayerDuplicate={handleLayerDuplicate}
+                  onPasteLayer={handlePasteLayer}
+                  layerClipboardRef={layerClipboardRef}
                 />
               )}
           </div>
@@ -957,6 +1018,10 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
             onLayerChange={handleLayerChange}
             onLayerDelete={handleCanvasLayerDelete}
+            onLayerReorder={handleLayerReorder}
+            onLayerDuplicate={handleLayerDuplicate}
+            onPasteLayer={handlePasteLayer}
+            layerClipboardRef={layerClipboardRef}
             onAddTextLayer={isDraftEditor ? handleAddTextLayer : undefined}
             onSaveLayout={isDraftEditor ? handleSavePlacementLayout : undefined}
             onRefreshPrintfulPreview={isDraftEditor ? handleRefreshPrintfulPreview : undefined}

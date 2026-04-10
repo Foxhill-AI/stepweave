@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react'
+import type { MutableRefObject } from 'react'
 import Moveable from 'react-moveable'
 import {
   mergeAndClampPlacement,
@@ -10,8 +11,15 @@ import {
   estimateTextLayerBox,
   isTextLayer,
   isImageLayer,
+  placementLayerToSerializable,
 } from '@/lib/designDraftState'
-import type { ResolvedPlacementLayer, PlacementLayerPatch } from '@/lib/designDraftState'
+import type {
+  ResolvedPlacementLayer,
+  PlacementLayerPatch,
+  PlacementLayer,
+  PlacementLayerReorderOp,
+} from '@/lib/designDraftState'
+import PlacementLayerToolbar from './PlacementLayerToolbar'
 
 export type PlacementCanvasPreviewProps = {
   areaWidth: number
@@ -20,8 +28,16 @@ export type PlacementCanvasPreviewProps = {
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
   onLayerChange: (layerId: string, patch: PlacementLayerPatch) => void
-  /** Remove layer (e.g. × on selection chrome). */
+  /** Remove layer (toolbar trash / shortcuts). */
   onLayerDelete?: (layerId: string) => void
+  /** Change stacking order (array index: higher = on top). */
+  onLayerReorder?: (layerId: string, op: PlacementLayerReorderOp) => void
+  /** Clone selected layer after itself. */
+  onLayerDuplicate?: (layerId: string) => void
+  /** Append a layer from clipboard (e.g. Cmd+V). */
+  onPasteLayer?: (layer: PlacementLayer) => void
+  /** Holds last copied layer for paste; updated on Cmd+C. */
+  layerClipboardRef?: MutableRefObject<PlacementLayer | null>
   disabled?: boolean
   variant?: 'default' | 'overlay'
   hideHint?: boolean
@@ -39,6 +55,10 @@ export default function PlacementCanvasPreview({
   onLayerSelect,
   onLayerChange,
   onLayerDelete,
+  onLayerReorder,
+  onLayerDuplicate,
+  onPasteLayer,
+  layerClipboardRef,
   disabled = false,
   variant = 'default',
   hideHint = false,
@@ -57,6 +77,16 @@ export default function PlacementCanvasPreview({
   effectiveSelectedIdRef.current = effectiveSelectedId
   const onLayerChangeRef = useRef(onLayerChange)
   onLayerChangeRef.current = onLayerChange
+  const onLayerReorderRef = useRef(onLayerReorder)
+  onLayerReorderRef.current = onLayerReorder
+  const onLayerDuplicateRef = useRef(onLayerDuplicate)
+  onLayerDuplicateRef.current = onLayerDuplicate
+  const onLayerDeleteRef = useRef(onLayerDelete)
+  onLayerDeleteRef.current = onLayerDelete
+  const onPasteLayerRef = useRef(onPasteLayer)
+  onPasteLayerRef.current = onPasteLayer
+  const layerClipboardRefRef = useRef(layerClipboardRef)
+  layerClipboardRefRef.current = layerClipboardRef
 
   const stageCallbackRef = useCallback((el: HTMLDivElement | null) => {
     stageRef.current = el
@@ -166,6 +196,7 @@ export default function PlacementCanvasPreview({
 
   const handleSelectPointerDown = useCallback(
     (e: React.PointerEvent, layer: ResolvedPlacementLayer) => {
+      stageRef.current?.focus({ preventScroll: true })
       if (disabled) return
       if (layer.id === effectiveSelectedIdRef.current) return
       e.stopPropagation()
@@ -178,6 +209,119 @@ export default function PlacementCanvasPreview({
     () => layers.find((l) => l.id === effectiveSelectedId) ?? null,
     [layers, effectiveSelectedId]
   )
+
+  const toolbarAnchor = useMemo(() => {
+    if (!selectedLayer || disabled) return null
+    const ds = displayScale > 0 ? displayScale : 1
+    if (isTextLayer(selectedLayer)) {
+      const td = clampTextLayerDxDy(areaWidth, areaHeight, selectedLayer)
+      const { w: tw, h: th } = estimateTextLayerBox(selectedLayer.text, selectedLayer.fontSize)
+      const leftPrint = areaWidth / 2 + td.dx - tw / 2
+      const topPrint = areaHeight / 2 + td.dy - th / 2
+      return { left: leftPrint * ds, top: topPrint * ds, width: tw * ds, height: th * ds }
+    }
+    const { w: iw, h: ih } = getImageLayerDimensions(selectedLayer, areaWidth, areaHeight)
+    const leftPrint = (areaWidth - iw) / 2 + selectedLayer.dx
+    const topPrint = (areaHeight - ih) / 2 + selectedLayer.dy
+    return { left: leftPrint * ds, top: topPrint * ds, width: iw * ds, height: ih * ds }
+  }, [selectedLayer, disabled, displayScale, areaWidth, areaHeight])
+
+  const layerStackIndex = useMemo(() => {
+    if (!effectiveSelectedId) return -1
+    return layers.findIndex((l) => l.id === effectiveSelectedId)
+  }, [layers, effectiveSelectedId])
+
+  useEffect(() => {
+    if (disabled) return
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t?.closest('.placement-layer-toolbar')) return
+      if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
+      if (t?.isContentEditable) return
+
+      const stage = stageRef.current
+      if (!stage) return
+      const ae = document.activeElement as HTMLElement | null
+      if (ae !== stage && !ae?.closest?.('.placement-canvas-stage')) return
+
+      const id = effectiveSelectedIdRef.current
+      if (!id) return
+      const layer = layersRef.current.find((l) => l.id === id)
+      if (!layer) return
+
+      const mod = e.metaKey || e.ctrlKey
+
+      if (mod && e.key.toLowerCase() === 'c') {
+        const ref = layerClipboardRefRef.current
+        if (ref) {
+          ref.current = placementLayerToSerializable(layer)
+          e.preventDefault()
+        }
+        return
+      }
+      if (mod && e.key.toLowerCase() === 'v') {
+        const ref = layerClipboardRefRef.current
+        const paste = onPasteLayerRef.current
+        const clip = ref?.current
+        if (clip && paste) {
+          e.preventDefault()
+          paste(clip)
+        }
+        return
+      }
+      if (mod && e.key.toLowerCase() === 'd') {
+        const d = onLayerDuplicateRef.current
+        if (d) {
+          e.preventDefault()
+          d(id)
+        }
+        return
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const del = onLayerDeleteRef.current
+        if (del) {
+          e.preventDefault()
+          del(id)
+        }
+        return
+      }
+      if (mod && e.shiftKey && (e.key === ']' || e.code === 'BracketRight')) {
+        onLayerReorderRef.current?.(id, 'front')
+        e.preventDefault()
+        return
+      }
+      if (mod && e.shiftKey && (e.key === '[' || e.code === 'BracketLeft')) {
+        onLayerReorderRef.current?.(id, 'back')
+        e.preventDefault()
+        return
+      }
+      if (!mod && e.key === ']' && !e.shiftKey) {
+        onLayerReorderRef.current?.(id, 'forward')
+        e.preventDefault()
+        return
+      }
+      if (!mod && e.key === '[' && !e.shiftKey) {
+        onLayerReorderRef.current?.(id, 'backward')
+        e.preventDefault()
+        return
+      }
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'h') {
+        onLayerChangeRef.current(id, {
+          flipH: !((layer as { flipH?: boolean }).flipH === true),
+        })
+        e.preventDefault()
+        return
+      }
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'v') {
+        onLayerChangeRef.current(id, {
+          flipV: !((layer as { flipV?: boolean }).flipV === true),
+        })
+        e.preventDefault()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [disabled])
 
   return (
     <div
@@ -199,6 +343,10 @@ export default function PlacementCanvasPreview({
         style={variant === 'overlay' ? undefined : { aspectRatio: `${areaWidth} / ${areaHeight}` }}
         aria-describedby={hideHint ? undefined : hintId}
         data-disabled={disabled ? 'true' : undefined}
+        tabIndex={disabled ? undefined : 0}
+        onPointerDown={(e) => {
+          if (e.target === e.currentTarget) e.currentTarget.focus({ preventScroll: true })
+        }}
       >
         {layers.length === 0 && (
           <div className="placement-canvas-placeholder" aria-hidden>
@@ -210,6 +358,13 @@ export default function PlacementCanvasPreview({
           const isSelected = layer.id === effectiveSelectedId
           const ds = displayScale > 0 ? displayScale : 1
           const rot = layer.rotation ?? 0
+          const fh = (layer as { flipH?: boolean }).flipH === true ? -1 : 1
+          const fv = (layer as { flipV?: boolean }).flipV === true ? -1 : 1
+          const baseOp =
+            typeof (layer as { opacity?: number }).opacity === 'number'
+              ? Math.min(1, Math.max(0, (layer as { opacity?: number }).opacity!))
+              : 1
+          const op = isSelected ? baseOp : baseOp * 0.85
           const pointerPassthrough = isSelected && !disabled ? 'none' as const : undefined
 
           if (isTextLayer(layer)) {
@@ -233,30 +388,17 @@ export default function PlacementCanvasPreview({
                   top: topPrint * ds,
                   width: tw * ds,
                   height: th * ds,
-                  transform: `rotate(${rot}deg)`,
+                  transform: `rotate(${rot}deg) scaleX(${fh}) scaleY(${fv})`,
                   transformOrigin: 'center center',
                   zIndex: isSelected ? 2 : 1,
                   cursor: disabled ? 'default' : isSelected ? 'move' : 'pointer',
                   userSelect: 'none',
+                  opacity: op,
                 }}
                 onPointerDown={(e) => handleSelectPointerDown(e, layer)}
                 role="img"
                 aria-label={`Text layer: "${layer.text}"${isSelected ? ' (selected)' : ''}`}
               >
-                {isSelected && !disabled && onLayerDelete && (
-                  <button
-                    type="button"
-                    className="placement-canvas-delete"
-                    aria-label="Remove text layer"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onLayerDelete(layer.id)
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
                 <div
                   className="placement-canvas-text-inner"
                   style={{
@@ -306,30 +448,17 @@ export default function PlacementCanvasPreview({
                 top: topPrint * ds,
                 width: iw * ds,
                 height: ih * ds,
-                transform: `rotate(${rot}deg)`,
+                transform: `rotate(${rot}deg) scaleX(${fh}) scaleY(${fv})`,
                 transformOrigin: 'center center',
                 zIndex: isSelected ? 2 : 1,
                 cursor: disabled ? 'default' : isSelected ? 'move' : 'pointer',
                 overflow: tileRepeat ? 'visible' : undefined,
+                opacity: op,
               }}
               onPointerDown={(e) => handleSelectPointerDown(e, layer)}
               role="img"
               aria-label={`Image layer${tileRepeat ? ' (tiled)' : ''}${isSelected ? ' (selected)' : ''}`}
             >
-              {isSelected && !disabled && onLayerDelete && (
-                <button
-                  type="button"
-                  className="placement-canvas-delete"
-                  aria-label="Remove image layer"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onLayerDelete(layer.id)
-                  }}
-                >
-                  ×
-                </button>
-              )}
               {layer.signedUrl && tileRepeat ? (
                 <div
                   className="placement-canvas-repeat-tiles"
@@ -463,6 +592,52 @@ export default function PlacementCanvasPreview({
             }}
           />
         )}
+
+        {effectiveSelectedId &&
+ selectedLayer &&
+          toolbarAnchor &&
+          !disabled &&
+          onLayerDelete && (
+            <div
+              className="placement-layer-toolbar-wrap"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <PlacementLayerToolbar
+                selectedLayer={selectedLayer}
+                layerIndex={layerStackIndex}
+                layerCount={layers.length}
+                anchor={toolbarAnchor}
+                disabled={disabled}
+                onFlip={(axis) => {
+                  if (axis === 'h') {
+                    onLayerChange(effectiveSelectedId, {
+                      flipH: !((selectedLayer as { flipH?: boolean }).flipH === true),
+                    })
+                  } else {
+                    onLayerChange(effectiveSelectedId, {
+                      flipV: !((selectedLayer as { flipV?: boolean }).flipV === true),
+                    })
+                  }
+                }}
+                onOpacityChange={(v) => onLayerChange(effectiveSelectedId, { opacity: v })}
+                onReorder={(op) => onLayerReorder?.(effectiveSelectedId, op)}
+                onDuplicate={() => onLayerDuplicate?.(effectiveSelectedId)}
+                onDelete={() => onLayerDelete(effectiveSelectedId)}
+                onCopy={
+                  layerClipboardRef
+                    ? () => {
+                        layerClipboardRef.current = placementLayerToSerializable(selectedLayer)
+                      }
+                    : undefined
+                }
+                onRepeatToggle={
+                  isImageLayer(selectedLayer)
+                    ? (next) => onLayerChange(effectiveSelectedId, { repeat: next })
+                    : undefined
+                }
+              />
+            </div>
+          )}
       </div>
     </div>
   )

@@ -2,7 +2,13 @@
 
 import { useMemo, useRef, useEffect } from 'react'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
-import type { ResolvedPlacementLayer, PlacementLayerPatch } from '@/lib/designDraftState'
+import type {
+  ResolvedPlacementLayer,
+  PlacementLayerPatch,
+  PlacementLayer,
+  PlacementLayerReorderOp,
+} from '@/lib/designDraftState'
+import type { MutableRefObject } from 'react'
 import PlacementCanvasPreview from './PlacementCanvasPreview'
 
 /** Pre-layout/decode `offsetWidth` can be ~2px; never lock `.shoe-design-composite` to that (img is width:100%). */
@@ -19,6 +25,10 @@ export type ShoeDesignEditorProps = {
   onLayerSelect?: (id: string) => void
   onLayerChange: (layerId: string, patch: PlacementLayerPatch) => void
   onLayerDelete?: (layerId: string) => void
+  onLayerReorder?: (layerId: string, op: PlacementLayerReorderOp) => void
+  onLayerDuplicate?: (layerId: string) => void
+  onPasteLayer?: (layer: PlacementLayer) => void
+  layerClipboardRef?: MutableRefObject<PlacementLayer | null>
   disabled?: boolean
 }
 
@@ -35,6 +45,10 @@ export default function ShoeDesignEditor({
   onLayerSelect,
   onLayerChange,
   onLayerDelete,
+  onLayerReorder,
+  onLayerDuplicate,
+  onPasteLayer,
+  layerClipboardRef,
   disabled = false,
 }: ShoeDesignEditorProps) {
   const rows = useMemo(
@@ -158,6 +172,10 @@ export default function ShoeDesignEditor({
               onLayerSelect={onLayerSelect}
               onLayerChange={onLayerChange}
               onLayerDelete={onLayerDelete}
+              onLayerReorder={onLayerReorder}
+              onLayerDuplicate={onLayerDuplicate}
+              onPasteLayer={onPasteLayer}
+              layerClipboardRef={layerClipboardRef}
               disabled={disabled}
               variant="overlay"
               hideHint

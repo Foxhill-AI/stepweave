@@ -82,6 +82,10 @@ export type CompositeLayerInput = {
   rotation: number
   /** Tile the scaled image on a grid to cover the print area */
   repeat: boolean
+  flipH: boolean
+  flipV: boolean
+  /** 0–1 */
+  opacity: number
 }
 
 export type CompositeTextInput = {
@@ -93,6 +97,9 @@ export type CompositeTextInput = {
   dx: number
   dy: number
   rotation: number
+  flipH: boolean
+  flipV: boolean
+  opacity: number
 }
 
 export type CompositeInput = CompositeLayerInput | CompositeTextInput
@@ -114,6 +121,10 @@ export function placementLayersToCompositeInputs(
     const url = signedByPath.get(l.path)
     if (url) {
       const { w, h } = getImageLayerDimensions(l, areaWidth, areaHeight)
+      const op =
+        typeof l.opacity === 'number' && Number.isFinite(l.opacity)
+          ? Math.min(1, Math.max(0, l.opacity))
+          : 1
       inputs.push({
         kind: 'image',
         signedUrl: url,
@@ -123,11 +134,18 @@ export function placementLayersToCompositeInputs(
         dy: l.dy,
         rotation: l.rotation ?? 0,
         repeat: l.repeat === true,
+        flipH: l.flipH === true,
+        flipV: l.flipV === true,
+        opacity: op,
       })
     }
   }
   for (const l of layers) {
     if (!isTextLayer(l)) continue
+    const top =
+      typeof l.opacity === 'number' && Number.isFinite(l.opacity)
+        ? Math.min(1, Math.max(0, l.opacity))
+        : 1
     inputs.push({
       kind: 'text',
       text: l.text,
@@ -137,6 +155,9 @@ export function placementLayersToCompositeInputs(
       dx: l.dx,
       dy: l.dy,
       rotation: l.rotation ?? 0,
+      flipH: l.flipH === true,
+      flipV: l.flipV === true,
+      opacity: top,
     })
   }
   return inputs
@@ -163,6 +184,9 @@ async function renderImageLayerToFullCanvas(
   const rad = (input.rotation * Math.PI) / 180
   const cx = cw / 2 + input.dx
   const cy = ch / 2 + input.dy
+  const sx = input.flipH ? -1 : 1
+  const sy = input.flipV ? -1 : 1
+  const alpha = Math.min(1, Math.max(0, input.opacity))
 
   if (input.repeat) {
     const inv = (px: number, py: number): [number, number] => {
@@ -193,16 +217,20 @@ async function renderImageLayerToFullCanvas(
     for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
         ctx.save()
+        ctx.globalAlpha = alpha
         ctx.translate(cx, cy)
         ctx.rotate(rad)
+        if (sx !== 1 || sy !== 1) ctx.scale(sx, sy)
         ctx.drawImage(img, i * w - w / 2, j * h - h / 2, w, h)
         ctx.restore()
       }
     }
   } else {
     ctx.save()
+    ctx.globalAlpha = alpha
     ctx.translate(cx, cy)
     ctx.rotate(rad)
+    if (sx !== 1 || sy !== 1) ctx.scale(sx, sy)
     ctx.drawImage(img, -w / 2, -h / 2, w, h)
     ctx.restore()
   }
@@ -239,9 +267,14 @@ function renderTextToBuffer(areaWidth: number, areaHeight: number, input: Compos
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   const rot = (input.rotation * Math.PI) / 180
+  const fsx = input.flipH ? -1 : 1
+  const fsy = input.flipV ? -1 : 1
+  const talpha = Math.min(1, Math.max(0, input.opacity))
   ctx.save()
+  ctx.globalAlpha = talpha
   ctx.translate(x, y)
   ctx.rotate(rot)
+  if (fsx !== 1 || fsy !== 1) ctx.scale(fsx, fsy)
   ctx.fillText(input.text, 0, 0)
   ctx.restore()
   return canvas.toBuffer('image/png')
