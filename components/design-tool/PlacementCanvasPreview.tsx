@@ -152,10 +152,16 @@ export default function PlacementCanvasPreview({
     ]
   }, [layers, effectiveSelectedId])
 
-  const stageClass =
+  const stageRepeatOverflow = useMemo(
+    () => layers.some((l) => isImageLayer(l) && l.repeat === true),
+    [layers]
+  )
+
+  const baseStageClass =
     variant === 'overlay'
       ? 'placement-canvas-stage placement-canvas-stage--overlay'
       : 'placement-canvas-stage'
+  const stageClass = `${baseStageClass}${stageRepeatOverflow ? ' placement-canvas-stage--repeat-overflow' : ''}`
   const hintId = 'placement-canvas-desc'
 
   const handleSelectPointerDown = useCallback(
@@ -282,6 +288,8 @@ export default function PlacementCanvasPreview({
           const { w: iw, h: ih } = getImageLayerDimensions(layer, areaWidth, areaHeight)
           const leftPrint = (areaWidth - iw) / 2 + layer.dx
           const topPrint = (areaHeight - ih) / 2 + layer.dy
+          const tileRepeat = layer.repeat === true
+          const repeatSpan = 2 * Math.max(areaWidth, areaHeight) * ds
 
           return (
             <div
@@ -291,7 +299,7 @@ export default function PlacementCanvasPreview({
               }}
               className={`placement-canvas-art-target placement-canvas-art${
                 isSelected ? ' placement-canvas-art--selected' : ''
-              }`}
+              }${tileRepeat ? ' placement-canvas-art--repeat' : ''}`}
               style={{
                 position: 'absolute',
                 left: leftPrint * ds,
@@ -302,10 +310,11 @@ export default function PlacementCanvasPreview({
                 transformOrigin: 'center center',
                 zIndex: isSelected ? 2 : 1,
                 cursor: disabled ? 'default' : isSelected ? 'move' : 'pointer',
+                overflow: tileRepeat ? 'visible' : undefined,
               }}
               onPointerDown={(e) => handleSelectPointerDown(e, layer)}
               role="img"
-              aria-label={`Image layer${isSelected ? ' (selected)' : ''}`}
+              aria-label={`Image layer${tileRepeat ? ' (tiled)' : ''}${isSelected ? ' (selected)' : ''}`}
             >
               {isSelected && !disabled && onLayerDelete && (
                 <button
@@ -321,7 +330,26 @@ export default function PlacementCanvasPreview({
                   ×
                 </button>
               )}
-              {layer.signedUrl ? (
+              {layer.signedUrl && tileRepeat ? (
+                <div
+                  className="placement-canvas-repeat-tiles"
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    width: `${repeatSpan}px`,
+                    height: `${repeatSpan}px`,
+                    marginLeft: `${-repeatSpan / 2}px`,
+                    marginTop: `${-repeatSpan / 2}px`,
+                    backgroundImage: `url(${layer.signedUrl})`,
+                    backgroundSize: `${iw * ds}px ${ih * ds}px`,
+                    backgroundRepeat: 'repeat',
+                    backgroundPosition: 'center center',
+                    pointerEvents: 'none',
+                  }}
+                />
+              ) : layer.signedUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={layer.signedUrl}

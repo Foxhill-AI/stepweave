@@ -358,6 +358,24 @@ export default function PlacementEditorPanel({
                     <span className="placement-editor-value">{Math.round(t.s * 100)}%</span>
                   </div>
                 )}
+                {selectedLayer && !selectedIsText && onLayerChange && (
+                  <div className="placement-editor-field placement-editor-field--tile">
+                    <label className="placement-editor-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={Boolean((selectedLayer as { repeat?: boolean }).repeat)}
+                        onChange={(e) =>
+                          onLayerChange(selectedLayer.id, { repeat: e.target.checked })
+                        }
+                      />
+                      <span>Tile / repeat to fill area</span>
+                    </label>
+                    <p className="placement-editor-hint">
+                      Repeats the image at the current size in all directions (resize first for smaller tiles).
+                      Updates preview via server composite.
+                    </p>
+                  </div>
+                )}
                 <div className="placement-editor-field-row">
                   <div className="placement-editor-field">
                     <label htmlFor="pe-dx">Offset X (px)</label>

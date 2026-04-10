@@ -148,10 +148,7 @@ export default function ShoeDesignEditor({
           className="shoe-design-template-img"
           draggable={false}
         />
-        <div
-          className={`shoe-design-overlay${hasExactBounds ? ' shoe-design-overlay--exact-bounds' : ''}`}
-          style={overlayStyle}
-        >
+        <div className="shoe-design-overlay" style={overlayStyle}>
           <div className={`shoe-design-overlay-inner${hasExactBounds ? ' shoe-design-overlay-inner--exact' : ''}`}>
             <PlacementCanvasPreview
               areaWidth={current.area_width}
