@@ -15,6 +15,45 @@
   min-height: 0;
 }
 
+/* Slimmer main nav on design-tool routes (subnavbar Explore/search removed there) */
+.design-tool-page-wrapper--editor .navbar-left {
+  height: 3.5rem;
+  gap: var(--spacing-md);
+}
+
+.design-tool-page-wrapper--editor .navbar-logo {
+  font-size: 1.05rem;
+}
+
+.design-tool-page-wrapper--editor .logo-icon {
+  width: 88px;
+}
+
+.design-tool-page-wrapper--editor .navbar-link {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.875rem;
+}
+
+.design-tool-page-wrapper--editor .navbar-button-design-tool {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.8125rem;
+}
+
+.design-tool-page-wrapper--editor .navbar-icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.design-tool-page-wrapper--editor .navbar-actions {
+  gap: var(--spacing-xs);
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .design-tool-page-wrapper--editor .navbar-container {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+}
+
 .design-tool-gate {
   flex: 1;
   display: flex;

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Navbar from '@/components/Navbar'
-import Subnavbar from '@/components/Subnavbar'
 import Footer from '@/components/Footer'
 import DesignToolPage from '@/components/design-tool/DesignToolPage'
 import { useAuth } from '@/components/AuthProvider'
@@ -86,7 +85,6 @@ export default function DesignToolEditProductRoute() {
     return (
       <div className="design-tool-page-wrapper">
         <Navbar />
-        <Subnavbar />
         <main className="design-tool-main" role="main">
           <p className="design-tool-loading">
             No design draft is linked to this product. Products created outside the design tool cannot be
@@ -104,7 +102,6 @@ export default function DesignToolEditProductRoute() {
   return (
     <div className="design-tool-page-wrapper design-tool-page-wrapper--editor">
       <Navbar />
-      <Subnavbar />
       <main className="design-tool-main" role="main">
         <DesignToolPage draftId={draft.id} draft={draft} />
       </main>
