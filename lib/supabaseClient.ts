@@ -685,7 +685,7 @@ export const supabase =
           category_id,
           category ( id, name, slug )
         ),
-        user_account ( username, user_public_profile ( username ) ),
+        user_account ( username ),
         product_variant ( id, price_override )
       `)
       .eq('user_account_id', userAccountId)
