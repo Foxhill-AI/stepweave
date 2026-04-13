@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 export type ProductDesignData = { imageUrl?: string; source?: string } | null
 
@@ -14,10 +14,18 @@ interface ProductImageProps {
   fallback?: React.ReactNode
 }
 
+function fetchDesignImageUrl(productId: number): Promise<string | null> {
+  return fetch(`/api/products/${productId}/design-image`)
+    .then((res) => (res.ok ? res.json() : Promise.reject()))
+    .then((b: { url?: string }) => (typeof b.url === 'string' && b.url ? b.url : null))
+    .catch(() => null)
+}
+
 /**
  * Renders product image. When design_data.source === 'design_draft':
  * 1. Tries /api/products/[id]/mockup-image (Printful mockup — best visual quality).
  * 2. Falls back to /api/products/[id]/design-image (raw pattern from Storage).
+ * 3. If the mockup URL loads but fails in the browser (expired/blocked), onError loads design-image.
  * Otherwise uses design_data.imageUrl as a static URL.
  */
 export default function ProductImage({
@@ -29,12 +37,16 @@ export default function ProductImage({
   fallback,
 }: ProductImageProps) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const triedDesignAfterBadMockup = useRef(false)
 
   const useDesignDraftApi =
     designData && (designData as { source?: string }).source === 'design_draft'
   const staticUrl = designData?.imageUrl ?? null
 
   useEffect(() => {
+    triedDesignAfterBadMockup.current = false
+    setLoadFailed(false)
     if (!useDesignDraftApi) {
       setResolvedUrl(staticUrl)
       return
@@ -51,22 +63,17 @@ export default function ProductImage({
           setResolvedUrl(body.url)
         } else {
           // No mockup yet — fall back to pattern image from Storage
-          return fetch(`/api/products/${productId}/design-image`)
-            .then((res) => (res.ok ? res.json() : Promise.reject()))
-            .then((b: { url?: string }) => {
-              if (!cancelled && b.url) setResolvedUrl(b.url)
-            })
+          return fetchDesignImageUrl(productId).then((url) => {
+            if (!cancelled && url) setResolvedUrl(url)
+          })
         }
       })
       .catch(() => {
         // Mockup failed — try design image
         if (cancelled) return
-        fetch(`/api/products/${productId}/design-image`)
-          .then((res) => (res.ok ? res.json() : Promise.reject()))
-          .then((b: { url?: string }) => {
-            if (!cancelled && b.url) setResolvedUrl(b.url)
-          })
-          .catch(() => {})
+        fetchDesignImageUrl(productId).then((url) => {
+          if (!cancelled && url) setResolvedUrl(url)
+        })
       })
 
     return () => {
@@ -74,14 +81,39 @@ export default function ProductImage({
     }
   }, [productId, useDesignDraftApi, staticUrl])
 
+  const handleImgError = () => {
+    if (!useDesignDraftApi) {
+      setLoadFailed(true)
+      setResolvedUrl(null)
+      return
+    }
+    if (!triedDesignAfterBadMockup.current) {
+      triedDesignAfterBadMockup.current = true
+      setResolvedUrl(null)
+      void fetchDesignImageUrl(productId).then((url) => {
+        if (url) {
+          setLoadFailed(false)
+          setResolvedUrl(url)
+        } else {
+          setLoadFailed(true)
+          setResolvedUrl(null)
+        }
+      })
+      return
+    }
+    setLoadFailed(true)
+    setResolvedUrl(null)
+  }
+
   const src = useDesignDraftApi ? resolvedUrl : staticUrl
-  if (src) {
+  if (src && !loadFailed) {
     return (
       <img
         src={src}
         alt={alt}
         className={className}
         loading={loading}
+        onError={handleImgError}
       />
     )
   }

@@ -1,3 +1,6 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Heart, Eye, Download, Star } from 'lucide-react'
 import ProductImage from './ProductImage'
@@ -40,6 +43,10 @@ export default function ItemCard({
   badge,
   layout = 'grid',
 }: ItemCardProps) {
+  const [staticImgFailed, setStaticImgFailed] = useState(false)
+  useEffect(() => {
+    setStaticImgFailed(false)
+  }, [id, image])
   const useProductImage = productId != null && designData?.source === 'design_draft'
   const renderStars = (rating: number) => {
     const fullStars = Math.floor(rating)
@@ -82,12 +89,13 @@ export default function ItemCard({
                   </div>
                 }
               />
-            ) : image ? (
+            ) : image && !staticImgFailed ? (
               <img
                 src={image}
                 alt={title}
                 className="item-card-image"
                 loading="lazy"
+                onError={() => setStaticImgFailed(true)}
               />
             ) : (
               <div className="item-card-image-fallback">
