@@ -1376,19 +1376,27 @@ export const supabase =
   // ---------------------------------------------------------------------------
 
   /** Subscribe an email to the newsletter. RLS: public insert. */
-  export async function subscribeNewsletter(email: string): Promise<{ ok: boolean; error?: string }> {
+  export async function subscribeNewsletter(
+    email: string
+  ): Promise<{ ok: boolean; alreadySubscribed?: boolean; error?: string }> {
     const { error } = await supabase
       .from('newsletter_subscriber')
       .insert({ email: email.trim().toLowerCase(), status: 'active' })
 
     if (error) {
-      if (error.code === '23505') {
-        return { ok: true }
+      const msg = (error.message ?? '').toLowerCase()
+      const duplicate =
+        error.code === '23505' ||
+        msg.includes('duplicate') ||
+        msg.includes('unique constraint') ||
+        msg.includes('already exists')
+      if (duplicate) {
+        return { ok: true, alreadySubscribed: true }
       }
       console.error('subscribeNewsletter:', error)
       return { ok: false, error: error.message }
     }
-    return { ok: true }
+    return { ok: true, alreadySubscribed: false }
   }
 
   /** Submit a contact form message. RLS: public insert. */

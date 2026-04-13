@@ -19,6 +19,21 @@ import '../styles/ProfilePage.css'
 
 type TabType = 'products' | 'orders' | 'liked' | 'settings'
 
+type SettingsSubTab = 'profile' | 'account' | 'payments' | 'subscription' | 'privacy'
+
+const SETTINGS_SUB_TABS: readonly SettingsSubTab[] = [
+  'profile',
+  'account',
+  'payments',
+  'subscription',
+  'privacy',
+]
+
+function parseSettingsSubTabParam(raw: string | null): SettingsSubTab | undefined {
+  if (!raw) return undefined
+  return SETTINGS_SUB_TABS.includes(raw as SettingsSubTab) ? (raw as SettingsSubTab) : undefined
+}
+
 /** Map product row to the shape LikesTab expects (id, title, category, image, etc.). */
 function mapProductToLikedItem(row: ProductListingRow): LikedProduct {
   const category = row.product_category?.[0]?.category
@@ -144,6 +159,9 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
   const profileIncomplete = !userAccount?.username || String(userAccount.username).trim() === ''
   const showCreatorSetupPrompt = isCreatorRedirect && profileIncomplete && (userAccount?.subscription_tier === 'starter' || userAccount?.subscription_tier === 'pro')
 
+  const settingsSubTab = parseSettingsSubTabParam(searchParams.get('sub'))
+  const settingsTabKey = settingsSubTab ?? 'profile'
+
   return (
     <div className="profile-page">
       <div className="profile-page-container">
@@ -180,8 +198,9 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
           {activeTab === 'liked' && <LikesTab likedProducts={likedProducts} />}
           {activeTab === 'settings' && (
             <SettingsTab
+              key={settingsTabKey}
               userData={defaultUserData}
-              initialSubTab={searchParams.get('sub') === 'subscription' ? 'subscription' : undefined}
+              initialSubTab={settingsSubTab}
             />
           )}
         </div>
