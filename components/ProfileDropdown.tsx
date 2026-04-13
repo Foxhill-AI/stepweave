@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import {
   User,
-  Users,
   CircleDollarSign,
   Bookmark,
   Heart,
@@ -65,15 +64,19 @@ export default function ProfileDropdown({
       </Link>
 
       <nav className="profile-dropdown-nav">
-        <Link href="/profile" className="profile-dropdown-item" onClick={onClose}>
+        <Link
+          href="/profile?tab=settings&sub=profile"
+          className="profile-dropdown-item"
+          onClick={onClose}
+        >
           <User size={18} aria-hidden="true" />
           <span>View profile</span>
         </Link>
-        <Link href="/profile" className="profile-dropdown-item" onClick={onClose}>
-          <Users size={18} aria-hidden="true" />
-          <span>Shared with me</span>
-        </Link>
-        <Link href="/pricing" className="profile-dropdown-item" onClick={onClose}>
+        <Link
+          href="/profile?tab=settings&sub=subscription"
+          className="profile-dropdown-item"
+          onClick={onClose}
+        >
           <CircleDollarSign size={18} aria-hidden="true" />
           <span>Memberships</span>
         </Link>
@@ -93,7 +96,11 @@ export default function ProfileDropdown({
           <ShoppingCart size={18} aria-hidden="true" />
           <span>Order history</span>
         </Link>
-        <Link href="/profile" className="profile-dropdown-item" onClick={onClose}>
+        <Link
+          href="/profile?tab=settings&sub=account"
+          className="profile-dropdown-item"
+          onClick={onClose}
+        >
           <Settings size={18} aria-hidden="true" />
           <span>Settings</span>
         </Link>
