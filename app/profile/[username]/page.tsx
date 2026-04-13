@@ -27,7 +27,8 @@ function mapProductToItem(row: ProductListingRow) {
   const category = row.product_category?.[0]?.category
   const categoryLabel = category?.name ?? category?.slug ?? ''
   const designData = row.design_data as { imageUrl?: string; source?: string } | null
-  const authorUsername = row.user_account?.username ?? undefined
+  const authorUsername =
+    row.user_account?.user_public_profile?.username ?? row.user_account?.username ?? undefined
   return {
     id: String(row.id),
     productId: row.id as number,
@@ -139,6 +140,7 @@ export default function PublicProfilePage() {
   const showFollowButton = Boolean(
     profile?.id && userAccount?.id && profile.id !== userAccount.id
   )
+  const isOwnProfile = Boolean(userAccount?.id && profile?.id && userAccount.id === profile.id)
 
   if (loading) {
     return (
@@ -174,6 +176,21 @@ export default function PublicProfilePage() {
       <Subnavbar />
       <main className="profile-main profile-main-public" role="main">
         <div className="public-profile-container">
+          {isOwnProfile && (
+            <div className="public-profile-owner-banner" role="status">
+              <p className="public-profile-owner-banner-text">
+                This is how others see your profile.
+              </p>
+              <div className="public-profile-owner-banner-actions">
+                <Link href="/profile?tab=settings&sub=profile" className="public-profile-owner-btn">
+                  Edit profile
+                </Link>
+                <Link href="/profile" className="public-profile-owner-btn public-profile-owner-btn-secondary">
+                  Manage account
+                </Link>
+              </div>
+            </div>
+          )}
           <ProfileHeader
             avatar={profile.avatar_url ?? undefined}
             username={profile.username}

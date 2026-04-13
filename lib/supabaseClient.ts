@@ -86,17 +86,43 @@ export const supabase =
   }
 
   export async function getPublicProfileByUsername(username: string): Promise<PublicProfileRow | null> {
-    if (!username.trim()) return null
-    const { data, error } = await supabase
+    const trimmed = username.trim()
+    if (!trimmed) return null
+
+    const { data: pub, error: pubErr } = await supabase
+      .from('user_public_profile')
+      .select('user_account_id, username, avatar_url, bio')
+      .eq('username', trimmed)
+      .maybeSingle()
+
+    if (pubErr) {
+      console.error('getPublicProfileByUsername user_public_profile:', pubErr)
+    }
+
+    if (pub?.user_account_id != null) {
+      const { data: acc } = await supabase
+        .from('user_account')
+        .select('avatar_url, bio')
+        .eq('id', pub.user_account_id)
+        .maybeSingle()
+      return {
+        id: pub.user_account_id,
+        username: pub.username,
+        avatar_url: pub.avatar_url ?? acc?.avatar_url ?? null,
+        bio: pub.bio ?? acc?.bio ?? null,
+      }
+    }
+
+    const { data: accOnly, error: accErr } = await supabase
       .from('user_account')
       .select('id, username, avatar_url, bio')
-      .eq('username', username.trim())
+      .eq('username', trimmed)
       .maybeSingle()
-    if (error) {
-      console.error('getPublicProfileByUsername:', error)
+    if (accErr) {
+      console.error('getPublicProfileByUsername user_account:', accErr)
       return null
     }
-    return data as PublicProfileRow | null
+    return accOnly as PublicProfileRow | null
   }
 
   /** Public profile by user_account_id (for product creator display; readable by anyone). */
@@ -230,7 +256,12 @@ export const supabase =
       category_id: number
       category: { id: number; name: string; slug: string } | null
     }>
-    user_account: { username: string; avatar_url?: string | null; bio?: string | null } | null
+    user_account: {
+      username: string
+      avatar_url?: string | null
+      bio?: string | null
+      user_public_profile?: { username: string } | null
+    } | null
     /** First active variant (for Add to cart from listing). */
     product_variant?: Array<{ id: number; price_override: number | null }>
   }
@@ -286,7 +317,7 @@ export const supabase =
       category_id,
       category ( id, name, slug )
     ),
-    user_account ( username ),
+    user_account ( username, user_public_profile ( username ) ),
     product_variant ( id, price_override )
   `
 
@@ -564,9 +595,11 @@ export const supabase =
 
     if (creatorUsername && creatorUsername.trim()) {
       const match = creatorUsername.trim().toLowerCase()
-      rows = rows.filter(
-        (p) => p.user_account?.username?.toLowerCase().includes(match)
-      )
+      rows = rows.filter((p) => {
+        const acc = p.user_account?.username?.toLowerCase() ?? ''
+        const pub = p.user_account?.user_public_profile?.username?.toLowerCase() ?? ''
+        return acc.includes(match) || pub.includes(match)
+      })
     }
 
     if (exactMatch && exactMatch.trim()) {
@@ -652,7 +685,7 @@ export const supabase =
           category_id,
           category ( id, name, slug )
         ),
-        user_account ( username ),
+        user_account ( username, user_public_profile ( username ) ),
         product_variant ( id, price_override )
       `)
       .eq('user_account_id', userAccountId)
@@ -1487,7 +1520,7 @@ export const supabase =
         user_account_id,
         created_at,
         product_category ( category_id, category ( id, name, slug ) ),
-        user_account ( username ),
+        user_account ( username, user_public_profile ( username ) ),
         product_variant ( id, price_override )
       `)
       .eq('status', 'active')
@@ -1540,7 +1573,7 @@ export const supabase =
           user_account_id,
           created_at,
           product_category ( category_id, category ( id, name, slug ) ),
-          user_account ( username ),
+          user_account ( username, user_public_profile ( username ) ),
           product_variant ( id, price_override )
         )
       `
@@ -1630,7 +1663,7 @@ export const supabase =
           user_account_id,
           created_at,
           product_category ( category_id, category ( id, name, slug ) ),
-          user_account ( username ),
+          user_account ( username, user_public_profile ( username ) ),
           product_variant ( id, price_override )
         )
       `
