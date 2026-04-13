@@ -434,9 +434,10 @@ export async function POST(
   // Persist mockup URLs to design_draft so product cards and gallery can use them later.
   // Fire-and-forget: failure does not affect the response.
   if (anyUrl) {
+    const generatedAt = new Date().toISOString()
     supabase
       .from('design_draft')
-      .update({ mockup_urls: placements })
+      .update({ mockup_urls: placements, mockups_generated_at: generatedAt })
       .eq('id', draftId)
       .then(({ error }) => {
         if (error) console.error('[preview-mockups] persist mockup_urls:', error.message)

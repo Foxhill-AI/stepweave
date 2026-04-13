@@ -712,6 +712,14 @@ export const supabase =
       console.error('updateProduct:', error)
       return false
     }
+    // Printful mockups in design_draft are only valid after product.updated_at; clear until previews regenerate.
+    const { error: draftErr } = await supabase
+      .from('design_draft')
+      .update({ mockups_generated_at: null })
+      .eq('final_product_id', id)
+    if (draftErr) {
+      console.error('updateProduct invalidate mockups:', draftErr)
+    }
     return true
   }
 
@@ -728,12 +736,28 @@ export const supabase =
       console.error('setProductCategories delete:', deleteError)
       return false
     }
-    if (categoryIds.length === 0) return true
+    if (categoryIds.length === 0) {
+      const { error: draftErrEmpty } = await supabase
+        .from('design_draft')
+        .update({ mockups_generated_at: null })
+        .eq('final_product_id', productId)
+      if (draftErrEmpty) {
+        console.error('setProductCategories invalidate mockups:', draftErrEmpty)
+      }
+      return true
+    }
     const rows = categoryIds.map((category_id) => ({ product_id: productId, category_id }))
     const { error: insertError } = await supabase.from('product_category').insert(rows)
     if (insertError) {
       console.error('setProductCategories insert:', insertError)
       return false
+    }
+    const { error: draftErr } = await supabase
+      .from('design_draft')
+      .update({ mockups_generated_at: null })
+      .eq('final_product_id', productId)
+    if (draftErr) {
+      console.error('setProductCategories invalidate mockups:', draftErr)
     }
     return true
   }
@@ -2178,6 +2202,8 @@ export const supabase =
     final_product_id: number | null
     /** Per-placement mockup URLs (JSON); used for storefront imagery. */
     mockup_urls?: unknown
+    /** Last persist from preview-mockups; must be >= linked product.updated_at to use mockups. */
+    mockups_generated_at?: string | null
     created_at: string
     updated_at: string
   }
@@ -2218,6 +2244,7 @@ export const supabase =
     status?: DesignDraftStatus
     final_product_id?: number | null
     finalized_at?: string | null
+    mockups_generated_at?: string | null
   }
 
   /** Single message to insert into design_draft_ai_message. */
@@ -2336,6 +2363,8 @@ export const supabase =
       row.final_product_id = payload.final_product_id
     if (payload.finalized_at !== undefined)
       row.finalized_at = payload.finalized_at
+    if (payload.mockups_generated_at !== undefined)
+      row.mockups_generated_at = payload.mockups_generated_at
     if (Object.keys(row).length === 0) return true
     const { error } = await supabase.from('design_draft').update(row).eq('id', draftId)
     if (error) {
