@@ -112,19 +112,22 @@ export default function ItemCard({
 
         <div className="item-card-content">
           <h3 className="item-card-title">{title}</h3>
-          {author && (
-            <p className="item-card-author">
-              by{' '}
-              {authorProfileUrl ? (
-                <Link
-                  href={authorProfileUrl}
-                  className="item-card-author-link"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {author}
-                </Link>
+          {(author || (category && category !== 'Uncategorized')) && (
+            <p className="item-card-subline">
+              {author ? (
+                authorProfileUrl ? (
+                  <Link
+                    href={authorProfileUrl}
+                    className="item-card-subline-link"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {author}
+                  </Link>
+                ) : (
+                  author
+                )
               ) : (
-                author
+                category
               )}
             </p>
           )}
@@ -149,16 +152,13 @@ export default function ItemCard({
               </span>
             )}
           </div>
-          <div className="item-card-footer">
-            {category && (
-              <span className="item-card-category">{category}</span>
-            )}
-            {price && (
+          {price && (
+            <div className="item-card-footer">
               <span className="item-card-price" aria-label={`Price: ${price}`}>
                 {price}
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </Link>
     </article>
