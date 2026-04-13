@@ -477,7 +477,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
               }
             : null
         )
-        void handleRefreshPrintfulPreview()
+        await handleRefreshPrintfulPreview()
       } else {
         throw new Error('update failed')
       }
@@ -701,7 +701,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
           return
         }
         try {
-          void fetchPreviewMockupsWithRetry(draftId, { maxAttempts: 10 })
+          await fetchPreviewMockupsWithRetry(draftId, { maxAttempts: 18 })
         } catch {
           /* listing may fall back until user regenerates mockups */
         }
@@ -721,7 +721,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.productId) {
         try {
-          void fetchPreviewMockupsWithRetry(draftId, { maxAttempts: 10 })
+          await fetchPreviewMockupsWithRetry(draftId, { maxAttempts: 18 })
         } catch {
           /* listing may fall back to pattern image until user opens design tool preview */
         }

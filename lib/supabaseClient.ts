@@ -712,14 +712,7 @@ export const supabase =
       console.error('updateProduct:', error)
       return false
     }
-    // Printful mockups in design_draft are only valid after product.updated_at; clear until previews regenerate.
-    const { error: draftErr } = await supabase
-      .from('design_draft')
-      .update({ mockups_generated_at: null })
-      .eq('final_product_id', id)
-    if (draftErr) {
-      console.error('updateProduct invalidate mockups:', draftErr)
-    }
+    // Mockup freshness vs product.updated_at is enforced in /api/products/*/mockup-image (see areProductMockupsFresh).
     return true
   }
 
@@ -737,13 +730,6 @@ export const supabase =
       return false
     }
     if (categoryIds.length === 0) {
-      const { error: draftErrEmpty } = await supabase
-        .from('design_draft')
-        .update({ mockups_generated_at: null })
-        .eq('final_product_id', productId)
-      if (draftErrEmpty) {
-        console.error('setProductCategories invalidate mockups:', draftErrEmpty)
-      }
       return true
     }
     const rows = categoryIds.map((category_id) => ({ product_id: productId, category_id }))
@@ -751,13 +737,6 @@ export const supabase =
     if (insertError) {
       console.error('setProductCategories insert:', insertError)
       return false
-    }
-    const { error: draftErr } = await supabase
-      .from('design_draft')
-      .update({ mockups_generated_at: null })
-      .eq('final_product_id', productId)
-    if (draftErr) {
-      console.error('setProductCategories invalidate mockups:', draftErr)
     }
     return true
   }
