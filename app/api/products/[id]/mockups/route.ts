@@ -5,6 +5,7 @@ import {
   compareMockupPlacementsForGallery,
   pickPrimaryMockupUrl,
 } from '@/lib/printful/pickPrimaryMockupForCard'
+import { areProductMockupsFresh } from '@/lib/printful/productMockupsFresh'
 
 type MockupPlacement = {
   placement: string
@@ -49,7 +50,7 @@ export async function GET(
   const supabase = await createServerSupabaseClient()
   const { data: product, error: productError } = await supabase
     .from('product')
-    .select('id, user_account_id, status, name')
+    .select('id, user_account_id, status, name, updated_at')
     .eq('id', productId)
     .maybeSingle()
   if (productError || !product) {
@@ -74,11 +75,17 @@ export async function GET(
 
   const { data: draft } = await admin
     .from('design_draft')
-    .select('mockup_urls')
+    .select('mockup_urls, mockups_generated_at')
     .eq('final_product_id', productId)
     .maybeSingle()
 
-  const rawPlacements = (draft?.mockup_urls ?? []) as MockupPlacement[]
+  const productUpdatedAt = product.updated_at as string | undefined
+  const mockupsGeneratedAt = draft?.mockups_generated_at as string | null | undefined
+  const rawPlacements = (
+    draft && areProductMockupsFresh(productUpdatedAt, mockupsGeneratedAt ?? null)
+      ? draft.mockup_urls ?? []
+      : []
+  ) as MockupPlacement[]
   const productName = (product as { name: string }).name
 
   const cardPrimaryUrl = pickPrimaryMockupUrl(rawPlacements)
