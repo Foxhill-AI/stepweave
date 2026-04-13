@@ -34,8 +34,13 @@ export function productToHomeItem(row: ProductListingRow): HomeItem {
     views: 0,
     likes: 0,
     downloads: 0,
-    author: row.user_account?.username ?? undefined,
-    authorProfileUrl: row.user_account?.username ? `/profile/${encodeURIComponent(row.user_account.username)}` : undefined,
+    author:
+      row.user_account?.user_public_profile?.username ?? row.user_account?.username ?? undefined,
+    authorProfileUrl: (() => {
+      const name =
+        row.user_account?.user_public_profile?.username ?? row.user_account?.username
+      return name ? `/profile/${encodeURIComponent(name)}` : undefined
+    })(),
     price: `$${Number(row.price).toFixed(2)}`,
     rating: 0,
     badge: isNew ? 'New' : undefined,
