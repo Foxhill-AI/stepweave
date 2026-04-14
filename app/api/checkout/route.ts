@@ -11,6 +11,7 @@ import {
   type CreateOrderItemInput,
 } from '@/lib/supabaseClient'
 import { resolveDesignSnapshotForProductCheckout } from '@/lib/checkout/resolveDesignSnapshotForProduct'
+import { getPlatformFeeBps, splitLineSubtotal } from '@/lib/platformFee'
 
 /** Body `designDraftByCartItemId`: maps cart_item.id → design_draft.id (must belong to cart owner). */
 function parseDesignDraftByCartItemId(
@@ -150,12 +151,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const feeBps = getPlatformFeeBps()
     const orderItems: CreateOrderItemInput[] = cartItems.map((row) => {
       const product = row.product_variant?.product
       const productId = product?.id ?? 0
       const productName = product?.name ?? 'Product'
       const unitPrice = Number(row.unit_price_at_added)
       const quantity = row.quantity
+      const lineSubtotal = quantity * unitPrice
+      const sellerId =
+        product != null && typeof product.user_account_id === 'number'
+          ? product.user_account_id
+          : null
+      const { platformFeeAmount, sellerNetAmount } = splitLineSubtotal(lineSubtotal, feeBps)
       const base: CreateOrderItemInput = {
         product_id: productId,
         product_variant_id: row.product_variant_id,
@@ -164,6 +172,10 @@ export async function POST(request: NextRequest) {
         quantity,
         unit_price: unitPrice,
         stripe_price_id: row.product_variant?.stripe_price_id ?? undefined,
+        seller_user_account_id: sellerId,
+        platform_fee_rate_bps: feeBps,
+        platform_fee_amount: platformFeeAmount,
+        seller_net_amount: sellerNetAmount,
       }
       const linked = resolvedDrafts.get(row.id)
       if (linked) {
@@ -184,8 +196,13 @@ export async function POST(request: NextRequest) {
       )
     }
     const totalAmount = subtotal + shippingAmount + taxesAmount
+    const platformFeeTotal = orderItems.reduce((s, i) => s + (i.platform_fee_amount ?? 0), 0)
+    const sellerNetTotal = orderItems.reduce((s, i) => s + (i.seller_net_amount ?? 0), 0)
 
-    const order = await createOrder(userAccountId, totalAmount, 'usd', supabase)
+    const order = await createOrder(userAccountId, totalAmount, 'usd', supabase, {
+      platformFeeTotal,
+      sellerNetTotal,
+    })
     if (!order) {
       return NextResponse.json(
         { error: 'Failed to create order' },

@@ -60,6 +60,9 @@ export default function SettingsTab({ userData, initialSubTab }: SettingsTabProp
   const [subscriptionMessage, setSubscriptionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [subscriptionModal, setSubscriptionModal] = useState<'downgrade' | 'cancel' | null>(null)
 
+  const [connectLoading, setConnectLoading] = useState(false)
+  const [connectMessage, setConnectMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
   const fetchSubscriptionStatus = async () => {
     setSubscriptionLoading(true)
     setSubscriptionMessage(null)
@@ -80,6 +83,45 @@ export default function SettingsTab({ userData, initialSubTab }: SettingsTabProp
   useEffect(() => {
     if (activeSubTab === 'subscription') fetchSubscriptionStatus()
   }, [activeSubTab])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || activeSubTab !== 'payments') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('connect') === 'return' || params.get('connect') === 'refresh') {
+      void (async () => {
+        try {
+          await fetch('/api/stripe/connect/status?sync=1', { credentials: 'include' })
+        } catch {
+          /* non-fatal */
+        }
+        await refreshUserAccount()
+        params.delete('connect')
+        const qs = params.toString()
+        const path = window.location.pathname + (qs ? `?${qs}` : '')
+        window.history.replaceState(null, '', path)
+      })()
+    }
+  }, [activeSubTab, refreshUserAccount])
+
+  const handleStartConnectOnboarding = async () => {
+    setConnectLoading(true)
+    setConnectMessage(null)
+    try {
+      const res = await fetch('/api/stripe/connect/start', { method: 'POST', credentials: 'include' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && typeof data.url === 'string' && data.url) {
+        window.location.href = data.url
+        return
+      }
+      setConnectMessage({
+        type: 'error',
+        text: typeof data.error === 'string' ? data.error : 'Could not start payout setup.',
+      })
+    } catch {
+      setConnectMessage({ type: 'error', text: 'Network error.' })
+    }
+    setConnectLoading(false)
+  }
 
   const handleDowngrade = async () => {
     setSubscriptionActionLoading(true)
@@ -402,6 +444,56 @@ export default function SettingsTab({ userData, initialSubTab }: SettingsTabProp
               <button className="settings-action-btn" disabled>
                 Manage Payment Methods (Coming Soon)
               </button>
+            </div>
+
+            <h3 className="settings-section-title" style={{ marginTop: '1.75rem' }}>
+              Creator payouts
+            </h3>
+            <div className="settings-form">
+              <p className="settings-help-text">
+                Connect a Stripe Express account to receive your share of sales. Platform checkout still runs on the
+                main account until payouts are fully enabled in a later release.
+              </p>
+              {userAccount &&
+                (() => {
+                  const charges = Boolean(userAccount.stripe_connect_charges_enabled)
+                  const payouts = Boolean(userAccount.stripe_connect_payouts_enabled)
+                  const details = Boolean(userAccount.stripe_connect_details_submitted)
+                  const ready = charges && payouts
+                  return (
+                    <div className="settings-view-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.35rem' }}>
+                      <span className="settings-view-label">Payout account</span>
+                      <span className="settings-view-value">
+                        {ready
+                          ? 'Onboarding complete — charges and payouts enabled.'
+                          : userAccount.stripe_connect_account_id
+                            ? details
+                              ? 'Account created; Stripe may still be reviewing requirements.'
+                              : 'Onboarding not finished yet.'
+                            : 'Not connected yet.'}
+                      </span>
+                      {!ready && (
+                        <button
+                          type="button"
+                          className="settings-action-btn settings-action-btn-recommended"
+                          onClick={handleStartConnectOnboarding}
+                          disabled={connectLoading}
+                          style={{ marginTop: '0.5rem' }}
+                        >
+                          {connectLoading ? 'Opening Stripe…' : userAccount.stripe_connect_account_id ? 'Continue setup' : 'Set up payouts'}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()}
+              {connectMessage && (
+                <p
+                  className={`settings-save-message ${connectMessage.type === 'error' ? 'settings-save-message-error' : 'settings-save-message-success'}`}
+                  role="alert"
+                >
+                  {connectMessage.text}
+                </p>
+              )}
             </div>
           </div>
         )}

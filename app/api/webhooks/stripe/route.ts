@@ -11,6 +11,7 @@ import {
 } from '@/lib/supabaseClient'
 import { sendOrderConfirmationEmail, sendSubscriptionEndedEmail } from '@/lib/email'
 import { fulfillOrderAfterPayment } from '@/lib/fulfillment/fulfillOrderAfterPayment'
+import { settleConnectTransfersForOrder } from '@/lib/stripe/settleConnectTransfersForOrder'
 
 function shippingAddressFromSession(session: Stripe.Checkout.Session): ShippingAddressRow | null {
   /** Stripe typings omit `shipping_details` on Session in some API versions; it exists at runtime. */
@@ -57,7 +58,8 @@ function shippingAddressFromSession(session: Stripe.Checkout.Session): ShippingA
 }
 
 /**
- * Stripe webhook: checkout.session.completed (orders + subscriptions), customer.subscription.deleted.
+ * Stripe webhook: checkout.session.completed (orders + subscriptions), customer.subscription.deleted,
+ * account.updated (Connect Express onboarding flags). Product orders: after pay, Connect Transfers to sellers (Phase 3).
  * Idempotencia: tabla stripe_webhook_event (evt_…); reintentos si processed_at es null.
  *
  * Requiere STRIPE_WEBHOOK_SECRET, STRIPE_SECRET_KEY, y SUPABASE_SERVICE_ROLE_KEY (recomendado).
@@ -185,6 +187,64 @@ export async function POST(request: NextRequest) {
     }
     await markStripeWebhookEventProcessed(event.id, client, null)
     return NextResponse.json({ received: true, subscription_deleted: true }, { status: 200 })
+  }
+
+  // ——— Stripe Connect (Express) account updates ———
+  if (event.type === 'account.updated') {
+    const account = event.data.object as Stripe.Account
+    const acctId = account.id
+    const metaRaw = account.metadata?.user_account_id
+    let userAccountId: number | null = null
+    if (metaRaw != null && String(metaRaw).trim() !== '') {
+      const n = Number(metaRaw)
+      if (Number.isInteger(n) && n > 0) userAccountId = n
+    }
+    if (userAccountId == null && acctId) {
+      const { data: byAcct } = await client
+        .from('user_account')
+        .select('id')
+        .eq('stripe_connect_account_id', acctId)
+        .maybeSingle()
+      if (byAcct?.id != null) userAccountId = byAcct.id as number
+    }
+    if (userAccountId == null) {
+      console.warn('Stripe webhook: account.updated could not resolve user_account_id', acctId)
+      await markStripeWebhookEventProcessed(event.id, client, null)
+      return NextResponse.json({ received: true, connect: 'unmapped' }, { status: 200 })
+    }
+
+    const charges = Boolean(account.charges_enabled)
+    const payouts = Boolean(account.payouts_enabled)
+    const details = Boolean(account.details_submitted)
+    const now = new Date().toISOString()
+
+    const { data: before } = await client
+      .from('user_account')
+      .select('stripe_connect_onboarding_completed_at')
+      .eq('id', userAccountId)
+      .maybeSingle()
+    const wasComplete = Boolean(before?.stripe_connect_onboarding_completed_at)
+    const nowComplete = charges && payouts
+
+    const patch: Record<string, unknown> = {
+      stripe_connect_account_id: acctId,
+      stripe_connect_charges_enabled: charges,
+      stripe_connect_payouts_enabled: payouts,
+      stripe_connect_details_submitted: details,
+      stripe_connect_last_synced_at: now,
+      updated_at: now,
+    }
+    if (nowComplete && !wasComplete) {
+      patch.stripe_connect_onboarding_completed_at = now
+    }
+
+    const { error: connectUpdateError } = await client.from('user_account').update(patch).eq('id', userAccountId)
+    if (connectUpdateError) {
+      console.error('Stripe webhook: account.updated user_account update failed', connectUpdateError)
+      return NextResponse.json({ error: 'Failed to update Connect status' }, { status: 500 })
+    }
+    await markStripeWebhookEventProcessed(event.id, client, null)
+    return NextResponse.json({ received: true, connect: true, user_account_id: userAccountId }, { status: 200 })
   }
 
   if (event.type !== 'checkout.session.completed') {
@@ -328,6 +388,13 @@ export async function POST(request: NextRequest) {
       { error: 'Failed to update order' },
       { status: 500 }
     )
+  }
+
+  try {
+    const stripeForConnect = new Stripe(stripeSecret)
+    await settleConnectTransfersForOrder(orderId, stripeForConnect, client, paymentIntentId)
+  } catch (e) {
+    console.error('Stripe webhook: settleConnectTransfersForOrder', e)
   }
 
   try {
