@@ -838,6 +838,10 @@ export const supabase =
     created_at: string
     design_draft_id?: number | null
     design_snapshot?: Record<string, unknown> | null
+    seller_user_account_id?: number | null
+    platform_fee_rate_bps?: number
+    platform_fee_amount?: number
+    seller_net_amount?: number
   }
 
   /** Order row with items (for list/detail). */
@@ -865,6 +869,8 @@ export const supabase =
     created_at: string
     updated_at: string | null
     shipping_address: ShippingAddressRow | null
+    platform_fee_total?: number
+    seller_net_total?: number
     order_item: OrderItemRow[]
   }
 
@@ -885,6 +891,8 @@ export const supabase =
         created_at,
         updated_at,
         shipping_address,
+        platform_fee_total,
+        seller_net_total,
         order_item (
           id,
           order_id,
@@ -898,7 +906,11 @@ export const supabase =
           stripe_price_id,
           created_at,
           design_draft_id,
-          design_snapshot
+          design_snapshot,
+          seller_user_account_id,
+          platform_fee_rate_bps,
+          platform_fee_amount,
+          seller_net_amount
         )
       `
       )
@@ -924,6 +936,11 @@ export const supabase =
     /** Set when checkout links a design line item to a draft (Printful fulfillment). */
     design_draft_id?: number | null
     design_snapshot?: Record<string, unknown> | null
+    /** Creator payout snapshot (Phase 2). */
+    seller_user_account_id?: number | null
+    platform_fee_rate_bps?: number
+    platform_fee_amount?: number
+    seller_net_amount?: number
   }
 
   /** Frozen design fields for Printful / order fulfillment (stored at checkout). */
@@ -978,7 +995,8 @@ export const supabase =
     userAccountId: number,
     totalAmount: number,
     currency: string = 'usd',
-    client?: typeof supabase
+    client?: typeof supabase,
+    payoutTotals?: { platformFeeTotal: number; sellerNetTotal: number }
   ): Promise<{ id: number } | null> {
     const db = client ?? supabase
     const { data, error } = await db
@@ -988,6 +1006,12 @@ export const supabase =
         total_amount: totalAmount,
         currency: currency.toLowerCase(),
         status: 'pending',
+        ...(payoutTotals
+          ? {
+              platform_fee_total: payoutTotals.platformFeeTotal,
+              seller_net_total: payoutTotals.sellerNetTotal,
+            }
+          : {}),
       })
       .select('id')
       .single()
@@ -1018,6 +1042,16 @@ export const supabase =
       unit_price: item.unit_price,
       subtotal: item.quantity * item.unit_price,
       stripe_price_id: item.stripe_price_id ?? null,
+      ...(item.seller_user_account_id != null
+        ? { seller_user_account_id: item.seller_user_account_id }
+        : {}),
+      ...(item.platform_fee_rate_bps != null
+        ? { platform_fee_rate_bps: item.platform_fee_rate_bps }
+        : {}),
+      ...(item.platform_fee_amount != null
+        ? { platform_fee_amount: item.platform_fee_amount }
+        : {}),
+      ...(item.seller_net_amount != null ? { seller_net_amount: item.seller_net_amount } : {}),
       ...(item.design_draft_id != null
         ? { design_draft_id: item.design_draft_id }
         : {}),
@@ -1055,6 +1089,8 @@ export const supabase =
         created_at,
         updated_at,
         shipping_address,
+        platform_fee_total,
+        seller_net_total,
         order_item (
           id,
           order_id,
@@ -1068,7 +1104,11 @@ export const supabase =
           stripe_price_id,
           created_at,
           design_draft_id,
-          design_snapshot
+          design_snapshot,
+          seller_user_account_id,
+          platform_fee_rate_bps,
+          platform_fee_amount,
+          seller_net_amount
         )
       `
       )
@@ -1100,6 +1140,8 @@ export const supabase =
         created_at,
         updated_at,
         shipping_address,
+        platform_fee_total,
+        seller_net_total,
         order_item (
           id,
           order_id,
@@ -1113,7 +1155,11 @@ export const supabase =
           stripe_price_id,
           created_at,
           design_draft_id,
-          design_snapshot
+          design_snapshot,
+          seller_user_account_id,
+          platform_fee_rate_bps,
+          platform_fee_amount,
+          seller_net_amount
         )
       `
       )
@@ -1992,6 +2038,7 @@ export const supabase =
       product: {
         id: number
         name: string
+        user_account_id: number
         design_data: Record<string, unknown> | null
         user_account: { username: string } | null
       } | null
@@ -2090,6 +2137,7 @@ export const supabase =
           product (
             id,
             name,
+            user_account_id,
             design_data,
             user_account ( username )
           ),
@@ -2751,6 +2799,8 @@ export type Database = {
             created_at: string
             updated_at: string | null
             shipping_address: ShippingAddressRow | null
+            platform_fee_total: number
+            seller_net_total: number
           }
           Insert: {
             id?: number
@@ -2766,6 +2816,8 @@ export type Database = {
             created_at?: string
             updated_at?: string | null
             shipping_address?: ShippingAddressRow | null
+            platform_fee_total?: number
+            seller_net_total?: number
           }
           Update: {
             id?: number
@@ -2781,6 +2833,8 @@ export type Database = {
             created_at?: string
             updated_at?: string | null
             shipping_address?: ShippingAddressRow | null
+            platform_fee_total?: number
+            seller_net_total?: number
           }
         }
         order_item: {
@@ -2796,6 +2850,10 @@ export type Database = {
             subtotal: number
             stripe_price_id: string | null
             created_at: string
+            seller_user_account_id: number | null
+            platform_fee_rate_bps: number
+            platform_fee_amount: number
+            seller_net_amount: number
           }
           Insert: {
             id?: number
@@ -2809,6 +2867,10 @@ export type Database = {
             subtotal?: number
             stripe_price_id?: string | null
             created_at?: string
+            seller_user_account_id?: number | null
+            platform_fee_rate_bps?: number
+            platform_fee_amount?: number
+            seller_net_amount?: number
           }
           Update: {
             id?: number
@@ -2822,6 +2884,10 @@ export type Database = {
             subtotal?: number
             stripe_price_id?: string | null
             created_at?: string
+            seller_user_account_id?: number | null
+            platform_fee_rate_bps?: number
+            platform_fee_amount?: number
+            seller_net_amount?: number
           }
         }
         product_interaction: {
