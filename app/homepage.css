@@ -55,6 +55,29 @@
   animation: homepage-fade-in 0.4s ease-out both;
 }
 
+.homepage-show-more-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: calc(var(--spacing-lg) * -0.25);
+  margin-bottom: var(--spacing-2xl);
+}
+
+.homepage-show-more-button {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.homepage-show-more-button:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 .explore-back-link {
   display: inline-block;
   margin-top: var(--spacing-md);
