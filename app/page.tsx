@@ -13,11 +13,13 @@ import './homepage.css'
 
 
 export default function HomePage() {
+  const TRENDING_BATCH_SIZE = 6
   const [products, setProducts] = useState<HomeItem[]>([])
   /** Ranked by likes + saves (all users); from /api/home-products popularProducts. */
   const [popularItems, setPopularItems] = useState<HomeItem[]>([])
   const [heroSections, setHeroSections] = useState<HeroSectionData[]>([])
   const [loading, setLoading] = useState(true)
+  const [visibleTrendingCount, setVisibleTrendingCount] = useState(TRENDING_BATCH_SIZE)
 
   useEffect(() => {
     let cancelled = false
@@ -119,6 +121,8 @@ export default function HomePage() {
   }, [])
 
   const trendingItems = products.slice(0, 12)
+  const visibleTrendingItems = trendingItems.slice(0, visibleTrendingCount)
+  const hasMoreTrending = visibleTrendingCount < trendingItems.length
   /** Only listings with the "New" badge (created within the last 7 days). */
   const newItems = products.filter((p) => p.badge === 'New').slice(0, 12)
   const digitalItems = products.slice(0, 8)
@@ -148,12 +152,30 @@ export default function HomePage() {
             </p>
           )}
           {!loading && trendingItems.length > 0 && (
-            <ContentSection
-              title="Trending Now"
-              items={trendingItems}
-              showAsCarousel={true}
-              sectionSlug="trending-now"
-            />
+            <>
+              <ContentSection
+                title="Trending Now"
+                items={visibleTrendingItems}
+                showAsGrid={true}
+                gridLayout="responsive-trending"
+                sectionSlug="trending-now"
+              />
+              {hasMoreTrending && (
+                <div className="homepage-show-more-wrap">
+                  <button
+                    type="button"
+                    className="homepage-show-more-button"
+                    onClick={() =>
+                      setVisibleTrendingCount((count) =>
+                        Math.min(count + TRENDING_BATCH_SIZE, trendingItems.length)
+                      )
+                    }
+                  >
+                    Show more
+                  </button>
+                </div>
+              )}
+            </>
           )}
           {!loading && popularItems.length > 0 && (
             <ContentSection
