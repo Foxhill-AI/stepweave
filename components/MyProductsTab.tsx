@@ -98,7 +98,7 @@ export default function MyProductsTab() {
 
     switch (action) {
       case 'edit':
-        router.push(`/design-tool/${productId}`)
+        router.push(`/design-tool/product/${productId}`)
         break
       case 'duplicate':
         // TODO: clone product + variants

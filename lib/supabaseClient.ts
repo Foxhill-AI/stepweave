@@ -86,17 +86,43 @@ export const supabase =
   }
 
   export async function getPublicProfileByUsername(username: string): Promise<PublicProfileRow | null> {
-    if (!username.trim()) return null
-    const { data, error } = await supabase
+    const trimmed = username.trim()
+    if (!trimmed) return null
+
+    const { data: pub, error: pubErr } = await supabase
+      .from('user_public_profile')
+      .select('user_account_id, username, avatar_url, bio')
+      .eq('username', trimmed)
+      .maybeSingle()
+
+    if (pubErr) {
+      console.error('getPublicProfileByUsername user_public_profile:', pubErr)
+    }
+
+    if (pub?.user_account_id != null) {
+      const { data: acc } = await supabase
+        .from('user_account')
+        .select('avatar_url, bio')
+        .eq('id', pub.user_account_id)
+        .maybeSingle()
+      return {
+        id: pub.user_account_id,
+        username: pub.username,
+        avatar_url: pub.avatar_url ?? acc?.avatar_url ?? null,
+        bio: pub.bio ?? acc?.bio ?? null,
+      }
+    }
+
+    const { data: accOnly, error: accErr } = await supabase
       .from('user_account')
       .select('id, username, avatar_url, bio')
-      .eq('username', username.trim())
+      .eq('username', trimmed)
       .maybeSingle()
-    if (error) {
-      console.error('getPublicProfileByUsername:', error)
+    if (accErr) {
+      console.error('getPublicProfileByUsername user_account:', accErr)
       return null
     }
-    return data as PublicProfileRow | null
+    return accOnly as PublicProfileRow | null
   }
 
   /** Public profile by user_account_id (for product creator display; readable by anyone). */
@@ -113,6 +139,58 @@ export const supabase =
       return null
     }
     return data as { username: string; avatar_url: string | null; bio: string | null } | null
+  }
+
+  /**
+   * Public username, avatar, and bio for the homepage hero. Uses service role when
+   * available so counts/text match what visitors should see (RLS-safe). Merges
+   * user_public_profile with user_account so bio/avatar/username still appear if
+   * one table is missing a value the other has.
+   */
+  export async function getPublicProfileForHero(userAccountId: number): Promise<{
+    username: string
+    avatar_url: string | null
+    bio: string
+  }> {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const fallback = async () => {
+      const p = await getPublicProfileByUserAccountId(userAccountId)
+      if (!p) return { username: 'Creator', avatar_url: null, bio: '' }
+      return {
+        username: p.username?.trim() || 'Creator',
+        avatar_url: p.avatar_url,
+        bio: p.bio?.trim() ?? '',
+      }
+    }
+    if (!url || !serviceRoleKey) {
+      return fallback()
+    }
+    const admin = createClient(url, serviceRoleKey)
+    const [{ data: pub }, { data: acc }] = await Promise.all([
+      admin
+        .from('user_public_profile')
+        .select('username, avatar_url, bio')
+        .eq('user_account_id', userAccountId)
+        .maybeSingle(),
+      admin.from('user_account').select('username, avatar_url, bio').eq('id', userAccountId).maybeSingle(),
+    ])
+
+    const username =
+      (pub?.username && String(pub.username).trim()) ||
+      (acc?.username && String(acc.username).trim()) ||
+      'Creator'
+
+    const avatarRaw =
+      (pub?.avatar_url && String(pub.avatar_url).trim()) ||
+      (acc?.avatar_url && String(acc.avatar_url).trim()) ||
+      ''
+    const avatar_url = avatarRaw || null
+
+    let bio = (pub?.bio && String(pub.bio).trim()) || ''
+    if (!bio && acc?.bio) bio = String(acc.bio).trim()
+
+    return { username, avatar_url, bio }
   }
 
   /** Update profile (bio, avatar_url, username) in user_account and user_public_profile. */
@@ -178,7 +256,12 @@ export const supabase =
       category_id: number
       category: { id: number; name: string; slug: string } | null
     }>
-    user_account: { username: string; avatar_url?: string | null; bio?: string | null } | null
+    user_account: {
+      username: string
+      avatar_url?: string | null
+      bio?: string | null
+      user_public_profile?: { username: string } | null
+    } | null
     /** First active variant (for Add to cart from listing). */
     product_variant?: Array<{ id: number; price_override: number | null }>
   }
@@ -234,7 +317,7 @@ export const supabase =
       category_id,
       category ( id, name, slug )
     ),
-    user_account ( username ),
+    user_account ( username, user_public_profile ( username ) ),
     product_variant ( id, price_override )
   `
 
@@ -259,6 +342,59 @@ export const supabase =
     products: ProductListingRow[]
   }
 
+  /**
+   * Build hero carousel sections from the same product rows as the homepage list
+   * (avoids a second DB query that could disagree with getActiveProducts).
+   */
+  export async function buildFeaturedCreatorsFromProductRows(
+    rows: ProductListingRow[]
+  ): Promise<FeaturedCreatorForHero[]> {
+    const byOwner = new Map<number, ProductListingRow[]>()
+    for (const row of rows) {
+      const rawId = row.user_account_id
+      if (rawId == null) continue
+      const id = typeof rawId === 'number' ? rawId : Number(rawId)
+      if (!Number.isFinite(id)) continue
+      const list = byOwner.get(id) ?? []
+      if (list.length < 3) list.push(row)
+      byOwner.set(id, list)
+    }
+    const creatorIds = Array.from(byOwner.entries())
+      .filter(([, products]) => products.length > 0)
+      .slice(0, 3)
+      .map(([ownerId]) => ownerId)
+
+    if (creatorIds.length === 0) return []
+
+    const [publicProfiles, statsList] = await Promise.all([
+      Promise.all(creatorIds.map((id) => getPublicProfileForHero(id))),
+      Promise.all(creatorIds.map((id) => getProfileStatsWithServiceRole(id))),
+    ])
+    const sections: FeaturedCreatorForHero[] = creatorIds.map((id, i) => {
+      const products = byOwner.get(id) ?? []
+      const heroProfile = publicProfiles[i]
+      const username = heroProfile.username
+      const avatarUrl = heroProfile.avatar_url?.trim()
+      const avatar = avatarUrl || username.charAt(0).toUpperCase()
+      const bio = heroProfile.bio
+      const stats = statsList[i]
+      const fc = stats?.followers ?? 0
+      const followersNumStr = fc >= 1000 ? `${(fc / 1000).toFixed(1)}k` : String(fc)
+      const followersLabel = fc === 1 ? '1 follower' : `${followersNumStr} followers`
+      return {
+        profile: {
+          userAccountId: id,
+          avatar,
+          name: username,
+          followers: followersLabel,
+          description: bio,
+        },
+        products,
+      }
+    })
+    return sections
+  }
+
   /** Fetch up to 3 creators with active products, each with up to 3 products, for the homepage hero carousel.
    * Uses user_public_profile for username, avatar_url, and bio so that any visitor (including not signed in) can see them. */
   export async function getFeaturedCreatorsForHero(): Promise<FeaturedCreatorForHero[]> {
@@ -273,45 +409,7 @@ export const supabase =
       return []
     }
     const rows = (data ?? []) as unknown as ProductListingRow[]
-    const byOwner = new Map<number, ProductListingRow[]>()
-    for (const row of rows) {
-      const id = row.user_account_id
-      const list = byOwner.get(id) ?? []
-      if (list.length < 3) list.push(row)
-      byOwner.set(id, list)
-    }
-    const creatorIds = Array.from(byOwner.entries())
-      .filter(([, products]) => products.length > 0)
-      .slice(0, 3)
-      .map(([id]) => id)
-
-    if (creatorIds.length === 0) return []
-
-    const [publicProfiles, statsList] = await Promise.all([
-      Promise.all(creatorIds.map((id) => getPublicProfileByUserAccountId(id))),
-      Promise.all(creatorIds.map((id) => getProfileStats(id).catch(() => ({ followers: 0, following: 0, products: 0, likesReceived: 0 })))),
-    ])
-    const sections: FeaturedCreatorForHero[] = creatorIds.map((id, i) => {
-      const products = byOwner.get(id) ?? []
-      const publicProfile = publicProfiles[i]
-      const username = publicProfile?.username?.trim() || 'Creator'
-      const avatarUrl = publicProfile?.avatar_url?.trim()
-      const avatar = avatarUrl || username.charAt(0).toUpperCase()
-      const bio = publicProfile?.bio?.trim() || ''
-      const stats = statsList[i]
-      const followers = stats ? (stats.followers >= 1000 ? `${(stats.followers / 1000).toFixed(1)}k` : String(stats.followers)) : '0'
-      return {
-        profile: {
-          userAccountId: id,
-          avatar,
-          name: username,
-          followers: `${followers} followers`,
-          description: bio || 'Explore unique designs and join our creative community.',
-        },
-        products,
-      }
-    })
-    return sections
+    return buildFeaturedCreatorsFromProductRows(rows)
   }
 
   export async function getActiveProducts(categorySlug?: string): Promise<ProductListingRow[]> {
@@ -332,6 +430,83 @@ export const supabase =
         (pc) => pc.category?.slug === categorySlug
       )
     )
+  }
+
+  export type PopularProductsResult = {
+    products: ProductListingRow[]
+    /** Total interactions (likes + saves) per product id — for UI badges. */
+    engagementByProductId: Record<number, number>
+  }
+
+  /**
+   * Active products ranked by total engagement: likes + saves (product_interaction).
+   * Uses service role to aggregate counts across all users. Falls back to newest products
+   * when SERVICE_ROLE_KEY is missing or no interactions exist.
+   */
+  export async function getPopularProductsWithEngagement(limit = 12): Promise<PopularProductsResult> {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    if (!url || !serviceKey) {
+      const fallback = await getActiveProducts()
+      const products = fallback.slice(0, limit)
+      const engagementByProductId: Record<number, number> = {}
+      return { products, engagementByProductId }
+    }
+
+    const admin = createClient(url, serviceKey)
+    const { data: interactions, error } = await admin
+      .from('product_interaction')
+      .select('product_id')
+      .in('interaction_type', ['like', 'save'])
+
+    if (error) {
+      console.error('getPopularProductsWithEngagement interactions:', error)
+      const fallback = await getActiveProducts()
+      return { products: fallback.slice(0, limit), engagementByProductId: {} }
+    }
+
+    const counts = new Map<number, number>()
+    for (const row of interactions ?? []) {
+      const pid = Number((row as { product_id: number }).product_id)
+      if (!Number.isFinite(pid)) continue
+      counts.set(pid, (counts.get(pid) ?? 0) + 1)
+    }
+
+    const sortedIds = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([id]) => id)
+      .slice(0, limit)
+
+    if (sortedIds.length === 0) {
+      const fallback = await getActiveProducts()
+      return { products: fallback.slice(0, limit), engagementByProductId: {} }
+    }
+
+    const { data: productRows, error: productError } = await admin
+      .from('product')
+      .select(productListingSelect)
+      .eq('status', 'active')
+      .in('id', sortedIds)
+
+    if (productError || !productRows?.length) {
+      const fallback = await getActiveProducts()
+      return { products: fallback.slice(0, limit), engagementByProductId: {} }
+    }
+
+    const rows = productRows as unknown as ProductListingRow[]
+    const byId = new Map(rows.map((p) => [p.id as number, p]))
+    const ordered = sortedIds
+      .map((id) => byId.get(id))
+      .filter((p): p is ProductListingRow => p != null)
+      .slice(0, limit)
+
+    const engagementByProductId: Record<number, number> = {}
+    for (const p of ordered) {
+      const id = p.id as number
+      engagementByProductId[id] = counts.get(id) ?? 0
+    }
+
+    return { products: ordered, engagementByProductId }
   }
 
   /** Search active products by name and optional filters. For homepage browse / search. */
@@ -420,9 +595,11 @@ export const supabase =
 
     if (creatorUsername && creatorUsername.trim()) {
       const match = creatorUsername.trim().toLowerCase()
-      rows = rows.filter(
-        (p) => p.user_account?.username?.toLowerCase().includes(match)
-      )
+      rows = rows.filter((p) => {
+        const acc = p.user_account?.username?.toLowerCase() ?? ''
+        const pub = p.user_account?.user_public_profile?.username?.toLowerCase() ?? ''
+        return acc.includes(match) || pub.includes(match)
+      })
     }
 
     if (exactMatch && exactMatch.trim()) {
@@ -535,6 +712,7 @@ export const supabase =
       console.error('updateProduct:', error)
       return false
     }
+    // Mockup freshness vs product.updated_at is enforced in /api/products/*/mockup-image (see areProductMockupsFresh).
     return true
   }
 
@@ -551,7 +729,9 @@ export const supabase =
       console.error('setProductCategories delete:', deleteError)
       return false
     }
-    if (categoryIds.length === 0) return true
+    if (categoryIds.length === 0) {
+      return true
+    }
     const rows = categoryIds.map((category_id) => ({ product_id: productId, category_id }))
     const { error: insertError } = await supabase.from('product_category').insert(rows)
     if (insertError) {
@@ -656,6 +836,12 @@ export const supabase =
     subtotal: number
     stripe_price_id: string | null
     created_at: string
+    design_draft_id?: number | null
+    design_snapshot?: Record<string, unknown> | null
+    seller_user_account_id?: number | null
+    platform_fee_rate_bps?: number
+    platform_fee_amount?: number
+    seller_net_amount?: number
   }
 
   /** Order row with items (for list/detail). */
@@ -667,6 +853,10 @@ export const supabase =
     state?: string | null
     postal_code?: string | null
     country?: string | null
+    /** From Stripe customer / shipping details (Printful recipient). */
+    name?: string | null
+    email?: string | null
+    phone?: string | null
   }
 
   export type OrderWithItemsRow = {
@@ -679,6 +869,8 @@ export const supabase =
     created_at: string
     updated_at: string | null
     shipping_address: ShippingAddressRow | null
+    platform_fee_total?: number
+    seller_net_total?: number
     order_item: OrderItemRow[]
   }
 
@@ -699,6 +891,8 @@ export const supabase =
         created_at,
         updated_at,
         shipping_address,
+        platform_fee_total,
+        seller_net_total,
         order_item (
           id,
           order_id,
@@ -710,7 +904,13 @@ export const supabase =
           unit_price,
           subtotal,
           stripe_price_id,
-          created_at
+          created_at,
+          design_draft_id,
+          design_snapshot,
+          seller_user_account_id,
+          platform_fee_rate_bps,
+          platform_fee_amount,
+          seller_net_amount
         )
       `
       )
@@ -733,6 +933,57 @@ export const supabase =
     quantity: number
     unit_price: number
     stripe_price_id?: string | null
+    /** Set when checkout links a design line item to a draft (Printful fulfillment). */
+    design_draft_id?: number | null
+    design_snapshot?: Record<string, unknown> | null
+    /** Creator payout snapshot (Phase 2). */
+    seller_user_account_id?: number | null
+    platform_fee_rate_bps?: number
+    platform_fee_amount?: number
+    seller_net_amount?: number
+  }
+
+  /** Frozen design fields for Printful / order fulfillment (stored at checkout). */
+  export type DesignDraftSnapshotPayload = {
+    design_state: Record<string, unknown>
+    pattern_image_url: string | null
+    base_model_id: string
+    structural_color: string
+    captured_at: string
+  }
+
+  /**
+   * Load a design draft owned by the user and build a snapshot for order_item.design_snapshot.
+   */
+  export async function getDesignDraftSnapshotForUser(
+    draftId: number,
+    userAccountId: number,
+    client?: typeof supabase
+  ): Promise<{ draftId: number; snapshot: DesignDraftSnapshotPayload } | null> {
+    const db = client ?? supabase
+    const { data, error } = await db
+      .from('design_draft')
+      .select('id, design_state, pattern_image_url, base_model_id, structural_color')
+      .eq('id', draftId)
+      .eq('user_account_id', userAccountId)
+      .maybeSingle()
+    if (error || !data) {
+      if (error) console.error('getDesignDraftSnapshotForUser:', error)
+      return null
+    }
+    const raw = data.design_state
+    const design_state =
+      typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {}
+    const snapshot: DesignDraftSnapshotPayload = {
+      design_state,
+      pattern_image_url: data.pattern_image_url ?? null,
+      base_model_id: data.base_model_id,
+      structural_color: data.structural_color,
+      captured_at: new Date().toISOString(),
+    }
+    return { draftId: data.id as number, snapshot }
   }
 
   /**
@@ -744,7 +995,8 @@ export const supabase =
     userAccountId: number,
     totalAmount: number,
     currency: string = 'usd',
-    client?: typeof supabase
+    client?: typeof supabase,
+    payoutTotals?: { platformFeeTotal: number; sellerNetTotal: number }
   ): Promise<{ id: number } | null> {
     const db = client ?? supabase
     const { data, error } = await db
@@ -754,6 +1006,12 @@ export const supabase =
         total_amount: totalAmount,
         currency: currency.toLowerCase(),
         status: 'pending',
+        ...(payoutTotals
+          ? {
+              platform_fee_total: payoutTotals.platformFeeTotal,
+              seller_net_total: payoutTotals.sellerNetTotal,
+            }
+          : {}),
       })
       .select('id')
       .single()
@@ -784,6 +1042,22 @@ export const supabase =
       unit_price: item.unit_price,
       subtotal: item.quantity * item.unit_price,
       stripe_price_id: item.stripe_price_id ?? null,
+      ...(item.seller_user_account_id != null
+        ? { seller_user_account_id: item.seller_user_account_id }
+        : {}),
+      ...(item.platform_fee_rate_bps != null
+        ? { platform_fee_rate_bps: item.platform_fee_rate_bps }
+        : {}),
+      ...(item.platform_fee_amount != null
+        ? { platform_fee_amount: item.platform_fee_amount }
+        : {}),
+      ...(item.seller_net_amount != null ? { seller_net_amount: item.seller_net_amount } : {}),
+      ...(item.design_draft_id != null
+        ? { design_draft_id: item.design_draft_id }
+        : {}),
+      ...(item.design_snapshot != null
+        ? { design_snapshot: item.design_snapshot }
+        : {}),
     }))
     const { error } = await db.from('order_item').insert(rows)
     if (error) {
@@ -815,6 +1089,8 @@ export const supabase =
         created_at,
         updated_at,
         shipping_address,
+        platform_fee_total,
+        seller_net_total,
         order_item (
           id,
           order_id,
@@ -826,7 +1102,13 @@ export const supabase =
           unit_price,
           subtotal,
           stripe_price_id,
-          created_at
+          created_at,
+          design_draft_id,
+          design_snapshot,
+          seller_user_account_id,
+          platform_fee_rate_bps,
+          platform_fee_amount,
+          seller_net_amount
         )
       `
       )
@@ -858,6 +1140,8 @@ export const supabase =
         created_at,
         updated_at,
         shipping_address,
+        platform_fee_total,
+        seller_net_total,
         order_item (
           id,
           order_id,
@@ -869,7 +1153,13 @@ export const supabase =
           unit_price,
           subtotal,
           stripe_price_id,
-          created_at
+          created_at,
+          design_draft_id,
+          design_snapshot,
+          seller_user_account_id,
+          platform_fee_rate_bps,
+          platform_fee_amount,
+          seller_net_amount
         )
       `
       )
@@ -905,32 +1195,132 @@ export const supabase =
     return data != null
   }
 
+  export type UpdateOrderPaidOptions = {
+    stripePaymentIntentId?: string | null
+    stripeCustomerId?: string | null
+    /**
+     * If set, update only when user_order.stripe_checkout_session_id matches (webhook hardening).
+     */
+    expectedStripeCheckoutSessionId?: string | null
+  }
+
   /**
    * Mark order as paid (for Stripe webhook: checkout.session.completed).
-   * Sets status to 'paid', paid_at to now, and optionally shipping_address.
+   * Sets status to 'paid', paid_at to now, optional Stripe ids, shipping_address.
+   * Idempotent: if order is already `paid`, returns true without updating.
    */
   export async function updateOrderPaid(
     orderId: number,
     client?: typeof supabase,
-    shippingAddress?: ShippingAddressRow | null
+    shippingAddress?: ShippingAddressRow | null,
+    options?: UpdateOrderPaidOptions
   ): Promise<boolean> {
     const db = client ?? supabase
+    const { data: existing, error: loadErr } = await db
+      .from('user_order')
+      .select('id, status, stripe_checkout_session_id')
+      .eq('id', orderId)
+      .maybeSingle()
+    if (loadErr || !existing) {
+      console.error('updateOrderPaid: load order', loadErr)
+      return false
+    }
+    if (String(existing.status) === 'paid') {
+      return true
+    }
+
+    const expectedSession = options?.expectedStripeCheckoutSessionId
+    if (
+      expectedSession &&
+      existing.stripe_checkout_session_id &&
+      existing.stripe_checkout_session_id !== expectedSession
+    ) {
+      console.error(
+        'updateOrderPaid: stripe_checkout_session_id mismatch for order',
+        orderId
+      )
+      return false
+    }
+
     const now = new Date().toISOString()
-    const payload: { status: string; paid_at: string; shipping_address?: ShippingAddressRow | null } = {
+    const payload: Record<string, unknown> = {
       status: 'paid',
       paid_at: now,
     }
     if (shippingAddress != null) {
       payload.shipping_address = shippingAddress
     }
-    const { error } = await db
-      .from('user_order')
-      .update(payload)
-      .eq('id', orderId)
+    if (options?.stripePaymentIntentId) {
+      payload.stripe_payment_intent_id = options.stripePaymentIntentId
+    }
+    if (options?.stripeCustomerId) {
+      payload.stripe_customer_id = options.stripeCustomerId
+    }
+
+    const { error } = await db.from('user_order').update(payload).eq('id', orderId)
     if (error) {
       console.error('updateOrderPaid:', error)
       return false
     }
+    return true
+  }
+
+  /**
+   * Claim a Stripe webhook event for idempotent processing.
+   * `inserted: true` = first delivery; `inserted: false` + `duplicate: true` = already handled (return 200).
+   */
+  export async function claimStripeWebhookEvent(
+    eventId: string,
+    eventType: string,
+    client?: typeof supabase
+  ): Promise<{ inserted: boolean; duplicate: boolean; dbError: boolean }> {
+    const db = client ?? supabase
+    const { error } = await db.from('stripe_webhook_event').insert({
+      id: eventId,
+      event_type: eventType,
+    })
+    if (error) {
+      if ((error as { code?: string }).code === '23505') {
+        return { inserted: false, duplicate: true, dbError: false }
+      }
+      console.error('claimStripeWebhookEvent:', error)
+      return { inserted: false, duplicate: false, dbError: true }
+    }
+    return { inserted: true, duplicate: false, dbError: false }
+  }
+
+  export async function markStripeWebhookEventProcessed(
+    eventId: string,
+    client?: typeof supabase,
+    userOrderId?: number | null,
+    errorMessage?: string | null
+  ): Promise<void> {
+    const db = client ?? supabase
+    const { error } = await db
+      .from('stripe_webhook_event')
+      .update({
+        processed_at: new Date().toISOString(),
+        ...(userOrderId != null ? { user_order_id: userOrderId } : {}),
+        ...(errorMessage != null ? { error: errorMessage } : {}),
+      })
+      .eq('id', eventId)
+    if (error) {
+      console.error('markStripeWebhookEventProcessed:', error)
+    }
+  }
+
+  /** If event row exists and is fully processed, webhook can return 200 without re-running side effects. */
+  export async function isStripeWebhookEventFullyProcessed(
+    eventId: string,
+    client?: typeof supabase
+  ): Promise<boolean> {
+    const db = client ?? supabase
+    const { data, error } = await db
+      .from('stripe_webhook_event')
+      .select('processed_at')
+      .eq('id', eventId)
+      .maybeSingle()
+    if (error || !data?.processed_at) return false
     return true
   }
 
@@ -1068,19 +1458,27 @@ export const supabase =
   // ---------------------------------------------------------------------------
 
   /** Subscribe an email to the newsletter. RLS: public insert. */
-  export async function subscribeNewsletter(email: string): Promise<{ ok: boolean; error?: string }> {
+  export async function subscribeNewsletter(
+    email: string
+  ): Promise<{ ok: boolean; alreadySubscribed?: boolean; error?: string }> {
     const { error } = await supabase
       .from('newsletter_subscriber')
       .insert({ email: email.trim().toLowerCase(), status: 'active' })
 
     if (error) {
-      if (error.code === '23505') {
-        return { ok: true }
+      const msg = (error.message ?? '').toLowerCase()
+      const duplicate =
+        error.code === '23505' ||
+        msg.includes('duplicate') ||
+        msg.includes('unique constraint') ||
+        msg.includes('already exists')
+      if (duplicate) {
+        return { ok: true, alreadySubscribed: true }
       }
       console.error('subscribeNewsletter:', error)
       return { ok: false, error: error.message }
     }
-    return { ok: true }
+    return { ok: true, alreadySubscribed: false }
   }
 
   /** Submit a contact form message. RLS: public insert. */
@@ -1171,7 +1569,7 @@ export const supabase =
         user_account_id,
         created_at,
         product_category ( category_id, category ( id, name, slug ) ),
-        user_account ( username ),
+        user_account ( username, user_public_profile ( username ) ),
         product_variant ( id, price_override )
       `)
       .eq('status', 'active')
@@ -1224,7 +1622,7 @@ export const supabase =
           user_account_id,
           created_at,
           product_category ( category_id, category ( id, name, slug ) ),
-          user_account ( username ),
+          user_account ( username, user_public_profile ( username ) ),
           product_variant ( id, price_override )
         )
       `
@@ -1314,7 +1712,7 @@ export const supabase =
           user_account_id,
           created_at,
           product_category ( category_id, category ( id, name, slug ) ),
-          user_account ( username ),
+          user_account ( username, user_public_profile ( username ) ),
           product_variant ( id, price_override )
         )
       `
@@ -1462,6 +1860,57 @@ export const supabase =
     }
   }
 
+  /**
+   * Same numbers as GET /api/profile-stats/[id]: uses service role when
+   * SUPABASE_SERVICE_ROLE_KEY is set so counts match public profile pages
+   * (bypasses RLS on user_follow). Used by server-side hero data — do not use
+   * fetch('/api/profile-stats/...') from Node (relative URLs fail).
+   */
+  export async function getProfileStatsWithServiceRole(
+    userAccountId: number
+  ): Promise<ProfileStats> {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !serviceRoleKey) {
+      return getProfileStats(userAccountId)
+    }
+    const admin = createClient(url, serviceRoleKey)
+    const [followersRes, followingRes, productsRes, productIdsRes] = await Promise.all([
+      admin
+        .from('user_follow')
+        .select('follower_id', { count: 'exact', head: true })
+        .eq('following_id', userAccountId),
+      admin
+        .from('user_follow')
+        .select('following_id', { count: 'exact', head: true })
+        .eq('follower_id', userAccountId),
+      admin
+        .from('product')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_account_id', userAccountId)
+        .eq('status', 'active'),
+      admin.from('product').select('id').eq('user_account_id', userAccountId),
+    ])
+
+    const productIds = (productIdsRes.data ?? []).map((p) => p.id)
+    let likesReceived = 0
+    if (productIds.length > 0) {
+      const { count } = await admin
+        .from('product_interaction')
+        .select('id', { count: 'exact', head: true })
+        .eq('interaction_type', 'like')
+        .in('product_id', productIds)
+      likesReceived = count ?? 0
+    }
+
+    return {
+      followers: followersRes.count ?? 0,
+      following: followingRes.count ?? 0,
+      products: productsRes.count ?? 0,
+      likesReceived,
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Notifications (user_notification table)
   // ---------------------------------------------------------------------------
@@ -1589,6 +2038,7 @@ export const supabase =
       product: {
         id: number
         name: string
+        user_account_id: number
         design_data: Record<string, unknown> | null
         user_account: { username: string } | null
       } | null
@@ -1687,6 +2137,7 @@ export const supabase =
           product (
             id,
             name,
+            user_account_id,
             design_data,
             user_account ( username )
           ),
@@ -1776,6 +2227,10 @@ export const supabase =
     status: DesignDraftStatus
     finalized_at: string | null
     final_product_id: number | null
+    /** Per-placement mockup URLs (JSON); used for storefront imagery. */
+    mockup_urls?: unknown
+    /** Last persist from preview-mockups; must be >= linked product.updated_at to use mockups. */
+    mockups_generated_at?: string | null
     created_at: string
     updated_at: string
   }
@@ -1816,6 +2271,7 @@ export const supabase =
     status?: DesignDraftStatus
     final_product_id?: number | null
     finalized_at?: string | null
+    mockups_generated_at?: string | null
   }
 
   /** Single message to insert into design_draft_ai_message. */
@@ -1888,6 +2344,28 @@ export const supabase =
     return data as DesignDraftRow | null
   }
 
+  /**
+   * Draft linked to a published product (design_draft.final_product_id).
+   * RLS: design_draft_select_own — only the owner can read.
+   */
+  export async function getDesignDraftByFinalProductId(
+    productId: number
+  ): Promise<DesignDraftRow | null> {
+    if (!Number.isFinite(productId)) return null
+    const { data, error } = await supabase
+      .from('design_draft')
+      .select('*')
+      .eq('final_product_id', productId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      console.error('getDesignDraftByFinalProductId:', error)
+      return null
+    }
+    return data as DesignDraftRow | null
+  }
+
   /** Update a design draft. RLS: design_draft_update_own. */
   export async function updateDesignDraft(
     draftId: number,
@@ -1912,6 +2390,8 @@ export const supabase =
       row.final_product_id = payload.final_product_id
     if (payload.finalized_at !== undefined)
       row.finalized_at = payload.finalized_at
+    if (payload.mockups_generated_at !== undefined)
+      row.mockups_generated_at = payload.mockups_generated_at
     if (Object.keys(row).length === 0) return true
     const { error } = await supabase.from('design_draft').update(row).eq('id', draftId)
     if (error) {
@@ -1938,6 +2418,56 @@ export const supabase =
       .insert(rows)
     if (error) {
       console.error('insertDesignDraftAiMessages:', error)
+      return false
+    }
+    return true
+  }
+
+  /** Append messages after the current max `message_index` (for chat history). RLS: design_draft_ai_message_insert_own. */
+  export async function appendDesignDraftAiMessages(
+    designDraftId: number,
+    messages: DesignDraftAiMessageInsert[]
+  ): Promise<boolean> {
+    if (messages.length === 0) return true
+    const { data: maxRow, error: maxErr } = await supabase
+      .from('design_draft_ai_message')
+      .select('message_index')
+      .eq('design_draft_id', designDraftId)
+      .order('message_index', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (maxErr) {
+      console.error('appendDesignDraftAiMessages (max index):', maxErr)
+      return false
+    }
+    const start =
+      typeof maxRow?.message_index === 'number' && Number.isFinite(maxRow.message_index)
+        ? maxRow.message_index + 1
+        : 0
+    const rows = messages.map((msg, i) => ({
+      design_draft_id: designDraftId,
+      message_index: start + i,
+      role: msg.role,
+      content: msg.content,
+    }))
+    const { error } = await supabase.from('design_draft_ai_message').insert(rows)
+    if (error) {
+      console.error('appendDesignDraftAiMessages:', error)
+      return false
+    }
+    return true
+  }
+
+  /** Remove all AI chat rows for a draft. Requires DELETE RLS (e.g. design_draft_ai_message_delete_own). */
+  export async function deleteDesignDraftAiMessages(
+    designDraftId: number
+  ): Promise<boolean> {
+    const { error } = await supabase
+      .from('design_draft_ai_message')
+      .delete()
+      .eq('design_draft_id', designDraftId)
+    if (error) {
+      console.error('deleteDesignDraftAiMessages:', error)
       return false
     }
     return true
@@ -2269,6 +2799,8 @@ export type Database = {
             created_at: string
             updated_at: string | null
             shipping_address: ShippingAddressRow | null
+            platform_fee_total: number
+            seller_net_total: number
           }
           Insert: {
             id?: number
@@ -2284,6 +2816,8 @@ export type Database = {
             created_at?: string
             updated_at?: string | null
             shipping_address?: ShippingAddressRow | null
+            platform_fee_total?: number
+            seller_net_total?: number
           }
           Update: {
             id?: number
@@ -2299,6 +2833,8 @@ export type Database = {
             created_at?: string
             updated_at?: string | null
             shipping_address?: ShippingAddressRow | null
+            platform_fee_total?: number
+            seller_net_total?: number
           }
         }
         order_item: {
@@ -2314,6 +2850,10 @@ export type Database = {
             subtotal: number
             stripe_price_id: string | null
             created_at: string
+            seller_user_account_id: number | null
+            platform_fee_rate_bps: number
+            platform_fee_amount: number
+            seller_net_amount: number
           }
           Insert: {
             id?: number
@@ -2327,6 +2867,10 @@ export type Database = {
             subtotal?: number
             stripe_price_id?: string | null
             created_at?: string
+            seller_user_account_id?: number | null
+            platform_fee_rate_bps?: number
+            platform_fee_amount?: number
+            seller_net_amount?: number
           }
           Update: {
             id?: number
@@ -2340,6 +2884,10 @@ export type Database = {
             subtotal?: number
             stripe_price_id?: string | null
             created_at?: string
+            seller_user_account_id?: number | null
+            platform_fee_rate_bps?: number
+            platform_fee_amount?: number
+            seller_net_amount?: number
           }
         }
         product_interaction: {
@@ -2579,3 +3127,98 @@ export type Database = {
       }
     }
   }
+// ─── Product Comments ────────────────────────────────────────────────────────
+
+export type ProductCommentRow = {
+  id: number
+  product_id: number
+  user_account_id: number
+  parent_id: number | null
+  body: string
+  rating?: number | null
+  created_at: string
+  updated_at: string
+  author_username?: string | null
+  author_avatar_url?: string | null
+  replies?: ProductCommentRow[]
+}
+
+/**
+ * Fetches top-level comments for a product with author info, ordered oldest-first.
+ * Replies are nested under their parent comment.
+ */
+export async function getProductComments(productId: number): Promise<ProductCommentRow[]> {
+  const { data, error } = await supabase
+    .from('product_comment')
+    .select(`
+      id,
+      product_id,
+      user_account_id,
+      parent_id,
+      body,
+      rating,
+      created_at,
+      updated_at,
+      user_account ( username, user_public_profile ( avatar_url ) )
+    `)
+    .eq('product_id', productId)
+    .order('created_at', { ascending: true })
+  if (error) {
+    console.error('getProductComments:', error)
+    return []
+  }
+  type RawRow = {
+    id: number; product_id: number; user_account_id: number; parent_id: number | null
+    body: string; rating: number | null; created_at: string; updated_at: string
+    user_account: { username: string; user_public_profile: { avatar_url: string | null } | null } | null
+  }
+  const rows = (data ?? []) as unknown as RawRow[]
+  const all: ProductCommentRow[] = rows.map((r) => ({
+    id: r.id, product_id: r.product_id, user_account_id: r.user_account_id,
+    parent_id: r.parent_id, body: r.body, rating: r.rating ?? null,
+    created_at: r.created_at, updated_at: r.updated_at,
+    author_username: r.user_account?.username ?? null,
+    author_avatar_url: r.user_account?.user_public_profile?.avatar_url ?? null,
+    replies: [],
+  }))
+  const byId = new Map<number, ProductCommentRow>(all.map((c) => [c.id, c]))
+  const topLevel: ProductCommentRow[] = []
+  for (const comment of all) {
+    if (comment.parent_id != null) {
+      byId.get(comment.parent_id)?.replies!.push(comment)
+    } else {
+      topLevel.push(comment)
+    }
+  }
+  return topLevel
+}
+
+/** Inserts a new review/comment. Returns new comment id or null on failure. */
+export async function addProductComment(
+  productId: number,
+  userAccountId: number,
+  body: string,
+  parentId?: number | null,
+  rating?: number | null
+): Promise<number | null> {
+  const { data, error } = await supabase
+    .from('product_comment')
+    .insert({
+      product_id: productId,
+      user_account_id: userAccountId,
+      body: body.trim(),
+      parent_id: parentId ?? null,
+      ...(rating != null ? { rating } : {}),
+    })
+    .select('id')
+    .single()
+  if (error) { console.error('addProductComment:', error); return null }
+  return (data as { id: number }).id
+}
+
+/** Deletes a comment. RLS enforces only author or product owner can delete. */
+export async function deleteProductComment(commentId: number): Promise<boolean> {
+  const { error } = await supabase.from('product_comment').delete().eq('id', commentId)
+  if (error) { console.error('deleteProductComment:', error); return false }
+  return true
+}

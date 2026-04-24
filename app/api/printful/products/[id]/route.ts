@@ -27,6 +27,8 @@ export type PrintfulProductVariantSummary = {
   color: string
   size: string
   image: string
+  /** Printful catalog wholesale/fulfillment price string (e.g. "29.50"), if present. */
+  catalogPrice: string | null
 }
 
 export type PrintfulProductByIdResponse = {
@@ -34,6 +36,8 @@ export type PrintfulProductByIdResponse = {
   name: string
   image: string
   imagesByView: ProductViewImages
+  /** ISO currency for catalog prices (e.g. USD, EUR). */
+  currency: string
   /** Catalog variants for mockup variant_id selection. */
   variants: PrintfulProductVariantSummary[]
 }
@@ -103,19 +107,28 @@ export async function GET(
       left: referenceImage,
     }
 
-    const variantSummaries: PrintfulProductVariantSummary[] = variants.map((v) => ({
-      id: v.id,
-      name: (v as { name?: string }).name ?? `Variant ${v.id}`,
-      color: (v.color as string) ?? '',
-      size: (v as { size?: string }).size ?? '',
-      image: ((v.image as string) ?? '').trim(),
-    }))
+    const productCurrency = String((product as { currency?: string })?.currency ?? 'USD').trim() || 'USD'
+
+    const variantSummaries: PrintfulProductVariantSummary[] = variants.map((v) => {
+      const rawPrice = (v as { price?: string }).price
+      const catalogPrice =
+        typeof rawPrice === 'string' && rawPrice.trim() !== '' ? rawPrice.trim() : null
+      return {
+        id: v.id,
+        name: (v as { name?: string }).name ?? `Variant ${v.id}`,
+        color: (v.color as string) ?? '',
+        size: (v as { size?: string }).size ?? '',
+        image: ((v.image as string) ?? '').trim(),
+        catalogPrice,
+      }
+    })
 
     const response: PrintfulProductByIdResponse = {
       id: String(product?.id ?? productId),
       name: product?.title || product?.model || `Product ${productId}`,
       image: referenceImage,
       imagesByView,
+      currency: productCurrency,
       variants: variantSummaries,
     }
 

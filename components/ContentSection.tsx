@@ -21,6 +21,7 @@ interface ContentSectionProps {
   items: Item[]
   showAsCarousel?: boolean
   showAsGrid?: boolean
+  gridLayout?: 'auto' | 'single-column' | 'responsive-trending'
   /** Slug for the "View more" link (e.g. 'trending-now'). When set, adds a View more card at the end of the carousel. */
   sectionSlug?: string
 }
@@ -30,6 +31,7 @@ export default function ContentSection({
   items,
   showAsCarousel = true,
   showAsGrid = false,
+  gridLayout = 'auto',
   sectionSlug,
 }: ContentSectionProps) {
   if (showAsGrid) {
@@ -38,7 +40,15 @@ export default function ContentSection({
         <h2 id={`section-${title.toLowerCase().replace(/\s+/g, '-')}`} className="content-section-title">
           {title}
         </h2>
-        <div className="content-section-grid">
+        <div
+          className={`content-section-grid ${
+            gridLayout === 'single-column'
+              ? 'content-section-grid-single-column'
+              : gridLayout === 'responsive-trending'
+                ? 'content-section-grid-responsive-trending'
+                : ''
+          }`}
+        >
           {items.map((item) => (
             <ItemCard key={item.id} {...item} />
           ))}

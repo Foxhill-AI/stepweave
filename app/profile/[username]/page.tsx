@@ -11,7 +11,6 @@ import ItemCard from '@/components/ItemCard'
 import { useAuth } from '@/components/AuthProvider'
 import {
   getPublicProfileByUsername,
-  getProfileStats,
   getProductsByUserAccountId,
   isFollowing,
   followUser,
@@ -28,6 +27,8 @@ function mapProductToItem(row: ProductListingRow) {
   const category = row.product_category?.[0]?.category
   const categoryLabel = category?.name ?? category?.slug ?? ''
   const designData = row.design_data as { imageUrl?: string; source?: string } | null
+  const authorUsername =
+    row.user_account?.user_public_profile?.username ?? row.user_account?.username ?? undefined
   return {
     id: String(row.id),
     productId: row.id as number,
@@ -38,7 +39,8 @@ function mapProductToItem(row: ProductListingRow) {
     views: 0,
     likes: 0,
     downloads: 0,
-    author: row.user_account?.username ?? undefined,
+    author: authorUsername,
+    authorProfileUrl: authorUsername ? `/profile/${encodeURIComponent(authorUsername)}` : undefined,
     price: `$${Number(row.price).toFixed(2)}`,
     rating: 0,
   }
@@ -75,7 +77,7 @@ export default function PublicProfilePage() {
           return
         }
         Promise.all([
-          getProfileStats(data.id),
+          fetch(`/api/profile-stats/${data.id}`).then((r) => r.ok ? r.json() : null).catch(() => null),
           getProductsByUserAccountId(data.id),
         ]).then(([statsData, productsData]) => {
           if (cancelled) return
@@ -114,13 +116,13 @@ export default function PublicProfilePage() {
       const { error } = await unfollowUser(userAccount.id, profile.id)
       if (!error) {
         setIsFollowingCreator(false)
-        getProfileStats(profile.id).then(setStats)
+        fetch(`/api/profile-stats/${profile.id}`).then((r) => r.ok ? r.json() : null).then((s) => { if (s) setStats(s) })
       }
     } else {
       const { error } = await followUser(userAccount.id, profile.id)
       if (!error) {
         setIsFollowingCreator(true)
-        getProfileStats(profile.id).then(setStats)
+        fetch(`/api/profile-stats/${profile.id}`).then((r) => r.ok ? r.json() : null).then((s) => { if (s) setStats(s) })
         createNotification(
           profile.id,
           'follow',
@@ -138,6 +140,7 @@ export default function PublicProfilePage() {
   const showFollowButton = Boolean(
     profile?.id && userAccount?.id && profile.id !== userAccount.id
   )
+  const isOwnProfile = Boolean(userAccount?.id && profile?.id && userAccount.id === profile.id)
 
   if (loading) {
     return (
@@ -173,6 +176,21 @@ export default function PublicProfilePage() {
       <Subnavbar />
       <main className="profile-main profile-main-public" role="main">
         <div className="public-profile-container">
+          {isOwnProfile && (
+            <div className="public-profile-owner-banner" role="status">
+              <p className="public-profile-owner-banner-text">
+                This is how others see your profile.
+              </p>
+              <div className="public-profile-owner-banner-actions">
+                <Link href="/profile?tab=settings&sub=profile" className="public-profile-owner-btn">
+                  Edit profile
+                </Link>
+                <Link href="/profile" className="public-profile-owner-btn public-profile-owner-btn-secondary">
+                  Manage account
+                </Link>
+              </div>
+            </div>
+          )}
           <ProfileHeader
             avatar={profile.avatar_url ?? undefined}
             username={profile.username}

@@ -1,11 +1,17 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type MutableRefObject } from 'react'
 import { Upload, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ShoeDesignEditor from './ShoeDesignEditor'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
-import type { ResolvedPlacementLayer, PlacementLayerPatch, PlacementTextLayer } from '@/lib/designDraftState'
+import type {
+  ResolvedPlacementLayer,
+  PlacementLayerPatch,
+  PlacementTextLayer,
+  PlacementLayer,
+  PlacementLayerReorderOp,
+} from '@/lib/designDraftState'
 import { FONTS } from '@/lib/fonts'
 
 const ACCEPT_IMAGES = 'image/*'
@@ -52,6 +58,11 @@ interface PreviewWorkspaceProps {
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
   onLayerChange?: (layerId: string, patch: PlacementLayerPatch) => void
+  onLayerDelete?: (layerId: string) => void
+  onLayerReorder?: (layerId: string, op: PlacementLayerReorderOp) => void
+  onLayerDuplicate?: (layerId: string) => void
+  onPasteLayer?: (layer: PlacementLayer) => void
+  layerClipboardRef?: MutableRefObject<PlacementLayer | null>
   /** Called when the user adds a new text layer. */
   onAddTextLayer?: (layer: PlacementTextLayer) => void
   /** Placement layout actions — rendered contextually below the shoe canvas */
@@ -89,6 +100,11 @@ export default function PreviewWorkspace({
   selectedLayerId,
   onLayerSelect,
   onLayerChange,
+  onLayerDelete,
+  onLayerReorder,
+  onLayerDuplicate,
+  onPasteLayer,
+  layerClipboardRef,
   onAddTextLayer,
   onSaveLayout,
   onRefreshPrintfulPreview,
@@ -162,21 +178,6 @@ export default function PreviewWorkspace({
     if (wasLoading && !previewLoading) {
       const hasRealMockups = placementMockups?.some((t) => t.mockup_url?.trim())
       if (hasRealMockups) {
-        // #region agent log
-        fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-          body: JSON.stringify({
-            sessionId: 'ffdcdb',
-            runId: 'post-fix',
-            hypothesisId: 'B',
-            location: 'PreviewWorkspace.tsx:viewModeAfterPreview',
-            message: 'set viewMode mockups after preview finished',
-            data: { hasRealMockups },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
         setViewMode('mockups')
       }
     }
@@ -184,31 +185,17 @@ export default function PreviewWorkspace({
 
   // After upload / new layer, show template editor (user may have been on Preview tab).
   useEffect(() => {
-    const hasImage = activeLayers.length > 0 || Boolean(imageUrl?.trim())
+    const hasImage =
+      activeLayers.length > 0 || Boolean(imageUrl?.trim()) || Boolean(hasPatternImage)
     const n = activeLayers.length
     const gainedFirstImage = !prevHadImageRef.current && hasImage
     const addedLayer = n > prevActiveLayerCountRef.current && n > 0
     if (gainedFirstImage || addedLayer) {
-      // #region agent log
-      fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-        body: JSON.stringify({
-          sessionId: 'ffdcdb',
-          runId: 'post-fix',
-          hypothesisId: 'B',
-          location: 'PreviewWorkspace.tsx:viewModeAfterPattern',
-          message: 'set viewMode canvas after pattern/layer',
-          data: { gainedFirstImage, addedLayer, layerCount: n },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
       setViewMode('canvas')
     }
     prevHadImageRef.current = hasImage
     prevActiveLayerCountRef.current = n
-  }, [activeLayers.length, imageUrl])
+  }, [activeLayers.length, imageUrl, hasPatternImage])
 
   useEffect(() => {
     if (!mockupImagesLoading) {
@@ -318,7 +305,8 @@ export default function PreviewWorkspace({
   const selectedMockupUrl = galleryItems[clampedIndex]?.mockup_url ?? ''
   const referenceUrl = selectedMockupUrl || catalogFallbackUrl || ''
 
-  const hasImage = activeLayers.length > 0 || Boolean(imageUrl?.trim())
+  const hasImage =
+    activeLayers.length > 0 || Boolean(imageUrl?.trim()) || Boolean(hasPatternImage)
   const layerCount = activeLayers.length
   // Only count real generated mockups — not the catalog fallback — so the toggle
   // only appears after the user explicitly clicks "See preview".
@@ -327,35 +315,6 @@ export default function PreviewWorkspace({
 
   const showShoeCanvas =
     useShoeCanvas && (viewMode === 'canvas' || !hasMockups) && !mockupImagesLoading
-  const layersWithSignedUrl = activeLayers.filter(
-    (l) => 'signedUrl' in l && Boolean((l as { signedUrl?: string | null }).signedUrl)
-  ).length
-
-  // #region agent log
-  fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-    body: JSON.stringify({
-      sessionId: 'ffdcdb',
-      runId: 'post-fix',
-      hypothesisId: 'A',
-      location: 'PreviewWorkspace.tsx:render',
-      message: 'preview workspace render gates',
-      data: {
-        mockupImagesLoading,
-        viewMode,
-        useShoeCanvas,
-        hasMockups,
-        hasImage,
-        showShoeCanvas,
-        activeLayersLen: activeLayers.length,
-        layersWithSignedUrl,
-        extPlacement: externalActivePlacement ?? '',
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion
 
   return (
     <div className="preview-workspace">
@@ -523,7 +482,7 @@ export default function PreviewWorkspace({
               className="preview-image-bar-btn preview-image-bar-btn--remove"
               onClick={onImageClear}
               aria-label="Remove selected layer"
-              disabled={layerCount === 0}
+              disabled={layerCount === 0 && !hasPatternImage}
             >
               <X size={13} aria-hidden /> Remove
             </button>
@@ -666,6 +625,11 @@ export default function PreviewWorkspace({
             selectedLayerId={selectedLayerId}
             onLayerSelect={onLayerSelect}
             onLayerChange={onLayerChange ?? (() => {})}
+            onLayerDelete={onLayerDelete}
+            onLayerReorder={onLayerReorder}
+            onLayerDuplicate={onLayerDuplicate}
+            onPasteLayer={onPasteLayer}
+            layerClipboardRef={layerClipboardRef}
           />
           {(onSaveLayout || onRefreshPrintfulPreview) && (
             <div className="preview-placement-actions">

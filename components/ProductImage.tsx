@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 export type ProductDesignData = { imageUrl?: string; source?: string } | null
 
@@ -14,9 +14,19 @@ interface ProductImageProps {
   fallback?: React.ReactNode
 }
 
+function fetchDesignImageUrl(productId: number): Promise<string | null> {
+  return fetch(`/api/products/${productId}/design-image`)
+    .then((res) => (res.ok ? res.json() : Promise.reject()))
+    .then((b: { url?: string }) => (typeof b.url === 'string' && b.url ? b.url : null))
+    .catch(() => null)
+}
+
 /**
- * Renders product image. When design_data.source === 'design_draft', fetches
- * signed URL from /api/products/[id]/design-image; otherwise uses design_data.imageUrl.
+ * Renders product image. When design_data.source === 'design_draft':
+ * 1. Tries /api/products/[id]/mockup-image (Printful mockup — best visual quality).
+ * 2. Falls back to /api/products/[id]/design-image (raw pattern from Storage).
+ * 3. If the mockup URL loads but fails in the browser (expired/blocked), onError loads design-image.
+ * Otherwise uses design_data.imageUrl as a static URL.
  */
 export default function ProductImage({
   productId,
@@ -27,43 +37,83 @@ export default function ProductImage({
   fallback,
 }: ProductImageProps) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
-  const [failed, setFailed] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const triedDesignAfterBadMockup = useRef(false)
 
   const useDesignDraftApi =
     designData && (designData as { source?: string }).source === 'design_draft'
   const staticUrl = designData?.imageUrl ?? null
 
   useEffect(() => {
+    triedDesignAfterBadMockup.current = false
+    setLoadFailed(false)
     if (!useDesignDraftApi) {
       setResolvedUrl(staticUrl)
-      setFailed(false)
       return
     }
     setResolvedUrl(null)
-    setFailed(false)
     let cancelled = false
-    fetch(`/api/products/${productId}/design-image`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Not found'))))
-      .then((body: { url?: string }) => {
-        if (!cancelled && body.url) setResolvedUrl(body.url)
-        else if (!cancelled) setFailed(true)
+
+    // Try mockup image first; fall back to raw design image
+    fetch(`/api/products/${productId}/mockup-image`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((body: { url?: string | null }) => {
+        if (cancelled) return
+        if (body.url) {
+          setResolvedUrl(body.url)
+        } else {
+          // No mockup yet — fall back to pattern image from Storage
+          return fetchDesignImageUrl(productId).then((url) => {
+            if (!cancelled && url) setResolvedUrl(url)
+          })
+        }
       })
       .catch(() => {
-        if (!cancelled) setFailed(true)
+        // Mockup failed — try design image
+        if (cancelled) return
+        fetchDesignImageUrl(productId).then((url) => {
+          if (!cancelled && url) setResolvedUrl(url)
+        })
       })
+
     return () => {
       cancelled = true
     }
   }, [productId, useDesignDraftApi, staticUrl])
 
+  const handleImgError = () => {
+    if (!useDesignDraftApi) {
+      setLoadFailed(true)
+      setResolvedUrl(null)
+      return
+    }
+    if (!triedDesignAfterBadMockup.current) {
+      triedDesignAfterBadMockup.current = true
+      setResolvedUrl(null)
+      void fetchDesignImageUrl(productId).then((url) => {
+        if (url) {
+          setLoadFailed(false)
+          setResolvedUrl(url)
+        } else {
+          setLoadFailed(true)
+          setResolvedUrl(null)
+        }
+      })
+      return
+    }
+    setLoadFailed(true)
+    setResolvedUrl(null)
+  }
+
   const src = useDesignDraftApi ? resolvedUrl : staticUrl
-  if (src) {
+  if (src && !loadFailed) {
     return (
       <img
         src={src}
         alt={alt}
         className={className}
         loading={loading}
+        onError={handleImgError}
       />
     )
   }

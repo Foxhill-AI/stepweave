@@ -6,9 +6,29 @@ import {
   createOrder,
   createOrderItems,
   updateOrderStripeCheckoutSession,
+  getDesignDraftSnapshotForUser,
   type CartItemRow,
   type CreateOrderItemInput,
 } from '@/lib/supabaseClient'
+import { resolveDesignSnapshotForProductCheckout } from '@/lib/checkout/resolveDesignSnapshotForProduct'
+import { getPlatformFeeBps, splitLineSubtotal } from '@/lib/platformFee'
+
+/** Body `designDraftByCartItemId`: maps cart_item.id → design_draft.id (must belong to cart owner). */
+function parseDesignDraftByCartItemId(
+  raw: unknown,
+  cartItemIds: Set<number>
+): Map<number, number> {
+  const m = new Map<number, number>()
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return m
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const cartItemId = Number(k)
+    const draftId = typeof v === 'number' ? v : Number(v)
+    if (!Number.isInteger(cartItemId) || cartItemId <= 0 || !cartItemIds.has(cartItemId)) continue
+    if (!Number.isInteger(draftId) || draftId <= 0) continue
+    m.set(cartItemId, draftId)
+  }
+  return m
+}
 
 function buildVariantLabel(row: CartItemRow): string | null {
   if (row.variant_label != null && String(row.variant_label).trim() !== '') {
@@ -81,13 +101,70 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const cartItemIdSet = new Set(cartItems.map((r) => r.id))
+    const draftMap = parseDesignDraftByCartItemId(body.designDraftByCartItemId, cartItemIdSet)
+
+    const resolvedDrafts = new Map<number, { draftId: number; snapshot: Record<string, unknown> }>()
+
+    for (const row of cartItems) {
+      const product = row.product_variant?.product
+      const productId = product?.id
+      const designData = product?.design_data
+      const isPrintfulListing =
+        productId != null &&
+        designData &&
+        typeof designData === 'object' &&
+        !Array.isArray(designData) &&
+        (designData as Record<string, unknown>).source === 'design_draft'
+
+      if (isPrintfulListing) {
+        const resolved = await resolveDesignSnapshotForProductCheckout(productId)
+        if (!resolved) {
+          return NextResponse.json(
+            {
+              error:
+                'A customizable product in your cart cannot be fulfilled (missing design link or server config). Remove it or contact support.',
+            },
+            { status: 400 }
+          )
+        }
+        resolvedDrafts.set(row.id, {
+          draftId: resolved.draftId,
+          snapshot: { ...resolved.snapshot } as Record<string, unknown>,
+        })
+        continue
+      }
+
+      const draftIdFromClient = draftMap.get(row.id)
+      if (draftIdFromClient != null) {
+        const resolved = await getDesignDraftSnapshotForUser(draftIdFromClient, userAccountId, supabase)
+        if (!resolved) {
+          return NextResponse.json(
+            { error: `Invalid or unauthorized design draft for cart item ${row.id}` },
+            { status: 400 }
+          )
+        }
+        resolvedDrafts.set(row.id, {
+          draftId: resolved.draftId,
+          snapshot: { ...resolved.snapshot } as Record<string, unknown>,
+        })
+      }
+    }
+
+    const feeBps = getPlatformFeeBps()
     const orderItems: CreateOrderItemInput[] = cartItems.map((row) => {
       const product = row.product_variant?.product
       const productId = product?.id ?? 0
       const productName = product?.name ?? 'Product'
       const unitPrice = Number(row.unit_price_at_added)
       const quantity = row.quantity
-      return {
+      const lineSubtotal = quantity * unitPrice
+      const sellerId =
+        product != null && typeof product.user_account_id === 'number'
+          ? product.user_account_id
+          : null
+      const { platformFeeAmount, sellerNetAmount } = splitLineSubtotal(lineSubtotal, feeBps)
+      const base: CreateOrderItemInput = {
         product_id: productId,
         product_variant_id: row.product_variant_id,
         product_name: productName,
@@ -95,7 +172,17 @@ export async function POST(request: NextRequest) {
         quantity,
         unit_price: unitPrice,
         stripe_price_id: row.product_variant?.stripe_price_id ?? undefined,
+        seller_user_account_id: sellerId,
+        platform_fee_rate_bps: feeBps,
+        platform_fee_amount: platformFeeAmount,
+        seller_net_amount: sellerNetAmount,
       }
+      const linked = resolvedDrafts.get(row.id)
+      if (linked) {
+        base.design_draft_id = linked.draftId
+        base.design_snapshot = linked.snapshot
+      }
+      return base
     })
 
     const subtotal = orderItems.reduce(
@@ -109,8 +196,13 @@ export async function POST(request: NextRequest) {
       )
     }
     const totalAmount = subtotal + shippingAmount + taxesAmount
+    const platformFeeTotal = orderItems.reduce((s, i) => s + (i.platform_fee_amount ?? 0), 0)
+    const sellerNetTotal = orderItems.reduce((s, i) => s + (i.seller_net_amount ?? 0), 0)
 
-    const order = await createOrder(userAccountId, totalAmount, 'usd', supabase)
+    const order = await createOrder(userAccountId, totalAmount, 'usd', supabase, {
+      platformFeeTotal,
+      sellerNetTotal,
+    })
     if (!order) {
       return NextResponse.json(
         { error: 'Failed to create order' },

@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, type MutableRefObject } from 'react'
 import type { PlacementMeta } from '@/app/api/printful/products/[id]/placements/route'
 import type {
   PrintfulPlacementsState,
   ResolvedPlacementLayer,
   PlacementLayerPatch,
+  PlacementLayer,
+  PlacementLayerReorderOp,
 } from '@/lib/designDraftState'
 import { mergeAndClampPlacement, updatePlacementTransform, isTextLayer } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
@@ -49,6 +51,11 @@ interface PlacementEditorPanelProps {
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
   onLayerChange?: (layerId: string, patch: PlacementLayerPatch) => void
+  onLayerDelete?: (layerId: string) => void
+  onLayerReorder?: (layerId: string, op: PlacementLayerReorderOp) => void
+  onLayerDuplicate?: (layerId: string) => void
+  onPasteLayer?: (layer: PlacementLayer) => void
+  layerClipboardRef?: MutableRefObject<PlacementLayer | null>
 }
 
 export default function PlacementEditorPanel({
@@ -72,6 +79,11 @@ export default function PlacementEditorPanel({
   selectedLayerId,
   onLayerSelect,
   onLayerChange,
+  onLayerDelete,
+  onLayerReorder,
+  onLayerDuplicate,
+  onPasteLayer,
+  layerClipboardRef,
 }: PlacementEditorPanelProps) {
   const [meta, setMeta] = useState<PlacementMeta[]>([])
   const [metaLoading, setMetaLoading] = useState(false)
@@ -305,6 +317,11 @@ export default function PlacementEditorPanel({
               selectedLayerId={effectiveSelectedId}
               onLayerSelect={onLayerSelect}
               onLayerChange={onLayerChange ?? (() => {})}
+              onLayerDelete={onLayerDelete}
+              onLayerReorder={onLayerReorder}
+              onLayerDuplicate={onLayerDuplicate}
+              onPasteLayer={onPasteLayer}
+              layerClipboardRef={layerClipboardRef}
             />
           )}
 
@@ -316,6 +333,11 @@ export default function PlacementEditorPanel({
               selectedLayerId={effectiveSelectedId}
               onLayerSelect={onLayerSelect}
               onLayerChange={onLayerChange ?? (() => {})}
+              onLayerDelete={onLayerDelete}
+              onLayerReorder={onLayerReorder}
+              onLayerDuplicate={onLayerDuplicate}
+              onPasteLayer={onPasteLayer}
+              layerClipboardRef={layerClipboardRef}
             />
           )}
 
@@ -352,6 +374,24 @@ export default function PlacementEditorPanel({
                       }
                     />
                     <span className="placement-editor-value">{Math.round(t.s * 100)}%</span>
+                  </div>
+                )}
+                {selectedLayer && !selectedIsText && onLayerChange && (
+                  <div className="placement-editor-field placement-editor-field--tile">
+                    <label className="placement-editor-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={Boolean((selectedLayer as { repeat?: boolean }).repeat)}
+                        onChange={(e) =>
+                          onLayerChange(selectedLayer.id, { repeat: e.target.checked })
+                        }
+                      />
+                      <span>Tile / repeat to fill area</span>
+                    </label>
+                    <p className="placement-editor-hint">
+                      Repeats the image at the current size in all directions (resize first for smaller tiles).
+                      Updates preview via server composite.
+                    </p>
                   </div>
                 )}
                 <div className="placement-editor-field-row">

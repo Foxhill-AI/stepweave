@@ -7,16 +7,19 @@ import Footer from '@/components/Footer'
 import HeroSection, { type HeroSectionData } from '@/components/HeroSection'
 import ContentSection from '@/components/ContentSection'
 import AdBanner from '@/components/AdBanner'
-import TrustStrip from '@/components/TrustStrip'
 import { productToHomeItem, type HomeItem } from '@/lib/productsForHome'
 import './homepage.css'
 
 
 
 export default function HomePage() {
+  const TRENDING_BATCH_SIZE = 6
   const [products, setProducts] = useState<HomeItem[]>([])
+  /** Ranked by likes + saves (all users); from /api/home-products popularProducts. */
+  const [popularItems, setPopularItems] = useState<HomeItem[]>([])
   const [heroSections, setHeroSections] = useState<HeroSectionData[]>([])
   const [loading, setLoading] = useState(true)
+  const [visibleTrendingCount, setVisibleTrendingCount] = useState(TRENDING_BATCH_SIZE)
 
   useEffect(() => {
     let cancelled = false
@@ -24,13 +27,27 @@ export default function HomePage() {
     const timeoutMs = 12000
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-    fetch('/api/home-products', { signal: controller.signal })
+    fetch('/api/home-products', { signal: controller.signal, cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return
         const productRows = data?.products ?? []
         const featuredCreators = data?.featuredCreators ?? []
-        setProducts(productRows.map(productToHomeItem))
+        const homeItems = productRows.map(productToHomeItem)
+        setProducts(homeItems)
+
+        type ProductRow = Parameters<typeof productToHomeItem>[0]
+        const popRows = (data?.popularProducts ?? []) as ProductRow[]
+        const engagement = (data?.popularEngagement ?? {}) as Record<string, number>
+        setPopularItems(
+          popRows.map((row) => {
+            const base = productToHomeItem(row)
+            const key = String(row.id)
+            const n = engagement[key]
+            const likes = typeof n === 'number' && n >= 0 ? n : base.likes
+            return { ...base, likes }
+          })
+        )
         if (featuredCreators.length > 0) {
           setHeroSections(
             featuredCreators.map((creator: { profile: HeroSectionData['profile']; products: unknown[] }) => ({
@@ -53,19 +70,44 @@ export default function HomePage() {
               }),
             }))
           )
+        } else if (productRows.length > 0) {
+          // Fallback: e.g. products missing user_account_id — one slide with newest items
+          type Row = Parameters<typeof productToHomeItem>[0]
+          const rows = productRows as Row[]
+          const first = rows[0]
+          const uname =
+            (first as { user_account?: { username?: string } }).user_account?.username?.trim() || 'Creator'
+          const uid = (first as { user_account_id?: number }).user_account_id
+          setHeroSections([
+            {
+              profile: {
+                avatar: uname.charAt(0).toUpperCase(),
+                name: uname,
+                followers: '',
+                description: '',
+                username: uname,
+                userAccountId: typeof uid === 'number' ? uid : undefined,
+              },
+              items: rows.slice(0, 3).map((row, i) => {
+                const item = productToHomeItem(row)
+                return {
+                  ...item,
+                  image: item.image ?? '',
+                  author: item.author || uname,
+                  badge: ['Featured', 'New Release', 'Trending'][i] ?? undefined,
+                }
+              }),
+            },
+          ])
         } else {
-          const heroProducts = productRows.map(productToHomeItem)
-          if (heroProducts.length >= 3) {
-            setHeroSections([
-              { profile: { avatar: 'K', name: 'Kreations', followers: '3.5k followers', description: 'Bringing beautiful creatures to life with 3D printing. Explore unique designs and join our creative community.' }, items: heroProducts.slice(0, 3).map((item: HomeItem, i: number) => ({ ...item, image: item.image ?? '', badge: ['Featured', 'New Release', 'Trending'][i] })) },
-              { profile: { avatar: 'FM', name: 'Fotis Mint', followers: '14K followers', description: 'Creating Busts, Figures, and Miniatures for both resin and FDM 3D printing.' }, items: heroProducts.slice(3, 6).map((item: HomeItem, i: number) => ({ ...item, image: item.image ?? '', badge: ['Featured', 'New Release', 'Trending'][i] })) },
-              { profile: { avatar: 'DS', name: 'Design Studio', followers: '8.2k followers', description: 'Professional 3D models and digital art. High-quality assets for creators and designers.' }, items: heroProducts.slice(6, 9).map((item: HomeItem, i: number) => ({ ...item, image: item.image ?? '', badge: ['Featured', 'New Release', 'Trending'][i] })) },
-            ])
-          }
+          setHeroSections([])
         }
       })
       .catch(() => {
-        if (!cancelled) setProducts([])
+        if (!cancelled) {
+          setProducts([])
+          setPopularItems([])
+        }
       })
       .finally(() => {
         clearTimeout(timeoutId)
@@ -78,10 +120,11 @@ export default function HomePage() {
     }
   }, [])
 
-  // Mismo listado (ordenado por created_at desc) repartido en secciones; luego podrás filtrar por métricas/categoría
   const trendingItems = products.slice(0, 12)
-  const popularItems = products.slice(0, 12)
-  const newItems = products.slice(0, 12)
+  const visibleTrendingItems = trendingItems.slice(0, visibleTrendingCount)
+  const hasMoreTrending = visibleTrendingCount < trendingItems.length
+  /** Only listings with the "New" badge (created within the last 7 days). */
+  const newItems = products.filter((p) => p.badge === 'New').slice(0, 12)
   const digitalItems = products.slice(0, 8)
 
   return (
@@ -94,8 +137,6 @@ export default function HomePage() {
         {!loading && heroSections.length > 0 && (
           <HeroSection sections={heroSections} />
         )}
-
-        <TrustStrip />
 
         <AdBanner />
 
@@ -111,12 +152,30 @@ export default function HomePage() {
             </p>
           )}
           {!loading && trendingItems.length > 0 && (
-            <ContentSection
-              title="Trending Now"
-              items={trendingItems}
-              showAsCarousel={true}
-              sectionSlug="trending-now"
-            />
+            <>
+              <ContentSection
+                title="Trending Now"
+                items={visibleTrendingItems}
+                showAsGrid={true}
+                gridLayout="responsive-trending"
+                sectionSlug="trending-now"
+              />
+              {hasMoreTrending && (
+                <div className="homepage-show-more-wrap">
+                  <button
+                    type="button"
+                    className="homepage-show-more-button"
+                    onClick={() =>
+                      setVisibleTrendingCount((count) =>
+                        Math.min(count + TRENDING_BATCH_SIZE, trendingItems.length)
+                      )
+                    }
+                  >
+                    Show more
+                  </button>
+                </div>
+              )}
+            </>
           )}
           {!loading && popularItems.length > 0 && (
             <ContentSection

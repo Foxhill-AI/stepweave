@@ -1,12 +1,17 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Heart, Share2, Bookmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Clock, Download, Eye } from 'lucide-react'
+import { usePathname } from 'next/navigation'
+import { Heart, Share2, Bookmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Clock, Download, Eye, Star } from 'lucide-react'
 import ItemCard from './ItemCard'
 import Carousel from './Carousel'
 import { useAuth } from '@/components/AuthProvider'
-import { isFollowing as getIsFollowing, followUser, unfollowUser, createNotification } from '@/lib/supabaseClient'
+import {
+  isFollowing as getIsFollowing, followUser, unfollowUser, createNotification,
+  getProductComments, addProductComment, deleteProductComment,
+  type ProductCommentRow,
+} from '@/lib/supabaseClient'
 import '../styles/Product.css'
 
 const COLOR_LABEL_TO_HEX: Record<string, string> = {
@@ -129,6 +134,8 @@ interface ProductProps {
   onSaveToggle?: () => void
   /** Creator's user_account id (for follow button; only shown when logged in and not own product). */
   creatorUserAccountId?: number
+  /** Numeric product id — needed for discussions. */
+  productNumericId?: number
 }
 
 function findVariantIdFromSelection(
@@ -217,13 +224,22 @@ export default function Product({
   isSaved: isSavedProp,
   onSaveToggle,
   creatorUserAccountId,
+  productNumericId,
 }: ProductProps) {
   const { userAccount } = useAuth()
+  const pathname = usePathname()
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false)
   const [localLiked, setLocalLiked] = useState(false)
   const [isFollowing, setIsFollowing] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
+  // Reviews
+  const [comments, setComments] = useState<ProductCommentRow[]>([])
+  const [commentBody, setCommentBody] = useState('')
+  const [commentRating, setCommentRating] = useState<number>(0)
+  const [hoverRating, setHoverRating] = useState<number>(0)
+  const [commentSubmitting, setCommentSubmitting] = useState(false)
+  const [commentError, setCommentError] = useState<string | null>(null)
   const isLiked = onLikeToggle !== undefined && isLikedProp !== undefined ? isLikedProp : localLiked
   const handleLikeClick = onLikeToggle ? () => onLikeToggle() : () => setLocalLiked((prev) => !prev)
   const isSaved = isSavedProp ?? false
@@ -265,9 +281,59 @@ export default function Product({
     }
     setFollowLoading(false)
   }
+  useEffect(() => {
+    if (!productNumericId) return
+    let cancelled = false
+    getProductComments(productNumericId).then((rows) => {
+      if (!cancelled) setComments(rows)
+    })
+    return () => { cancelled = true }
+  }, [productNumericId])
+
+  const handleCommentSubmit = async () => {
+    const body = commentBody.trim()
+    if (!body || !userAccount?.id || !productNumericId) return
+    if (commentRating === 0) {
+      setCommentError('Please select a star rating before submitting.')
+      return
+    }
+    setCommentSubmitting(true)
+    setCommentError(null)
+    const newId = await addProductComment(productNumericId, userAccount.id, body, null, commentRating)
+    if (newId) {
+      setCommentBody('')
+      setCommentRating(0)
+      setHoverRating(0)
+      // Re-fetch to get author info attached
+      getProductComments(productNumericId).then(setComments)
+    } else {
+      setCommentError('Could not post review. Please try again.')
+    }
+    setCommentSubmitting(false)
+  }
+
+  const handleCommentDelete = async (commentId: number) => {
+    if (!productNumericId) return
+    const ok = await deleteProductComment(commentId)
+    if (ok) setComments((prev) => prev.filter((c) => c.id !== commentId))
+  }
+
   /** One option per attribute (attributeId -> optionId) for variant selection */
   const [selectedOptionByAttribute, setSelectedOptionByAttribute] = useState<Record<number, number>>({})
-  const [addToCartQuantity, setAddToCartQuantity] = useState(1)
+  /** String state so manual typing (e.g. clearing the field, entering "12") works; clamp on blur / submit. */
+  const [quantityInput, setQuantityInput] = useState('1')
+  const [shareFallbackOpen, setShareFallbackOpen] = useState(false)
+  const [productPageUrl, setProductPageUrl] = useState('')
+  const [copyLinkDone, setCopyLinkDone] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setProductPageUrl(`${window.location.origin}${pathname}`)
+  }, [pathname])
+
+  useEffect(() => {
+    setQuantityInput('1')
+  }, [id])
 
   const selectedVariantId = variants.length > 0 && attributes.length > 0
     ? findVariantIdFromSelection(variants, selectedOptionByAttribute)
@@ -395,6 +461,68 @@ export default function Product({
     setSelectedImageIndex(index)
   }
 
+  const sharePageTitle = productData.title || `Product ${id}`
+  const sharePageText = `Check out ${sharePageTitle}`
+
+  const getShareUrl = useCallback(
+    () => productPageUrl || (typeof window !== 'undefined' ? window.location.href : ''),
+    [productPageUrl]
+  )
+
+  const openShareFallback = () => setShareFallbackOpen(true)
+  const closeShareFallback = () => {
+    setShareFallbackOpen(false)
+    setCopyLinkDone(false)
+  }
+
+  const handleShareClick = async () => {
+    const url = getShareUrl()
+    if (!url) {
+      openShareFallback()
+      return
+    }
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        // Pass url only via `url` — including it in `text` too makes many targets show the link twice.
+        await navigator.share({
+          title: sharePageTitle,
+          text: sharePageText,
+          url,
+        })
+        return
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return
+      }
+    }
+    openShareFallback()
+  }
+
+  const handleCopyProductLink = async () => {
+    const url = getShareUrl()
+    if (!url) return
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopyLinkDone(true)
+      window.setTimeout(() => setCopyLinkDone(false), 2500)
+    } catch {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = url
+        ta.setAttribute('readonly', '')
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+        setCopyLinkDone(true)
+        window.setTimeout(() => setCopyLinkDone(false), 2500)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   if ('_isMissing' in productData && productData._isMissing) {
     return (
       <div className="product-page product-missing">
@@ -410,6 +538,8 @@ export default function Product({
       </div>
     )
   }
+
+  const shareUrlForModal = getShareUrl()
 
   return (
     <div className="product-page">
@@ -557,8 +687,12 @@ export default function Product({
                 </button>
               )}
               <button
+                type="button"
                 className="product-action-button"
                 aria-label="Share"
+                aria-expanded={shareFallbackOpen}
+                aria-haspopup="dialog"
+                onClick={() => void handleShareClick()}
               >
                 <Share2 size={20} />
               </button>
@@ -686,8 +820,23 @@ export default function Product({
                     id="product-quantity"
                     type="number"
                     min={1}
-                    value={addToCartQuantity}
-                    onChange={(e) => setAddToCartQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    step={1}
+                    inputMode="numeric"
+                    value={quantityInput}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v === '') {
+                        setQuantityInput('')
+                        return
+                      }
+                      if (!/^\d+$/.test(v)) return
+                      setQuantityInput(v)
+                    }}
+                    onBlur={() => {
+                      const n = parseInt(quantityInput, 10)
+                      if (!Number.isFinite(n) || n < 1) setQuantityInput('1')
+                      else setQuantityInput(String(n))
+                    }}
                     className="product-quantity-input"
                   />
                 </div>
@@ -704,7 +853,8 @@ export default function Product({
                       return
                     }
                     if (variantIdForCart != null) {
-                      onAddToCart?.(variantIdForCart, addToCartQuantity, unitPriceForCart, selectedVariantLabel || undefined)
+                      const qty = Math.max(1, parseInt(quantityInput, 10) || 1)
+                      onAddToCart?.(variantIdForCart, qty, unitPriceForCart, selectedVariantLabel || undefined)
                     }
                   }}
                 >
@@ -895,45 +1045,219 @@ export default function Product({
             </div>
           )}
 
-          {/* Discussions Section */}
+          {/* Reviews Section */}
           <div className="product-discussions">
-            <h2 className="product-section-title">Discussions</h2>
+            <h2 className="product-section-title">Reviews</h2>
             <div className="product-discussions-content">
-              {!productData.isMember ? (
-                <p className="product-discussions-message">
-                  Become a member to join the conversation
-                </p>
-              ) : (
+              {comments.length > 0 ? (
                 <div className="product-discussions-list">
-                  {/* Mock discussion items */}
-                  <div className="product-discussion-item">
-                    <div className="product-discussion-author">User1</div>
-                    <div className="product-discussion-text">
-                      Great model! What settings did you use?
+                  {comments.map((c) => (
+                    <div key={c.id} className="product-discussion-item">
+                      <div className="product-review-header">
+                        <span className="product-discussion-author">
+                          {c.author_username ?? 'User'}
+                        </span>
+                        {c.rating != null && c.rating > 0 && (
+                          <span className="product-review-stars" aria-label={`${c.rating} out of 5 stars`}>
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Star
+                                key={s}
+                                size={14}
+                                className={s <= c.rating! ? 'star-full' : 'star-empty'}
+                                fill={s <= c.rating! ? 'currentColor' : 'none'}
+                              />
+                            ))}
+                          </span>
+                        )}
+                      </div>
+                      <div className="product-discussion-text">{c.body}</div>
+                      {userAccount?.id === c.user_account_id && (
+                        <button
+                          type="button"
+                          className="product-discussion-delete"
+                          onClick={() => handleCommentDelete(c.id)}
+                          aria-label="Delete review"
+                        >
+                          ✕
+                        </button>
+                      )}
+                      {c.replies && c.replies.length > 0 && (
+                        <div className="product-discussion-replies">
+                          {c.replies.map((r) => (
+                            <div key={r.id} className="product-discussion-item product-discussion-item--reply">
+                              <div className="product-review-header">
+                                <span className="product-discussion-author">{r.author_username ?? 'User'}</span>
+                              </div>
+                              <div className="product-discussion-text">{r.body}</div>
+                              {userAccount?.id === r.user_account_id && (
+                                <button
+                                  type="button"
+                                  className="product-discussion-delete"
+                                  onClick={() => handleCommentDelete(r.id)}
+                                  aria-label="Delete reply"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <div className="product-discussion-item">
-                    <div className="product-discussion-author">Creator</div>
-                    <div className="product-discussion-text">
-                      Thanks! I used the settings listed above. Let me know if you need more details.
-                    </div>
-                  </div>
+                  ))}
                 </div>
+              ) : (
+                <p className="product-discussions-message">
+                  No reviews yet. Be the first to leave a review!
+                </p>
               )}
-              <div className="product-discussions-input">
-                <textarea
-                  placeholder={productData.isMember ? "Add a comment..." : "Become a member to join the conversation"}
-                  disabled={!productData.isMember}
-                  className="product-discussions-textarea"
-                />
-                {productData.isMember && (
-                  <button className="product-discussions-submit">Comment</button>
-                )}
-              </div>
+
+              {userAccount ? (
+                <div className="product-discussions-input">
+                  <div className="product-review-rating-input">
+                    <span className="product-review-rating-label">Your rating:</span>
+                    <div className="product-review-stars-input" role="radiogroup" aria-label="Rating">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          className="product-review-star-btn"
+                          onClick={() => setCommentRating(s)}
+                          onMouseEnter={() => setHoverRating(s)}
+                          onMouseLeave={() => setHoverRating(0)}
+                          aria-label={`${s} star${s > 1 ? 's' : ''}`}
+                          aria-pressed={commentRating === s}
+                          disabled={commentSubmitting}
+                        >
+                          <Star
+                            size={22}
+                            className={s <= (hoverRating || commentRating) ? 'star-full' : 'star-empty'}
+                            fill={s <= (hoverRating || commentRating) ? 'currentColor' : 'none'}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <textarea
+                    placeholder="Share your experience with this product…"
+                    value={commentBody}
+                    onChange={(e) => setCommentBody(e.target.value)}
+                    className="product-discussions-textarea"
+                    maxLength={2000}
+                    disabled={commentSubmitting}
+                  />
+                  {commentError && (
+                    <p className="product-discussions-error" role="alert">{commentError}</p>
+                  )}
+                  <button
+                    type="button"
+                    className="product-discussions-submit"
+                    onClick={handleCommentSubmit}
+                    disabled={!commentBody.trim() || commentSubmitting}
+                  >
+                    {commentSubmitting ? 'Posting…' : 'Submit Review'}
+                  </button>
+                </div>
+              ) : (
+                <p className="product-discussions-message">
+                  <a href="/sign-in">Sign in</a> to leave a review.
+                </p>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {shareFallbackOpen && (
+        <>
+          <button
+            type="button"
+            className="product-share-backdrop"
+            aria-label="Close share menu"
+            onClick={closeShareFallback}
+          />
+          <div
+            className="product-share-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-share-title"
+          >
+            <div className="product-share-sheet-header">
+              <h2 id="product-share-title" className="product-share-sheet-title">
+                Share
+              </h2>
+              <button
+                type="button"
+                className="product-share-sheet-close"
+                onClick={closeShareFallback}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <p className="product-share-sheet-hint">
+              Your device may also offer more apps if sharing isn’t available above.
+            </p>
+            <div className="product-share-sheet-actions">
+              <button
+                type="button"
+                className="product-share-action"
+                onClick={() => void handleCopyProductLink()}
+              >
+                {copyLinkDone ? 'Link copied' : 'Copy link'}
+              </button>
+              <a
+                className="product-share-action"
+                href={
+                  shareUrlForModal
+                    ? `https://wa.me/?text=${encodeURIComponent(`${sharePageText} ${shareUrlForModal}`)}`
+                    : '#'
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={!shareUrlForModal ? (e) => e.preventDefault() : undefined}
+              >
+                WhatsApp
+              </a>
+              <a
+                className="product-share-action"
+                href={
+                  shareUrlForModal
+                    ? `sms:?body=${encodeURIComponent(`${sharePageText} ${shareUrlForModal}`)}`
+                    : '#'
+                }
+                onClick={!shareUrlForModal ? (e) => e.preventDefault() : undefined}
+              >
+                Messages / SMS
+              </a>
+              <a
+                className="product-share-action"
+                href={
+                  shareUrlForModal
+                    ? `mailto:?subject=${encodeURIComponent(sharePageTitle)}&body=${encodeURIComponent(`${sharePageText}\n\n${shareUrlForModal}`)}`
+                    : '#'
+                }
+                onClick={!shareUrlForModal ? (e) => e.preventDefault() : undefined}
+              >
+                Email
+              </a>
+              <a
+                className="product-share-action"
+                href={
+                  shareUrlForModal
+                    ? `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrlForModal)}`
+                    : '#'
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={!shareUrlForModal ? (e) => e.preventDefault() : undefined}
+              >
+                Facebook
+              </a>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
