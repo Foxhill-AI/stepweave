@@ -14,6 +14,7 @@ export interface LikedProduct {
   likes?: number
   downloads?: number
   author?: string
+  authorProfileUrl?: string
   price?: string
   rating?: number
   badge?: string

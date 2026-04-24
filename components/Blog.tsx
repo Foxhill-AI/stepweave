@@ -78,14 +78,18 @@ export default function Blog({ isLoggedIn = false, userName, userAvatar, searchE
     if (!newsletterEmail.trim()) return
     setNewsletterStatus('loading')
     setNewsletterMessage('')
-    const { ok, error } = await subscribeNewsletter(newsletterEmail)
+    const { ok, error, alreadySubscribed } = await subscribeNewsletter(newsletterEmail)
     if (ok) {
       setNewsletterStatus('success')
-      setNewsletterMessage('Thanks! You’re subscribed.')
-      setNewsletterEmail('')
+      setNewsletterMessage(
+        alreadySubscribed
+          ? 'Este correo ya está registrado.'
+          : '¡Gracias! Tu registro fue exitoso.'
+      )
+      if (!alreadySubscribed) setNewsletterEmail('')
     } else {
       setNewsletterStatus('error')
-      setNewsletterMessage(error ?? 'Something went wrong. Try again.')
+      setNewsletterMessage(error ?? 'Algo salió mal. Inténtalo de nuevo.')
     }
   }
 

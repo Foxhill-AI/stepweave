@@ -27,14 +27,18 @@ export default function Footer() {
     if (!email.trim()) return
     setNewsletterStatus('loading')
     setNewsletterMessage('')
-    const { ok, error } = await subscribeNewsletter(email)
+    const { ok, error, alreadySubscribed } = await subscribeNewsletter(email)
     if (ok) {
       setNewsletterStatus('success')
-      setNewsletterMessage('Thanks! Check your inbox to confirm.')
-      setEmail('')
+      setNewsletterMessage(
+        alreadySubscribed
+          ? 'Este correo ya está registrado.'
+          : '¡Gracias! Tu registro fue exitoso. Revisa tu bandeja para confirmar.'
+      )
+      if (!alreadySubscribed) setEmail('')
     } else {
       setNewsletterStatus('error')
-      setNewsletterMessage(error ?? 'Something went wrong. Try again.')
+      setNewsletterMessage(error ?? 'Algo salió mal. Inténtalo de nuevo.')
     }
   }
 

@@ -1,13 +1,91 @@
+import path from 'path'
+import fs from 'fs'
 import sharp from 'sharp'
-import { compactToPrintfulPosition } from '@/lib/designDraftState'
-import { getServerFamily } from '@/lib/fonts'
+import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas'
+import {
+  clampTextAnchorInPrintfile,
+  getImageLayerDimensions,
+  isImageLayer,
+  isTextLayer,
+  type PlacementLayer,
+} from '@/lib/designDraftState'
+import {
+  getServerCanvasFontFamilyName,
+  getServerCanvasFontKind,
+} from '@/lib/fonts'
+
+/**
+ * Resolve the fonts directory. Primary: process.cwd()/lib/printful/fonts
+ * (works when Next.js outputFileTracingIncludes copies the TTFs correctly).
+ * Fallback: path relative to __dirname — useful if the route is compiled inside
+ * .next/server/... and the fonts end up alongside.
+ */
+function resolveFontsDir(): string {
+  const cwdPath = path.join(process.cwd(), 'lib', 'printful', 'fonts')
+  if (fs.existsSync(path.join(cwdPath, 'NotoSans-Regular.ttf'))) return cwdPath
+  let dir = __dirname
+  for (let i = 0; i < 8; i++) {
+    const candidate = path.join(dir, 'lib', 'printful', 'fonts')
+    if (fs.existsSync(path.join(candidate, 'NotoSans-Regular.ttf'))) return candidate
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return cwdPath
+}
+
+let canvasFontsRegistered = false
+function ensureCanvasFontsRegistered(): void {
+  if (canvasFontsRegistered) return
+  const fontsDir = resolveFontsDir()
+  console.info('[compositeImages] registering fonts from', fontsDir)
+  const entries: Array<[string, 'sans' | 'serif' | 'mono']> = [
+    ['NotoSans-Regular.ttf', 'sans'],
+    ['NotoSerif-Regular.ttf', 'serif'],
+    ['NotoSansMono-Regular.ttf', 'mono'],
+  ]
+  for (const [file, kind] of entries) {
+    const fullPath = path.join(fontsDir, file)
+    if (!fs.existsSync(fullPath)) {
+      console.error(
+        '[compositeImages] MISSING font file — tofu likely:',
+        fullPath,
+        '| cwd:',
+        process.cwd(),
+        '| __dirname:',
+        __dirname
+      )
+      continue
+    }
+    const familyName = getServerCanvasFontFamilyName(kind)
+    const result = GlobalFonts.registerFromPath(fullPath, familyName)
+    if (result == null) {
+      console.error(
+        '[compositeImages] registerFromPath returned null for',
+        file,
+        '— @napi-rs/canvas may have loaded wrong platform binary'
+      )
+    } else {
+      console.info('[compositeImages] registered', file, 'as', familyName)
+    }
+  }
+  canvasFontsRegistered = true
+}
 
 export type CompositeLayerInput = {
   kind: 'image'
   signedUrl: string
-  s: number
+  width: number
+  height: number
   dx: number
   dy: number
+  rotation: number
+  /** Tile the scaled image on a grid to cover the print area */
+  repeat: boolean
+  flipH: boolean
+  flipV: boolean
+  /** 0–1 */
+  opacity: number
 }
 
 export type CompositeTextInput = {
@@ -18,44 +96,188 @@ export type CompositeTextInput = {
   color: string
   dx: number
   dy: number
+  rotation: number
+  flipH: boolean
+  flipV: boolean
+  opacity: number
 }
 
 export type CompositeInput = CompositeLayerInput | CompositeTextInput
 
-/** Escape special XML characters for use inside SVG text content. */
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
+/**
+ * Build composite inputs from design_state layers. All image layers are drawn first (bottom),
+ * then all text layers (top). This avoids mockups missing text when array order is [text, image] —
+ * the in-editor canvas can show the selected layer on top regardless of array order.
+ */
+export function placementLayersToCompositeInputs(
+  layers: PlacementLayer[],
+  signedByPath: Map<string, string>,
+  areaWidth: number,
+  areaHeight: number
+): CompositeInput[] {
+  const inputs: CompositeInput[] = []
+  for (const l of layers) {
+    if (!isImageLayer(l)) continue
+    const url = signedByPath.get(l.path)
+    if (url) {
+      const { w, h } = getImageLayerDimensions(l, areaWidth, areaHeight)
+      const op =
+        typeof l.opacity === 'number' && Number.isFinite(l.opacity)
+          ? Math.min(1, Math.max(0, l.opacity))
+          : 1
+      inputs.push({
+        kind: 'image',
+        signedUrl: url,
+        width: w,
+        height: h,
+        dx: l.dx,
+        dy: l.dy,
+        rotation: l.rotation ?? 0,
+        repeat: l.repeat === true,
+        flipH: l.flipH === true,
+        flipV: l.flipV === true,
+        opacity: op,
+      })
+    }
+  }
+  for (const l of layers) {
+    if (!isTextLayer(l)) continue
+    const top =
+      typeof l.opacity === 'number' && Number.isFinite(l.opacity)
+        ? Math.min(1, Math.max(0, l.opacity))
+        : 1
+    inputs.push({
+      kind: 'text',
+      text: l.text,
+      fontFamily: l.fontFamily,
+      fontSize: l.fontSize,
+      color: l.color,
+      dx: l.dx,
+      dy: l.dy,
+      rotation: l.rotation ?? 0,
+      flipH: l.flipH === true,
+      flipV: l.flipV === true,
+      opacity: top,
+    })
+  }
+  return inputs
+}
+
+async function renderImageLayerToFullCanvas(
+  areaWidth: number,
+  areaHeight: number,
+  input: CompositeLayerInput
+): Promise<Buffer> {
+  ensureCanvasFontsRegistered()
+  const cw = Math.max(1, Math.round(areaWidth))
+  const ch = Math.max(1, Math.round(areaHeight))
+  const canvas = createCanvas(cw, ch)
+  const ctx = canvas.getContext('2d')
+
+  const res = await fetch(input.signedUrl)
+  if (!res.ok) throw new Error(`Failed to fetch layer image: ${res.status}`)
+  const buf = Buffer.from(await res.arrayBuffer())
+  const img = await loadImage(buf)
+
+  const w = Math.max(1, Math.round(input.width))
+  const h = Math.max(1, Math.round(input.height))
+  const rad = (input.rotation * Math.PI) / 180
+  const cx = cw / 2 + input.dx
+  const cy = ch / 2 + input.dy
+  const sx = input.flipH ? -1 : 1
+  const sy = input.flipV ? -1 : 1
+  const alpha = Math.min(1, Math.max(0, input.opacity))
+
+  if (input.repeat) {
+    const inv = (px: number, py: number): [number, number] => {
+      const ox = px - cx
+      const oy = py - cy
+      const c = Math.cos(-rad)
+      const s = Math.sin(-rad)
+      return [ox * c - oy * s, ox * s + oy * c]
+    }
+    const corners: [number, number][] = [
+      inv(0, 0),
+      inv(cw, 0),
+      inv(cw, ch),
+      inv(0, ch),
+    ]
+    const xs = corners.map((p) => p[0])
+    const ys = corners.map((p) => p[1])
+    const minX = Math.min(...xs)
+    const maxX = Math.max(...xs)
+    const minY = Math.min(...ys)
+    const maxY = Math.max(...ys)
+    const pad = Math.max(w, h) * 2
+    const i0 = Math.floor((minX - pad) / w)
+    const i1 = Math.ceil((maxX + pad) / w)
+    const j0 = Math.floor((minY - pad) / h)
+    const j1 = Math.ceil((maxY + pad) / h)
+
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        ctx.save()
+        ctx.globalAlpha = alpha
+        ctx.translate(cx, cy)
+        ctx.rotate(rad)
+        if (sx !== 1 || sy !== 1) ctx.scale(sx, sy)
+        ctx.drawImage(img, i * w - w / 2, j * h - h / 2, w, h)
+        ctx.restore()
+      }
+    }
+  } else {
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.translate(cx, cy)
+    ctx.rotate(rad)
+    if (sx !== 1 || sy !== 1) ctx.scale(sx, sy)
+    ctx.drawImage(img, -w / 2, -h / 2, w, h)
+    ctx.restore()
+  }
+
+  return canvas.toBuffer('image/png')
 }
 
 /**
- * Renders a text layer as a PNG buffer using SVG + sharp.
- * The text is centered at (areaWidth/2 + dx, areaHeight/2 + dy).
+ * Renders a text layer as a full printfile-sized PNG (transparent) using @napi-rs/canvas + Noto.
  */
-async function renderTextToBuffer(
-  areaWidth: number,
-  areaHeight: number,
-  input: CompositeTextInput
-): Promise<Buffer> {
-  const x = Math.round(areaWidth / 2 + input.dx)
-  const y = Math.round(areaHeight / 2 + input.dy)
-  const serverFamily = getServerFamily(input.fontFamily)
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${areaWidth}" height="${areaHeight}">
-    <text
-      x="${x}"
-      y="${y}"
-      font-family="${escapeXml(serverFamily)}"
-      font-size="${input.fontSize}"
-      fill="${escapeXml(input.color)}"
-      text-anchor="middle"
-      dominant-baseline="central"
-    >${escapeXml(input.text)}</text>
-  </svg>`
-  return sharp(Buffer.from(svg)).png().toBuffer()
+function renderTextToBuffer(areaWidth: number, areaHeight: number, input: CompositeTextInput): Buffer {
+  ensureCanvasFontsRegistered()
+  const w = Math.max(1, Math.round(areaWidth))
+  const h = Math.max(1, Math.round(areaHeight))
+  const canvas = createCanvas(w, h)
+  const ctx = canvas.getContext('2d')
+  const kind = getServerCanvasFontKind(input.fontFamily)
+  const family = getServerCanvasFontFamilyName(kind)
+  const size = Math.max(1, Math.round(input.fontSize))
+  let x = w / 2 + input.dx
+  let y = h / 2 + input.dy
+  const clamped = clampTextAnchorInPrintfile(w, h, x, y, size)
+  if (clamped.x !== x || clamped.y !== y) {
+    console.warn('[compositeImages] text anchor clamped to print area', {
+      before: { x, y },
+      after: clamped,
+      printfile: { w, h },
+    })
+  }
+  x = clamped.x
+  y = clamped.y
+  ctx.font = `${size}px ${family}`
+  ctx.fillStyle = input.color
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const rot = (input.rotation * Math.PI) / 180
+  const fsx = input.flipH ? -1 : 1
+  const fsy = input.flipV ? -1 : 1
+  const talpha = Math.min(1, Math.max(0, input.opacity))
+  ctx.save()
+  ctx.globalAlpha = talpha
+  ctx.translate(x, y)
+  ctx.rotate(rot)
+  if (fsx !== 1 || fsy !== 1) ctx.scale(fsx, fsy)
+  ctx.fillText(input.text, 0, 0)
+  ctx.restore()
+  return canvas.toBuffer('image/png')
 }
 
 /**
@@ -71,31 +293,24 @@ export async function compositeLayersToBuffer(
 ): Promise<Buffer> {
   if (layers.length === 0) throw new Error('No layers to composite')
 
-  // Resolve each layer to a positioned { input, left, top } for sharp composite
   const compositeInputs = await Promise.all(
     layers.map(async (layer) => {
       if (layer.kind === 'text') {
-        const buf = await renderTextToBuffer(areaWidth, areaHeight, layer)
-        return { input: buf, left: 0, top: 0 }
+        return {
+          input: renderTextToBuffer(areaWidth, areaHeight, layer),
+          left: 0,
+          top: 0,
+        }
       }
-
-      // Image layer: fetch → resize → position
-      const res = await fetch(layer.signedUrl)
-      if (!res.ok) throw new Error(`Failed to fetch layer image: ${res.status}`)
-      const buf = Buffer.from(await res.arrayBuffer())
-      const pos = compactToPrintfulPosition(areaWidth, areaHeight, layer)
-      const resized = await sharp(buf)
-        .resize(pos.width, pos.height, { fit: 'fill' })
-        .toBuffer()
+      const png = await renderImageLayerToFullCanvas(areaWidth, areaHeight, layer)
       return {
-        input: resized,
-        left: Math.max(0, pos.left),
-        top: Math.max(0, pos.top),
+        input: png,
+        left: 0,
+        top: 0,
       }
     })
   )
 
-  // Composite all layers onto a transparent RGBA base
   return sharp({
     create: {
       width: areaWidth,

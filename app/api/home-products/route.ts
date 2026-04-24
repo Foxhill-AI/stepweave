@@ -1,24 +1,37 @@
 import { NextResponse } from 'next/server'
-import { getActiveProducts, getFeaturedCreatorsForHero } from '@/lib/supabaseClient'
+import {
+  getActiveProducts,
+  buildFeaturedCreatorsFromProductRows,
+  getPopularProductsWithEngagement,
+} from '@/lib/supabaseClient'
+
+/** Always fresh data so new publishes show on the homepage without stale cache. */
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 /**
  * GET /api/home-products
  * Fetches products and featured creators on the server so the home page doesn't
  * depend on the browser Supabase client (which can hang with createBrowserClient).
+ * Hero sections are derived from the same product list as the carousels.
  */
 export async function GET() {
-  console.log("SUPABASE_URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
-  console.log("HAS_ANON_KEY:", !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   try {
-    const [products, featuredCreators] = await Promise.all([
+    const [products, popular] = await Promise.all([
       getActiveProducts(),
-      getFeaturedCreatorsForHero(),
+      getPopularProductsWithEngagement(12),
     ])
-    return NextResponse.json({ products, featuredCreators })
+    const featuredCreators = await buildFeaturedCreatorsFromProductRows(products)
+    return NextResponse.json({
+      products,
+      featuredCreators,
+      popularProducts: popular.products,
+      popularEngagement: popular.engagementByProductId,
+    })
   } catch (e) {
     console.error('[api/home-products]', e)
     return NextResponse.json(
-      { products: [], featuredCreators: [] },
+      { products: [], featuredCreators: [], popularProducts: [], popularEngagement: {} },
       { status: 200 }
     )
   }

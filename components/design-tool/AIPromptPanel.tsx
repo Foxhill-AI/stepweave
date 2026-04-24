@@ -2,6 +2,16 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Paperclip, X } from 'lucide-react'
+import {
+  appendDesignDraftAiMessages,
+  deleteDesignDraftAiMessages,
+  getDesignDraftAiMessages,
+  type DesignDraftAiMessageRow,
+} from '@/lib/supabaseClient'
+
+const AI_MSG_V = 1
+const KIND_USER = 'generation_user'
+const KIND_ASSISTANT = 'generation_assistant'
 
 export type AiGeneratedVariant = {
   id: string
@@ -19,31 +29,90 @@ type GenerationTurn = {
   usedReference: boolean
 }
 
-type PhotoMode = null | 'direct' | 'ai-reference'
+function buildTurnsFromDbMessages(rows: DesignDraftAiMessageRow[]): GenerationTurn[] {
+  const sorted = [...rows].sort((a, b) => a.message_index - b.message_index)
+  const turns: GenerationTurn[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    const row = sorted[i]
+    if (row.role !== 'user') continue
+    const uc = row.content
+    if (uc.kind !== KIND_USER || typeof uc.prompt !== 'string') continue
+    const next = sorted[i + 1]
+    if (!next || next.role !== 'assistant') continue
+    const ac = next.content
+    if (ac.kind !== KIND_ASSISTANT || !Array.isArray(ac.variants)) continue
+    const variantsRaw = ac.variants as unknown[]
+    const variants: AiGeneratedVariant[] = []
+    for (const item of variantsRaw) {
+      if (!item || typeof item !== 'object') continue
+      const o = item as Record<string, unknown>
+      if (
+        typeof o.id === 'string' &&
+        typeof o.storagePath === 'string' &&
+        typeof o.seed === 'number'
+      ) {
+        variants.push({
+          id: o.id,
+          storagePath: o.storagePath,
+          previewUrl: '',
+          seed: o.seed,
+        })
+      }
+    }
+    if (variants.length === 0) continue
+    const styleSummary = typeof ac.styleSummary === 'string' ? ac.styleSummary : null
+    turns.push({
+      id: `db-${row.id}-${next.id}`,
+      prompt: uc.prompt,
+      styleSummary,
+      variants,
+      usedReference: Boolean(uc.usedReference),
+    })
+    i++
+  }
+  return turns
+}
+
+function collectStoragePaths(turns: GenerationTurn[]): string[] {
+  const set = new Set<string>()
+  for (const t of turns) {
+    for (const v of t.variants) {
+      if (v.storagePath?.trim()) set.add(v.storagePath.trim())
+    }
+  }
+  return Array.from(set)
+}
+
+function applySignedUrls(turns: GenerationTurn[], urls: Record<string, string>): GenerationTurn[] {
+  return turns.map((turn) => ({
+    ...turn,
+    variants: turn.variants.map((v) => ({
+      ...v,
+      previewUrl: urls[v.storagePath] ?? v.previewUrl,
+    })),
+  }))
+}
 
 interface AIPromptPanelProps {
   /** Required for generation (draft from /design-tool/[id]). */
   draftId?: number
-  /** Called when user confirms an AI variant; should persist `pattern_image_url` on the draft. */
-  onPatternApplied?: (storagePath: string) => Promise<void>
-  /** Called when user wants to use the attached photo directly on their shoes. */
-  onUseDirectly?: (storagePath: string) => Promise<void>
-  /** Called to advance to the customize step. */
-  onNext?: () => void
+  /** Called when user confirms "Apply to shoe"; should persist `pattern_image_url` on the draft. */
+  onPatternApplied?: (storagePath: string, previewUrl?: string) => Promise<void>
 }
 
 const ACCEPT_IMAGES = 'image/jpeg,image/png,image/webp,image/gif'
 const MAX_SIZE_MB = 10
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 
-export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly, onNext }: AIPromptPanelProps) {
+export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPanelProps) {
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [history, setHistory] = useState<GenerationTurn[]>([])
   const [selectedVariant, setSelectedVariant] = useState<AiGeneratedVariant | null>(null)
-  const [photoMode, setPhotoMode] = useState<PhotoMode>(null)
-  const [nextLoading, setNextLoading] = useState(false)
+  const [applying, setApplying] = useState(false)
+  /** Loading persisted rows from design_draft_ai_message */
+  const [chatLoading, setChatLoading] = useState(false)
 
   // Reference image state
   const [referencePreviewUrl, setReferencePreviewUrl] = useState<string | null>(null)
@@ -58,6 +127,45 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [history, loading])
+
+  useEffect(() => {
+    if (!draftId) {
+      setHistory([])
+      setSelectedVariant(null)
+      setChatLoading(false)
+      return
+    }
+    let cancelled = false
+    setChatLoading(true)
+    ;(async () => {
+      try {
+        const rows = await getDesignDraftAiMessages(draftId)
+        if (cancelled) return
+        let turns = buildTurnsFromDbMessages(rows)
+        const paths = collectStoragePaths(turns)
+        if (paths.length > 0) {
+          const res = await fetch(`/api/design-drafts/${draftId}/sign-storage-paths`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paths }),
+          })
+          const body = (await res.json().catch(() => ({}))) as {
+            urls?: Record<string, string>
+          }
+          if (res.ok && body.urls && typeof body.urls === 'object') {
+            turns = applySignedUrls(turns, body.urls)
+          }
+        }
+        if (cancelled) return
+        setHistory(turns)
+      } finally {
+        if (!cancelled) setChatLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [draftId])
 
   // Revoke blob URL on unmount
   useEffect(() => {
@@ -84,12 +192,11 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
         blobUrlRef.current = null
       }
 
-      // Show preview immediately, reset any previous mode choice
+      // Show preview immediately
       const previewUrl = URL.createObjectURL(file)
       blobUrlRef.current = previewUrl
       setReferencePreviewUrl(previewUrl)
       setReferenceStoragePath(null)
-      setPhotoMode(null)
       setError(null)
 
       if (!draftId) return // can't upload without a draft
@@ -134,7 +241,6 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
     }
     setReferencePreviewUrl(null)
     setReferenceStoragePath(null)
-    setPhotoMode(null)
   }, [])
 
   const handleGenerate = useCallback(async () => {
@@ -159,7 +265,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
     setLoading(true)
     setError(null)
 
-    const isI2I = Boolean(referenceStoragePath) && photoMode === 'ai-reference'
+    const isI2I = Boolean(referenceStoragePath)
     try {
       const res = await fetch(`/api/design-drafts/${draftId}/generate`, {
         method: 'POST',
@@ -184,47 +290,63 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
         setError('No images were returned. Try again.')
         return
       }
-      setHistory((prev) => [
-        ...prev,
+      const newTurn: GenerationTurn = {
+        id: crypto.randomUUID(),
+        prompt: trimmed,
+        styleSummary: body.style_summary ?? null,
+        variants: body.variants!,
+        usedReference: isI2I,
+      }
+      setHistory((prev) => [...prev, newTurn])
+      setPrompt('')
+      const persistOk = await appendDesignDraftAiMessages(draftId, [
         {
-          id: crypto.randomUUID(),
-          prompt: trimmed,
-          styleSummary: body.style_summary ?? null,
-          variants: body.variants!,
-          usedReference: isI2I,
+          role: 'user',
+          content: {
+            v: AI_MSG_V,
+            kind: KIND_USER,
+            prompt: trimmed,
+            usedReference: isI2I,
+          },
+        },
+        {
+          role: 'assistant',
+          content: {
+            v: AI_MSG_V,
+            kind: KIND_ASSISTANT,
+            styleSummary: body.style_summary ?? null,
+            variants: body.variants!.map((v) => ({
+              id: v.id,
+              storagePath: v.storagePath,
+              seed: v.seed,
+            })),
+          },
         },
       ])
-      setPrompt('')
+      if (!persistOk) {
+        console.warn('[AIPromptPanel] Failed to persist AI chat; history may reset on reload')
+      }
     } catch {
       setError('Network error. Please try again.')
     } finally {
       setLoading(false)
     }
-  }, [draftId, prompt, referenceStoragePath, referencePreviewUrl, referenceUploading, photoMode])
+  }, [draftId, prompt, referenceStoragePath, referencePreviewUrl, referenceUploading])
 
-  const handleNext = useCallback(async () => {
-    setNextLoading(true)
+  const handleApplyToShoe = useCallback(async () => {
+    if (!selectedVariant || !onPatternApplied) return
+    setApplying(true)
     setError(null)
     try {
-      if (photoMode === 'direct' && referenceStoragePath && onUseDirectly) {
-        await onUseDirectly(referenceStoragePath)
-      } else if (selectedVariant && onPatternApplied) {
-        await onPatternApplied(selectedVariant.storagePath)
-      }
-      onNext?.()
+      await onPatternApplied(selectedVariant.storagePath, selectedVariant.previewUrl)
     } catch {
-      setError('Something went wrong. Please try again.')
+      setError('Could not apply pattern. Try again.')
     } finally {
-      setNextLoading(false)
+      setApplying(false)
     }
-  }, [photoMode, referenceStoragePath, selectedVariant, onPatternApplied, onUseDirectly, onNext])
+  }, [selectedVariant, onPatternApplied])
 
   const noDraft = !draftId
-
-  // Next is available when: direct mode with uploaded photo, or AI variant selected
-  const canGoNext =
-    (photoMode === 'direct' && Boolean(referenceStoragePath) && !referenceUploading) ||
-    (selectedVariant !== null && photoMode !== 'direct')
 
   return (
     <div className="ai-prompt-panel">
@@ -237,9 +359,14 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
 
       {/* ── Conversation history ── */}
       <div className="ai-prompt-messages" aria-label="AI design conversation" aria-live="polite">
-        {history.length === 0 && !loading && (
+        {chatLoading && (
+          <div className="ai-prompt-message placeholder" role="status">
+            Loading conversation…
+          </div>
+        )}
+        {history.length === 0 && !loading && !chatLoading && (
           <div className="ai-prompt-message placeholder">
-            Describe your design — or attach a photo to place directly on your shoes or use as style inspiration.
+            Describe your pattern or graphic — or attach a reference image for style inspiration.
           </div>
         )}
 
@@ -297,16 +424,27 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
         <div ref={messagesEndRef} aria-hidden />
       </div>
 
-      {/* ── Selected pattern preview (no apply button — Next handles it) ── */}
-      {selectedVariant && photoMode !== 'direct' && (
+      {/* ── Selected pattern preview ── */}
+      {selectedVariant && (
         <div className="ai-prompt-selected-panel">
-          <p className="ai-prompt-selected-label">Selected pattern</p>
+          <p className="ai-prompt-selected-label">Your selected pattern</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={selectedVariant.previewUrl}
             alt="Selected pattern preview"
             className="ai-prompt-selected-img"
           />
+          <button
+            type="button"
+            className="ai-prompt-btn primary ai-prompt-apply-btn"
+            onClick={() => void handleApplyToShoe()}
+            disabled={applying || !onPatternApplied}
+          >
+            {applying ? 'Applying…' : 'Apply to shoe →'}
+          </button>
+          {!onPatternApplied && (
+            <p className="ai-prompt-selected-hint">Open a draft to apply this pattern.</p>
+          )}
         </div>
       )}
 
@@ -325,14 +463,14 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
           }}
         />
 
-        {/* Photo attachment row */}
+        {/* Reference image row */}
         {referencePreviewUrl ? (
           <div className="ai-prompt-reference-row">
             <div className="ai-prompt-reference-thumb-wrap">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={referencePreviewUrl}
-                alt="Attached photo"
+                alt="Reference image"
                 className="ai-prompt-reference-thumb"
               />
               {referenceUploading && (
@@ -341,57 +479,19 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
                 </div>
               )}
             </div>
-
             <div className="ai-prompt-reference-meta">
-              {!photoMode ? (
-                /* Choice buttons — shown immediately after upload finishes */
-                <div className="ai-prompt-photo-choice">
-                  <p className="ai-prompt-photo-choice-label">
-                    {referenceUploading ? 'Uploading…' : 'What would you like to do?'}
-                  </p>
-                  {!referenceUploading && (
-                    <div className="ai-prompt-photo-choice-btns">
-                      <button
-                        type="button"
-                        className="ai-prompt-photo-choice-btn"
-                        onClick={() => setPhotoMode('direct')}
-                      >
-                        Put it on my shoes
-                      </button>
-                      <button
-                        type="button"
-                        className="ai-prompt-photo-choice-btn"
-                        onClick={() => setPhotoMode('ai-reference')}
-                      >
-                        Use as AI inspiration
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Mode confirmed */
-                <>
-                  <span className="ai-prompt-reference-label">
-                    {photoMode === 'direct'
-                      ? 'Will be placed on your shoes'
-                      : 'AI style reference ready'}
-                  </span>
-                  <button
-                    type="button"
-                    className="ai-prompt-reference-change"
-                    onClick={() => setPhotoMode(null)}
-                  >
-                    Change
-                  </button>
-                </>
-              )}
+              <span className="ai-prompt-reference-label">
+                {referenceUploading ? 'Uploading reference…' : 'Reference image ready'}
+              </span>
+              <span className="ai-prompt-reference-hint">
+                AI will use this as style inspiration
+              </span>
             </div>
-
             <button
               type="button"
               className="ai-prompt-reference-remove"
               onClick={handleRemoveReference}
-              aria-label="Remove photo"
+              aria-label="Remove reference image"
             >
               <X size={14} aria-hidden />
             </button>
@@ -401,90 +501,81 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
             <button
               type="button"
               className="ai-prompt-attach-btn"
-              aria-label="Attach a photo"
+              aria-label="Attach reference image"
               onClick={() => fileInputRef.current?.click()}
               disabled={!draftId}
-              title={!draftId ? 'Open a draft to attach photos' : 'Attach a photo'}
+              title={!draftId ? 'Open a draft to use image references' : 'Attach a reference image'}
             >
               <Paperclip size={18} aria-hidden />
-              Attach photo
+              Attach
             </button>
-            <span className="ai-prompt-attach-hint">Place on shoe or use as AI reference</span>
+            <span className="ai-prompt-attach-hint">Style reference image</span>
           </div>
         )}
 
-        {/* Text prompt + generate — hidden when photo is set to direct mode */}
-        {photoMode !== 'direct' && (
-          <>
-            <label htmlFor="ai-prompt-input" className="sr-only">
-              Design prompt
-            </label>
-            <textarea
-              id="ai-prompt-input"
-              className="ai-prompt-input"
-              placeholder={
-                history.length > 0
-                  ? 'Refine, iterate, or try a new direction…'
-                  : 'Describe what you want to create…'
-              }
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault()
-                  void handleGenerate()
-                }
-              }}
-              rows={2}
-              aria-label="Design prompt"
-              disabled={loading}
-            />
-            {error && (
-              <p className="ai-prompt-error" role="alert">
-                {error}
-              </p>
-            )}
-            <div className="ai-prompt-actions">
-              <button
-                type="button"
-                className="ai-prompt-btn primary"
-                onClick={() => void handleGenerate()}
-                disabled={loading || noDraft || !prompt.trim() || referenceUploading}
-              >
-                {loading ? 'Generating…' : 'Generate'}
-              </button>
-              {history.length > 0 && (
-                <button
-                  type="button"
-                  className="ai-prompt-btn secondary"
-                  onClick={() => { setHistory([]); setSelectedVariant(null); setError(null) }}
-                  disabled={loading}
-                >
-                  Clear history
-                </button>
-              )}
-            </div>
-            {history.length > 0 && (
-              <p className="ai-prompt-shortcut-hint">Tip: ⌘ Enter to generate</p>
-            )}
-          </>
+        <label htmlFor="ai-prompt-input" className="sr-only">
+          Design prompt
+        </label>
+        <textarea
+          id="ai-prompt-input"
+          className="ai-prompt-input"
+          placeholder={
+            history.length > 0
+              ? 'Refine, iterate, or try a new direction…'
+              : 'Describe what you want to create…'
+          }
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault()
+              void handleGenerate()
+            }
+          }}
+          rows={2}
+          aria-label="Design prompt"
+          disabled={loading}
+        />
+        {error && (
+          <p className="ai-prompt-error" role="alert">
+            {error}
+          </p>
         )}
-
-        {/* Error in direct mode */}
-        {photoMode === 'direct' && error && (
-          <p className="ai-prompt-error" role="alert">{error}</p>
-        )}
-
-        {/* Continue button — appears when ready to advance */}
-        {canGoNext && onNext && (
+        <div className="ai-prompt-actions">
           <button
             type="button"
-            className="ai-prompt-btn primary ai-prompt-next-btn"
-            onClick={() => void handleNext()}
-            disabled={nextLoading}
+            className="ai-prompt-btn primary"
+            onClick={() => void handleGenerate()}
+            disabled={loading || chatLoading || noDraft || !prompt.trim() || referenceUploading}
           >
-            {nextLoading ? 'Saving…' : 'Continue to customize →'}
+            {loading ? 'Generating…' : 'Generate'}
           </button>
+          {history.length > 0 && (
+          <button
+            type="button"
+            className="ai-prompt-btn secondary"
+            onClick={() => {
+              void (async () => {
+                if (draftId) {
+                  const ok = await deleteDesignDraftAiMessages(draftId)
+                  if (!ok) {
+                    setError('Could not clear saved chat. Try again.')
+                    return
+                  }
+                }
+                setHistory([])
+                setSelectedVariant(null)
+                setError(null)
+              })()
+            }}
+            disabled={loading || chatLoading}
+          >
+            Clear history
+          </button>
+          )}
+        </div>
+        {history.length > 0 && (
+          <p className="ai-prompt-shortcut-hint">Tip: ⌘ Enter to generate</p>
         )}
       </div>
     </div>

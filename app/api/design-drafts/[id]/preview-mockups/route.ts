@@ -6,6 +6,9 @@ import {
   parsePlacementImages,
   isTextLayer,
   isImageLayer,
+  placementLayersNeedServerComposite,
+  enrichDirectImagePlacementOverrides,
+  type PlacementCompactTransform,
 } from '@/lib/designDraftState'
 import {
   createTaskAndPoll,
@@ -18,7 +21,15 @@ import {
   buildPrintfileById,
   resolvePlacementKeys,
 } from '@/lib/printful/buildMockupFiles'
-import { compositeLayersToBuffer, type CompositeInput } from '@/lib/printful/compositeImages'
+import {
+  compositeLayersToBuffer,
+  placementLayersToCompositeInputs,
+} from '@/lib/printful/compositeImages'
+import {
+  PRINTFUL_SLOT_BUSY_CODE,
+  tryAcquirePrintfulMockupSlot,
+  releasePrintfulMockupSlot,
+} from '@/lib/printful/mockupSlot'
 
 const BUCKET = 'design-patterns'
 /** Long enough for Printful to fetch the pattern image during mockup generation */
@@ -117,6 +128,14 @@ export async function POST(
     )
   }
 
+  console.log('[preview-mockups]', {
+    draftId,
+    productId,
+    variantId,
+    globalPatternPath: globalPatternPath || null,
+    patternImagePlacements: Object.keys(perPlacementPaths),
+  })
+
   const placementTransforms = parsePrintfulPlacements(designState)
 
   const apiKey = process.env.PRINTFUL_API_KEY
@@ -164,13 +183,12 @@ export async function POST(
   const imageUrlByPlacement: Record<string, string> = {}
   // Overrides for placement transforms: single-layer uses layer's own s/dx/dy;
   // composited placements use { s:1, dx:0, dy:0 } (image is pre-positioned).
-  const placementTransformOverrides: Record<string, { s: number; dx: number; dy: number }> = {}
+  const placementTransformOverrides: Record<string, PlacementCompactTransform> = {}
 
   for (const [placement, layers] of Object.entries(perPlacementPaths)) {
-    const hasText = layers.some(isTextLayer)
     const imageLayers = layers.filter(isImageLayer)
-    if (!hasText && imageLayers.length === 1) {
-      // Pure single-image placement — use signed URL directly
+    if (!placementLayersNeedServerComposite(layers) && imageLayers.length === 1) {
+      // Single raster, no text, no rotation — Printful positions the raw URL
       const url = signedByPath.get(imageLayers[0].path)
       if (url) {
         imageUrlByPlacement[placement] = url
@@ -185,6 +203,20 @@ export async function POST(
       imageUrlByPlacement[`__pending__${placement}`] = placement
     }
   }
+
+  console.log(
+    '[preview-mockups] routing',
+    Object.entries(perPlacementPaths).map(([p, layers]) => ({
+      placement: p,
+      hasText: layers.some(isTextLayer),
+      nImages: layers.filter(isImageLayer).length,
+      mode: imageUrlByPlacement[`__pending__${p}`]
+        ? 'pending_composite'
+        : imageUrlByPlacement[p]
+          ? 'direct_image'
+          : 'none',
+    }))
+  )
 
   const headers: HeadersInit = {
     Authorization: `Bearer ${apiKey.trim()}`,
@@ -218,6 +250,17 @@ export async function POST(
   const availablePlacements = printfilesResult.available_placements ?? {}
   const { placementKeys, variantMapping } = resolvePlacementKeys(printfilesResult, variantId)
 
+  const designPlacementKeys = Object.keys(perPlacementPaths)
+  const missingOnPrintful = designPlacementKeys.filter((k) => !placementKeys.includes(k))
+  const missingInDesign = placementKeys.filter((k) => !designPlacementKeys.includes(k))
+  console.log('[preview-mockups] placement alignment', {
+    placementKeys,
+    designPlacementKeys,
+    missingOnPrintful,
+    missingInDesign,
+    variantHasMapping: Boolean(variantMapping?.placements),
+  })
+
   if (!variantMapping || placementKeys.length === 0) {
     return NextResponse.json({
       product_id: productId,
@@ -228,6 +271,16 @@ export async function POST(
   }
 
   const printfileById = buildPrintfileById(printfilesResult)
+
+  const placementTransformOverridesEnriched = enrichDirectImagePlacementOverrides(
+    placementTransformOverrides,
+    perPlacementPaths,
+    (placement) => {
+      const printfileId = variantMapping?.placements[placement]
+      const pf = printfileId != null ? printfileById.get(printfileId) : null
+      return { width: pf?.width ?? 1800, height: pf?.height ?? 1800 }
+    }
+  )
 
   // Resolve multi-layer placements: composite layers → upload → sign
   const pendingPlacements = Object.keys(imageUrlByPlacement)
@@ -248,26 +301,12 @@ export async function POST(
         const areaWidth = pf?.width ?? 1800
         const areaHeight = pf?.height ?? 1800
 
-        // Build composite inputs: image layers (need signed URL) + text layers (no URL)
-        const layerInputs: CompositeInput[] = []
-        for (const l of layers) {
-          if (isTextLayer(l)) {
-            layerInputs.push({
-              kind: 'text',
-              text: l.text,
-              fontFamily: l.fontFamily,
-              fontSize: l.fontSize,
-              color: l.color,
-              dx: l.dx,
-              dy: l.dy,
-            })
-          } else {
-            const url = signedByPath.get(l.path)
-            if (url) {
-              layerInputs.push({ kind: 'image', signedUrl: url, s: l.s, dx: l.dx, dy: l.dy })
-            }
-          }
-        }
+        const layerInputs = placementLayersToCompositeInputs(
+          layers,
+          signedByPath,
+          areaWidth,
+          areaHeight
+        )
         if (layerInputs.length === 0) return
 
         try {
@@ -302,7 +341,7 @@ export async function POST(
       finalTransforms[placement] = { s: 1, dx: 0, dy: 0 }
     }
   }
-  for (const [placement, t] of Object.entries(placementTransformOverrides)) {
+  for (const [placement, t] of Object.entries(placementTransformOverridesEnriched)) {
     finalTransforms[placement] = t
   }
 
@@ -315,6 +354,15 @@ export async function POST(
     placementTransforms: finalTransforms,
   })
 
+  console.log(
+    '[preview-mockups] files',
+    files.map((f) => ({
+      placement: f.placement,
+      urlPresent: f.image_url.trim().length > 0,
+      urlLength: f.image_url.length,
+    }))
+  )
+
   if (files.length === 0) {
     return NextResponse.json({
       product_id: productId,
@@ -324,7 +372,27 @@ export async function POST(
     })
   }
 
-  const batch = await createTaskAndPoll(productId, variantId, files, headers)
+  const slotHolder = crypto.randomUUID()
+  const slot = await tryAcquirePrintfulMockupSlot(admin, slotHolder)
+  if (slot === 'busy') {
+    return NextResponse.json(
+      {
+        error: 'Another preview is generating. Please wait a moment and try again.',
+        code: PRINTFUL_SLOT_BUSY_CODE,
+        retry_after_ms: 2000,
+      },
+      { status: 503 }
+    )
+  }
+
+  let batch: Awaited<ReturnType<typeof createTaskAndPoll>>
+  try {
+    batch = await createTaskAndPoll(productId, variantId, files, headers)
+  } finally {
+    if (slot === 'granted') {
+      await releasePrintfulMockupSlot(admin, slotHolder)
+    }
+  }
   const urlByPlacement = new Map<string, string>()
   const extrasByPlacement = new Map<string, PreviewMockupExtra[]>()
   let mockupErrorReason: string | undefined
@@ -344,8 +412,10 @@ export async function POST(
       status: 'status' in batch ? batch.status : undefined,
       productId,
       variantId,
-      placements: files.map((f) => f.placement),
-      files,
+      fileSummary: files.map((f) => ({
+        placement: f.placement,
+        urlPresent: f.image_url.trim().length > 0,
+      })),
     })
   }
 
@@ -360,6 +430,19 @@ export async function POST(
   })
 
   const anyUrl = placements.some((p) => p.mockup_url)
+
+  // Persist mockup URLs to design_draft so product cards and gallery can use them later.
+  // Fire-and-forget: failure does not affect the response.
+  if (anyUrl) {
+    const generatedAt = new Date().toISOString()
+    supabase
+      .from('design_draft')
+      .update({ mockup_urls: placements, mockups_generated_at: generatedAt })
+      .eq('id', draftId)
+      .then(({ error }) => {
+        if (error) console.error('[preview-mockups] persist mockup_urls:', error.message)
+      })
+  }
 
   return NextResponse.json({
     product_id: productId,

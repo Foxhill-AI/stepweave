@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import ProfileHeader from './ProfileHeader'
 import ProfileTabs from './ProfileTabs'
@@ -19,11 +20,28 @@ import '../styles/ProfilePage.css'
 
 type TabType = 'products' | 'orders' | 'liked' | 'settings'
 
+type SettingsSubTab = 'profile' | 'account' | 'payments' | 'subscription' | 'privacy'
+
+const SETTINGS_SUB_TABS: readonly SettingsSubTab[] = [
+  'profile',
+  'account',
+  'payments',
+  'subscription',
+  'privacy',
+]
+
+function parseSettingsSubTabParam(raw: string | null): SettingsSubTab | undefined {
+  if (!raw) return undefined
+  return SETTINGS_SUB_TABS.includes(raw as SettingsSubTab) ? (raw as SettingsSubTab) : undefined
+}
+
 /** Map product row to the shape LikesTab expects (id, title, category, image, etc.). */
 function mapProductToLikedItem(row: ProductListingRow): LikedProduct {
   const category = row.product_category?.[0]?.category
   const categoryLabel = category?.name ?? category?.slug ?? ''
   const designData = row.design_data as { imageUrl?: string; source?: string } | null
+  const authorUsername =
+    row.user_account?.user_public_profile?.username ?? row.user_account?.username ?? undefined
   return {
     id: String(row.id),
     productId: row.id as number,
@@ -34,7 +52,10 @@ function mapProductToLikedItem(row: ProductListingRow): LikedProduct {
     views: 0,
     likes: 0,
     downloads: 0,
-    author: row.user_account?.username ?? undefined,
+    author: authorUsername,
+    authorProfileUrl: authorUsername
+      ? `/profile/${encodeURIComponent(authorUsername)}`
+      : undefined,
     price: `$${Number(row.price).toFixed(2)}`,
     rating: 0,
   }
@@ -82,7 +103,9 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
 
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab === 'orders' || tab === 'settings' || tab === 'liked') setActiveTab(tab)
+    if (tab === 'products' || tab === 'orders' || tab === 'settings' || tab === 'liked') {
+      setActiveTab(tab)
+    }
   }, [searchParams])
 
   useEffect(() => {
@@ -144,9 +167,32 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
   const profileIncomplete = !userAccount?.username || String(userAccount.username).trim() === ''
   const showCreatorSetupPrompt = isCreatorRedirect && profileIncomplete && (userAccount?.subscription_tier === 'starter' || userAccount?.subscription_tier === 'pro')
 
+  const settingsSubTab = parseSettingsSubTabParam(searchParams.get('sub'))
+  const settingsTabKey = settingsSubTab ?? 'profile'
+  const publicUsername = userAccount?.username?.trim()
+  const publicProfileUrl = publicUsername ? `/profile/${encodeURIComponent(publicUsername)}` : null
+
   return (
     <div className="profile-page">
       <div className="profile-page-container">
+        {userAccount?.id && (
+          <nav className="profile-private-quick-actions" aria-label="Account quick actions">
+            {publicProfileUrl && (
+              <Link href={publicProfileUrl} className="profile-quick-action">
+                View public profile
+              </Link>
+            )}
+            <Link href="/profile?tab=settings&sub=profile" className="profile-quick-action">
+              Edit profile
+            </Link>
+            <Link href="/profile?tab=products" className="profile-quick-action">
+              My products
+            </Link>
+            <Link href="/profile?tab=orders" className="profile-quick-action">
+              Orders
+            </Link>
+          </nav>
+        )}
         {showCreatorSetupPrompt && (
           <div className="profile-creator-setup-prompt" role="status">
             <p className="profile-creator-setup-text">
@@ -180,8 +226,9 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
           {activeTab === 'liked' && <LikesTab likedProducts={likedProducts} />}
           {activeTab === 'settings' && (
             <SettingsTab
+              key={settingsTabKey}
               userData={defaultUserData}
-              initialSubTab={searchParams.get('sub') === 'subscription' ? 'subscription' : undefined}
+              initialSubTab={settingsSubTab}
             />
           )}
         </div>

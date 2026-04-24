@@ -40,7 +40,7 @@ export async function POST(
 
   const { data: draft, error: draftError } = await supabase
     .from('design_draft')
-    .select('id, user_account_id')
+    .select('id, user_account_id, mockup_urls')
     .eq('id', draftId)
     .maybeSingle()
   if (draftError || !draft) {
@@ -106,12 +106,17 @@ export async function POST(
     )
   }
 
+  const mockupList = draft?.mockup_urls
+  const hasMockups = Array.isArray(mockupList) && mockupList.length > 0
+
   const { error: updateError } = await supabase
     .from('design_draft')
     .update({
       final_product_id: productId,
       status: 'finalized',
       finalized_at: new Date().toISOString(),
+      // Bless existing previews for this new product row (same instant as product.updated_at).
+      mockups_generated_at: hasMockups ? new Date().toISOString() : null,
     })
     .eq('id', draftId)
   if (updateError) {

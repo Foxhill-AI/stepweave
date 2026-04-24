@@ -14,22 +14,51 @@ import {
   addPlacementTextLayer,
   updatePlacementLayer,
   removePlacementImageLayer,
+  reorderPlacementLayer,
+  duplicatePlacementLayer,
+  appendPlacementLayerClone,
   isImageLayer,
   type PrintfulPlacementsState,
   type PlacementImageLayer,
   type PlacementTextLayer,
   type ResolvedPlacementLayer,
+  type PlacementLayer,
+  type PlacementLayerReorderOp,
 } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import { useAuth } from '@/components/AuthProvider'
-import { getCategories, createProduct, updateDesignDraft } from '@/lib/supabaseClient'
+import {
+  getCategories,
+  createProduct,
+  updateDesignDraft,
+  getProductById,
+  updateProduct,
+  setProductCategories,
+} from '@/lib/supabaseClient'
 import type { CategoryRow, DesignDraftRow } from '@/lib/supabaseClient'
+import PricingEstimatePanel, { formatPricingMoney } from './PricingEstimatePanel'
+import type { PricingEstimateOk } from '@/lib/printful/pricingEstimate'
+import { fetchPreviewMockupsWithRetry } from '@/lib/design-tool/previewMockupsFetch'
 import '../../styles/DesignTool.css'
 
 interface DesignToolPageProps {
   /** When set, we are editing this design draft (from /design-tool/[id]). */
   draftId?: number
   draft?: DesignDraftRow
+}
+
+/** Distinct Printful placement keys from loaded template rows (preserves order). */
+function uniqueTemplatePlacements(rows: PlacementTemplateRow[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const r of rows) {
+    const p = r.placement
+    if (typeof p !== 'string' || !p.trim()) continue
+    if (seen.has(p)) continue
+    seen.add(p)
+    out.push(p)
+  }
+  return out
 }
 
 export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) {
@@ -56,8 +85,16 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [placementMockups, setPlacementMockups] = useState<PlacementTab[]>([])
   const [catalogFallbackUrl, setCatalogFallbackUrl] = useState<string>('')
   const [variantOptions, setVariantOptions] = useState<
-    Array<{ id: number; name: string; color: string; size: string; image: string }>
+    Array<{
+      id: number
+      name: string
+      color: string
+      size: string
+      image: string
+      catalogPrice?: string | null
+    }>
   >([])
+  const [pricingEstimate, setPricingEstimate] = useState<PricingEstimateOk | null>(null)
   const [printfulVariantId, setPrintfulVariantId] = useState<number | null>(null)
   /** Name of the currently selected shoe model (e.g. "Men's Athletic Shoes"). */
   const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
@@ -82,12 +119,12 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   /** Temporary object URLs for layers uploaded in this session (before server signed URL arrives). */
   const [localLayerUrls, setLocalLayerUrls] = useState<Record<string, string>>({})
-  /** Current step within the editor: chat → customize → publish */
-  const [editorStep, setEditorStep] = useState<'design' | 'customize' | 'publish'>('design')
-  /** Mobile-only: whether the adjustment/slider tools panel is expanded */
-  const [showMobileTools, setShowMobileTools] = useState(false)
+  /** Clipboard for Cmd/Ctrl+C / V in template canvas (layer payload without signed URLs). */
+  const layerClipboardRef = useRef<PlacementLayer | null>(null)
 
   const isDraftEditor = Boolean(draftId)
+  /** Draft is linked to an existing storefront product — publish flow updates that row instead of inserting. */
+  const isEditingPublishedProduct = Boolean(localDraft?.final_product_id)
 
   useEffect(() => {
     setLocalDraft(draft ?? null)
@@ -106,6 +143,26 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     })
     return () => { cancelled = true }
   }, [])
+
+  // Pre-fill listing fields when editing a product that was created from this draft.
+  useEffect(() => {
+    const pid = localDraft?.final_product_id
+    if (pid == null || typeof pid !== 'number') return
+    let cancelled = false
+    getProductById(pid).then((p) => {
+      if (cancelled || !p) return
+      const row = p as {
+        name?: string
+        price?: number
+        product_category?: Array<{ category_id: number }>
+      }
+      if (typeof row.name === 'string' && row.name.trim()) setName(row.name)
+      if (row.price != null && Number.isFinite(Number(row.price))) setPrice(String(row.price))
+      const firstCat = row.product_category?.[0]?.category_id
+      setCategoryId(firstCat != null && firstCat > 0 ? firstCat : '')
+    })
+    return () => { cancelled = true }
+  }, [localDraft?.final_product_id])
 
   // Fetch signed URL when draft has a pattern stored in Storage (private bucket).
   useEffect(() => {
@@ -200,12 +257,14 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         (productBody: {
           name?: string
           image?: string
+          currency?: string
           variants?: Array<{
             id: number
             name: string
             color: string
             size: string
             image: string
+            catalogPrice?: string | null
           }>
         }) => {
           if (cancelled) return
@@ -347,17 +406,9 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       setLocalDraft((prev) =>
         prev ? { ...prev, design_state: designDataRef.current } : null
       )
-      const res = await fetch(`/api/design-drafts/${draftId}/preview-mockups`, {
-        method: 'POST',
-      })
-      const body = (await res.json().catch(() => ({}))) as {
-        placements?: PlacementTab[]
-        mockup_generation_unavailable?: boolean
-        mockup_error?: string
-        error?: string
-      }
-      if (!res.ok) {
-        console.warn('[preview-mockups]', body.error ?? res.status)
+      const { ok, status, body } = await fetchPreviewMockupsWithRetry(draftId)
+      if (!ok) {
+        console.warn('[preview-mockups]', body.error ?? status)
         setPlacementMockups([])
         setMockupCatalogOnly(true)
         return
@@ -374,11 +425,46 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   }, [draftId])
 
   const handleAiPatternApplied = useCallback(
-    async (storagePath: string) => {
+    async (storagePath: string, previewUrl?: string) => {
       if (!draftId) return
+
+      // One image layer per Printful placement so template tabs + mockups all show the pattern.
+      const placementsList = uniqueTemplatePlacements(templateRows)
+      let nextDesignState = designDataRef.current
+      if (placementsList.length > 0) {
+        let current = parsePlacementImages(nextDesignState)
+        const selectedPatch: Record<string, string> = {}
+        const localPatch: Record<string, string> = {}
+
+        for (const placement of placementsList) {
+          const newLayer: PlacementImageLayer = {
+            id: crypto.randomUUID(),
+            path: storagePath,
+            s: 1,
+            dx: 0,
+            dy: 0,
+          }
+          current = addPlacementImageLayer(current, placement, newLayer)
+          selectedPatch[placement] = newLayer.id
+          if (previewUrl) localPatch[newLayer.id] = previewUrl
+        }
+
+        nextDesignState = mergePlacementImagesIntoDesignState(nextDesignState, current)
+        designDataRef.current = nextDesignState
+        setDesignData(nextDesignState)
+        setSelectedLayerByPlacement((prev) => ({ ...prev, ...selectedPatch }))
+        if (!activePlacement) {
+          setActivePlacement(placementsList[0])
+        }
+        if (Object.keys(localPatch).length > 0) {
+          setLocalLayerUrls((prev) => ({ ...prev, ...localPatch }))
+        }
+      }
+
       const ok = await updateDesignDraft(draftId, {
         pattern_image_url: storagePath,
         pattern_source_type: 'ai_generated',
+        ...(placementsList.length > 0 ? { design_state: nextDesignState } : {}),
       })
       if (ok) {
         setLocalDraft((prev) =>
@@ -387,97 +473,50 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
                 ...prev,
                 pattern_image_url: storagePath,
                 pattern_source_type: 'ai_generated',
+                ...(placementsList.length > 0 ? { design_state: nextDesignState } : {}),
               }
             : null
         )
-        // Preview is generated on demand on the customize step — not automatically here
+        await handleRefreshPrintfulPreview()
       } else {
         throw new Error('update failed')
       }
     },
-    [draftId]
-  )
-
-  const handleUseDirectly = useCallback(
-    async (storagePath: string) => {
-      if (!draftId) return
-      const ok = await updateDesignDraft(draftId, {
-        pattern_image_url: storagePath,
-        pattern_source_type: 'direct_upload',
-      })
-      if (ok) {
-        setLocalDraft((prev) =>
-          prev
-            ? { ...prev, pattern_image_url: storagePath, pattern_source_type: 'direct_upload' }
-            : null
-        )
-      } else {
-        throw new Error('update failed')
-      }
-    },
-    [draftId]
+    [draftId, handleRefreshPrintfulPreview, activePlacement, templateRows]
   )
 
   const handlePatternUploaded = useCallback(
     (path: string, localUrl?: string) => {
-      const placement = activePlacement || templateRows[0]?.placement || ''
-      if (!placement) {
-        // #region agent log
-        fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-          body: JSON.stringify({
-            sessionId: 'ffdcdb',
-            runId: 'pre-fix',
-            hypothesisId: 'C',
-            location: 'DesignToolPage.tsx:handlePatternUploaded',
-            message: 'early return no placement',
-            data: {
-              templateRowsLen: templateRows.length,
-              activePlacement: activePlacement || '',
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
-        return
+      const placementsList = uniqueTemplatePlacements(templateRows)
+      if (placementsList.length === 0) return
+
+      let current = parsePlacementImages(designDataRef.current)
+      const selectedPatch: Record<string, string> = {}
+      const localPatch: Record<string, string> = {}
+
+      for (const placement of placementsList) {
+        const newLayer: PlacementImageLayer = {
+          id: crypto.randomUUID(),
+          path,
+          s: 1,
+          dx: 0,
+          dy: 0,
+        }
+        current = addPlacementImageLayer(current, placement, newLayer)
+        selectedPatch[placement] = newLayer.id
+        if (localUrl) localPatch[newLayer.id] = localUrl
       }
-      const newLayer: PlacementImageLayer = {
-        id: crypto.randomUUID(),
-        path,
-        s: 1,
-        dx: 0,
-        dy: 0,
+
+      const next = mergePlacementImagesIntoDesignState(designDataRef.current, current)
+      designDataRef.current = next
+      setDesignData(next)
+      if (Object.keys(localPatch).length > 0) {
+        setLocalLayerUrls((prev) => ({ ...prev, ...localPatch }))
       }
-      setDesignData((prev) => {
-        const current = parsePlacementImages(prev)
-        return mergePlacementImagesIntoDesignState(prev, addPlacementImageLayer(current, placement, newLayer))
-      })
-      // Store the object URL so the canvas can render immediately before signed URL arrives
-      if (localUrl) setLocalLayerUrls((prev) => ({ ...prev, [newLayer.id]: localUrl }))
-      // #region agent log
-      fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-        body: JSON.stringify({
-          sessionId: 'ffdcdb',
-          runId: 'pre-fix',
-          hypothesisId: 'D',
-          location: 'DesignToolPage.tsx:handlePatternUploaded',
-          message: 'pattern uploaded applied',
-          data: {
-            placement,
-            layerIdSuffix: newLayer.id.slice(-8),
-            hasLocalUrl: Boolean(localUrl),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
-      // Auto-select the newly added layer
-      setSelectedLayerByPlacement((prev) => ({ ...prev, [placement]: newLayer.id }))
-      // Ensure the active placement is set so the canvas shows the new layer immediately
-      if (!activePlacement) setActivePlacement(placement)
+      setSelectedLayerByPlacement((prev) => ({ ...prev, ...selectedPatch }))
+      if (!activePlacement) {
+        setActivePlacement(placementsList[0])
+      }
     },
     [activePlacement, templateRows]
   )
@@ -522,6 +561,64 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     []
   )
 
+  const handleCanvasLayerDelete = useCallback(
+    (layerId: string) => {
+      if (!activePlacement) return
+      handleLayerRemove(activePlacement, layerId)
+    },
+    [activePlacement, handleLayerRemove]
+  )
+
+  const handleLayerReorder = useCallback(
+    (layerId: string, op: PlacementLayerReorderOp) => {
+      if (!activePlacement) return
+      setDesignData((prev) =>
+        mergePlacementImagesIntoDesignState(
+          prev,
+          reorderPlacementLayer(parsePlacementImages(prev), activePlacement, layerId, op)
+        )
+      )
+    },
+    [activePlacement]
+  )
+
+  const handleLayerDuplicate = useCallback(
+    (layerId: string) => {
+      if (!activePlacement) return
+      let newId: string | null = null
+      setDesignData((prev) => {
+        const cur = parsePlacementImages(prev)
+        const r = duplicatePlacementLayer(cur, activePlacement, layerId)
+        if (!r) return prev
+        newId = r.newId
+        return mergePlacementImagesIntoDesignState(prev, r.next)
+      })
+      if (newId) {
+        const selectId = newId
+        setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: selectId }))
+      }
+    },
+    [activePlacement]
+  )
+
+  const handlePasteLayer = useCallback(
+    (layer: PlacementLayer) => {
+      if (!activePlacement) return
+      let newId: string | null = null
+      setDesignData((prev) => {
+        const cur = parsePlacementImages(prev)
+        const r = appendPlacementLayerClone(cur, activePlacement, layer)
+        newId = r.newId
+        return mergePlacementImagesIntoDesignState(prev, r.next)
+      })
+      if (newId) {
+        const selectId = newId
+        setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: selectId }))
+      }
+    },
+    [activePlacement]
+  )
+
   const handlePatternClear = useCallback(async () => {
     if (!draftId) return
     await updateDesignDraft(draftId, { pattern_image_url: null })
@@ -563,9 +660,55 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       setCreateError('Please enter a valid price (0 or greater).')
       return
     }
+    if (
+      pricingEstimate &&
+      Number.isFinite(priceNum) &&
+      priceNum + 1e-9 < pricingEstimate.totalCost
+    ) {
+      setCreateError(
+        `Price must be at least ${formatPricingMoney(
+          pricingEstimate.totalCost,
+          pricingEstimate.currency
+        )} to cover estimated Printful costs (fulfillment + shipping + estimated tax).`
+      )
+      return
+    }
     setCreateError(null)
     setCreateLoading(true)
     try {
+      const existingProductId = localDraft?.final_product_id
+      if (typeof existingProductId === 'number' && existingProductId > 0) {
+        const okDraft = await updateDesignDraft(draftId, { design_state: designData })
+        if (!okDraft) {
+          setCreateError('Failed to save design. Please try again.')
+          return
+        }
+        const okProduct = await updateProduct(existingProductId, {
+          name: trimmedName,
+          price: priceNum,
+          design_data: { source: 'design_draft' },
+        })
+        if (!okProduct) {
+          setCreateError('Failed to update product. Please try again.')
+          return
+        }
+        const catOk = await setProductCategories(
+          existingProductId,
+          categoryId !== '' ? [categoryId as number] : []
+        )
+        if (!catOk) {
+          setCreateError('Product updated but categories could not be saved.')
+          return
+        }
+        try {
+          await fetchPreviewMockupsWithRetry(draftId, { maxAttempts: 18 })
+        } catch {
+          /* listing may fall back until user regenerates mockups */
+        }
+        router.push('/profile')
+        return
+      }
+
       const res = await fetch(`/api/design-drafts/${draftId}/create-product`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -577,6 +720,11 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.productId) {
+        try {
+          await fetchPreviewMockupsWithRetry(draftId, { maxAttempts: 18 })
+        } catch {
+          /* listing may fall back to pattern image until user opens design tool preview */
+        }
         router.push('/profile')
       } else {
         setCreateError((data.error as string) || 'Failed to create product. Please try again.')
@@ -586,7 +734,16 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     } finally {
       setCreateLoading(false)
     }
-  }, [draftId, name, price, categoryId, router])
+  }, [
+    draftId,
+    name,
+    price,
+    categoryId,
+    router,
+    pricingEstimate,
+    localDraft?.final_product_id,
+    designData,
+  ])
 
   const handleCreate = useCallback(
     async (status: 'draft' | 'active') => {
@@ -628,265 +785,365 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     [userAccount?.id, name, price, categoryId, designData, router]
   )
 
-  // ── Derived helpers reused across steps ────────────────────────────────────
-  const hasPatternImage = Boolean(
-    (localDraft?.pattern_image_url && String(localDraft.pattern_image_url).trim()) ||
-    Object.keys(parsePlacementImages(designData)).length > 0
-  )
-
-  const activeLayersResolved = (() => {
-    const layers = parsePlacementImages(designData)[activePlacement] ?? []
-    const urls = placementLayerSignedUrls[activePlacement] ?? {}
-    return layers.map((l): ResolvedPlacementLayer =>
-      isImageLayer(l) ? { ...l, signedUrl: urls[l.id] ?? localLayerUrls[l.id] ?? null } : l
-    )
-  })()
-
-  // ── Step bar ────────────────────────────────────────────────────────────────
-  const stepBar = isDraftEditor && (
-    <div className="design-tool-step-bar">
-      <a href="/design-tool" className="design-tool-back-link">← Change shoe</a>
-      <div className="design-tool-steps" aria-label="Progress">
-        <span className="design-tool-step design-tool-step--done">Model</span>
-        <span className="design-tool-step-sep" aria-hidden="true">›</span>
-        <button
-          type="button"
-          className={`design-tool-step ${editorStep === 'design' ? 'design-tool-step--active' : 'design-tool-step--done design-tool-step--link'}`}
-          aria-current={editorStep === 'design' ? 'step' : undefined}
-          onClick={() => editorStep !== 'design' && setEditorStep('design')}
-          disabled={editorStep === 'design'}
+  return (
+    <div className="design-tool-page">
+      {isDraftEditor && (
+        <div className="design-tool-step-bar">
+          <a href="/design-tool" className="design-tool-back-link">← Change shoe</a>
+          <div className="design-tool-steps" aria-label="Progress">
+            <span className="design-tool-step design-tool-step--done">Model</span>
+            <span className="design-tool-step-sep" aria-hidden="true">›</span>
+            <span className="design-tool-step design-tool-step--active" aria-current="step">Design</span>
+            <span className="design-tool-step-sep" aria-hidden="true">›</span>
+            <span
+              className={`design-tool-step${isEditingPublishedProduct ? ' design-tool-step--done' : ''}`}
+            >
+              {isEditingPublishedProduct ? 'Published' : 'Publish'}
+            </span>
+          </div>
+          {autoSaveState !== 'idle' && (
+            <span className="design-tool-autosave" aria-live="polite">
+              {autoSaveState === 'saving' ? 'Saving…' : 'Saved ✓'}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="design-tool-layout">
+        <section
+          className="design-tool-left"
+          id="design-tool-left-panel"
+          aria-label="AI Design"
+          role="region"
         >
-          Design
-        </button>
-        <span className="design-tool-step-sep" aria-hidden="true">›</span>
-        <button
-          type="button"
-          className={`design-tool-step ${editorStep === 'customize' ? 'design-tool-step--active' : editorStep === 'publish' ? 'design-tool-step--done design-tool-step--link' : ''}`}
-          aria-current={editorStep === 'customize' ? 'step' : undefined}
-          onClick={() => editorStep === 'publish' && setEditorStep('customize')}
-          disabled={editorStep !== 'publish'}
-        >
-          Customize
-        </button>
-        <span className="design-tool-step-sep" aria-hidden="true">›</span>
-        <span
-          className={`design-tool-step ${editorStep === 'publish' ? 'design-tool-step--active' : ''}`}
-          aria-current={editorStep === 'publish' ? 'step' : undefined}
-        >
-          Publish
-        </span>
-      </div>
-      <div className="design-tool-step-bar-end">
-        {editorStep === 'customize' && (
-          <button
-            type="button"
-            className="design-tool-btn design-tool-btn-publish design-tool-step-bar-action"
-            onClick={() => setEditorStep('publish')}
-          >
-            Publish →
-          </button>
-        )}
-        {autoSaveState !== 'idle' && (
-          <span className="design-tool-autosave" aria-live="polite">
-            {autoSaveState === 'saving' ? 'Saving…' : 'Saved ✓'}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-
-  // ── DESIGN STEP ─────────────────────────────────────────────────────────────
-  if (!isDraftEditor || editorStep === 'design') {
-    return (
-      <div className="design-tool-page">
-        {stepBar}
-        <div className="design-chat-layout">
-          <div className="design-chat-panel">
+          <div className="design-tool-panel-content">
             <AIPromptPanel
               draftId={draftId}
               onPatternApplied={handleAiPatternApplied}
-              onUseDirectly={handleUseDirectly}
-              onNext={isDraftEditor ? () => setEditorStep('customize') : undefined}
             />
+
+            {isDraftEditor &&
+              localDraft?.base_model_id &&
+              typeof localDraft.base_model_id === 'string' &&
+              printfulVariantId != null &&
+              /* Only show placement controls after the user has added a pattern image */
+              Boolean(
+                (localDraft.pattern_image_url && String(localDraft.pattern_image_url).trim()) ||
+                (typeof designData.imageUrl === 'string' && designData.imageUrl.trim()) ||
+                Object.keys(parsePlacementImages(designData)).length > 0
+              ) && (
+                <PlacementEditorPanel
+                  productId={localDraft.base_model_id.trim()}
+                  variantId={printfulVariantId}
+                  placementsState={parsePrintfulPlacements(designData)}
+                  onPlacementsStateChange={handlePlacementsStateChange}
+                  onSaveLayout={handleSavePlacementLayout}
+                  onRefreshPrintfulPreview={handleRefreshPrintfulPreview}
+                  hasPatternImage={Boolean(
+                    (localDraft.pattern_image_url && String(localDraft.pattern_image_url).trim()) ||
+                    Object.keys(parsePlacementImages(designData)).length > 0
+                  )}
+                  patternImageUrl={patternImageSignedUrl}
+                  saveLoading={placementSaveLoading}
+                  previewLoading={printfulPreviewLoading}
+                  externalTemplateRows={templateRows}
+                  externalTemplatesLoading={templatesLoading}
+                  externalActivePlacement={activePlacement}
+                  onExternalActivePlacementChange={setActivePlacement}
+                  hideCanvas
+                  hideActions
+                  activeLayers={(() => {
+                    const layers = parsePlacementImages(designData)[activePlacement] ?? []
+                    const urls = placementLayerSignedUrls[activePlacement] ?? {}
+                    return layers.map((l): ResolvedPlacementLayer =>
+                      isImageLayer(l) ? { ...l, signedUrl: urls[l.id] ?? localLayerUrls[l.id] ?? null } : l
+                    )
+                  })()}
+                  selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
+                  onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
+                  onLayerChange={handleLayerChange}
+                  onLayerDelete={handleCanvasLayerDelete}
+                  onLayerReorder={handleLayerReorder}
+                  onLayerDuplicate={handleLayerDuplicate}
+                  onPasteLayer={handlePasteLayer}
+                  layerClipboardRef={layerClipboardRef}
+                />
+              )}
           </div>
-        </div>
+          <div className="design-tool-product-form">
+            {isDraftEditor ? (
+              <div className="design-tool-form-actions">
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-draft"
+                  disabled={createLoading}
+                  onClick={handleSaveDraft}
+                >
+                  {createLoading ? 'Saving…' : 'Save draft'}
+                </button>
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-publish"
+                  onClick={() => setIsCreateDrawerOpen(true)}
+                >
+                  {isEditingPublishedProduct ? 'Update product' : 'Create product'}
+                </button>
+              </div>
+            ) : (
+              <>
+                <h3 className="design-tool-form-title">Product details</h3>
+                <label htmlFor="design-tool-name" className="design-tool-label">
+                  Name
+                </label>
+                <input
+                  id="design-tool-name"
+                  type="text"
+                  className="design-tool-input"
+                  placeholder="Product name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  aria-required
+                />
+                <label htmlFor="design-tool-price" className="design-tool-label">
+                  Price ($)
+                </label>
+                <input
+                  id="design-tool-price"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  className="design-tool-input"
+                  placeholder="0.00"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  aria-required
+                />
+                <label htmlFor="design-tool-category" className="design-tool-label">
+                  Category
+                </label>
+                <select
+                  id="design-tool-category"
+                  className="design-tool-select"
+                  value={categoryId === '' ? '' : String(categoryId)}
+                  onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
+                >
+                  <option value="">No category</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                {createError && (
+                  <p className="design-tool-form-error" role="alert">
+                    {createError}
+                  </p>
+                )}
+                <div className="design-tool-form-actions">
+                  <button
+                    type="button"
+                    className="design-tool-btn design-tool-btn-draft"
+                    disabled={createLoading}
+                    onClick={() => handleCreate('draft')}
+                  >
+                    {createLoading ? 'Saving…' : 'Save as Draft'}
+                  </button>
+                  <button
+                    type="button"
+                    className="design-tool-btn design-tool-btn-publish"
+                    disabled={createLoading}
+                    onClick={() => handleCreate('active')}
+                  >
+                    {createLoading ? 'Publishing…' : 'Publish'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+        <section
+          className="design-tool-right"
+          aria-label="Shoe design preview"
+          role="region"
+        >
+          <PreviewWorkspace
+            draftId={draftId}
+            authUserId={user?.id ?? null}
+            placementMockups={placementMockups.length > 0 ? placementMockups : null}
+            catalogFallbackUrl={catalogFallbackUrl || null}
+            catalogOnlyReference={mockupCatalogOnly}
+            selectedModelName={selectedModelName}
+            mockupImagesLoading={mockupImagesLoading || printfulPreviewLoading}
+            onImageSelect={(url) => setDesignData((prev) => ({ ...prev, imageUrl: url }))}
+            onPatternUploaded={handlePatternUploaded}
+            onImageClear={() => {
+              const placementImages = parsePlacementImages(designData)
+              const selectedId = selectedLayerByPlacement[activePlacement]
+              const layers = placementImages[activePlacement] ?? []
+              if (layers.length > 0) {
+                // Remove selected layer, or last layer if none selected
+                const targetId = selectedId ?? layers[layers.length - 1].id
+                handleLayerRemove(activePlacement, targetId)
+              } else if (localDraft?.pattern_image_url) {
+                handlePatternClear()
+              } else {
+                setDesignData((prev) => { const next = { ...prev }; delete next.imageUrl; return next })
+              }
+            }}
+            imageUrl={
+              localDraft?.pattern_image_url
+                ? patternImageSignedUrl ?? undefined
+                : typeof designData.imageUrl === 'string'
+                  ? designData.imageUrl
+                  : null
+            }
+            templateRows={templateRows}
+            templatesLoading={templatesLoading}
+            activePlacement={activePlacement}
+            onActivePlacementChange={setActivePlacement}
+            activeLayers={(() => {
+              const layers = parsePlacementImages(designData)[activePlacement] ?? []
+              const urls = placementLayerSignedUrls[activePlacement] ?? {}
+              return layers.map((l): ResolvedPlacementLayer =>
+                isImageLayer(l) ? { ...l, signedUrl: urls[l.id] ?? localLayerUrls[l.id] ?? null } : l
+              )
+            })()}
+            selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
+            onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
+            onLayerChange={handleLayerChange}
+            onLayerDelete={handleCanvasLayerDelete}
+            onLayerReorder={handleLayerReorder}
+            onLayerDuplicate={handleLayerDuplicate}
+            onPasteLayer={handlePasteLayer}
+            layerClipboardRef={layerClipboardRef}
+            onAddTextLayer={isDraftEditor ? handleAddTextLayer : undefined}
+            onSaveLayout={isDraftEditor ? handleSavePlacementLayout : undefined}
+            onRefreshPrintfulPreview={isDraftEditor ? handleRefreshPrintfulPreview : undefined}
+            saveLoading={placementSaveLoading}
+            previewLoading={printfulPreviewLoading}
+            hasPatternImage={Boolean(
+              (localDraft?.pattern_image_url && String(localDraft.pattern_image_url).trim()) ||
+              Object.keys(parsePlacementImages(designData)).length > 0
+            )}
+            hasGeneratedMockups={hasGeneratedMockups}
+          />
+        </section>
       </div>
-    )
-  }
 
-  // ── CUSTOMIZE STEP ──────────────────────────────────────────────────────────
-  if (editorStep === 'customize') {
-    const placementEditorProps = isDraftEditor &&
-      localDraft?.base_model_id &&
-      typeof localDraft.base_model_id === 'string' &&
-      printfulVariantId != null ? (
-      <PlacementEditorPanel
-        productId={localDraft.base_model_id.trim()}
-        variantId={printfulVariantId}
-        placementsState={parsePrintfulPlacements(designData)}
-        onPlacementsStateChange={handlePlacementsStateChange}
-        onSaveLayout={handleSavePlacementLayout}
-        onRefreshPrintfulPreview={handleRefreshPrintfulPreview}
-        hasPatternImage={hasPatternImage}
-        patternImageUrl={patternImageSignedUrl}
-        saveLoading={placementSaveLoading}
-        previewLoading={printfulPreviewLoading}
-        externalTemplateRows={templateRows}
-        externalTemplatesLoading={templatesLoading}
-        externalActivePlacement={activePlacement}
-        onExternalActivePlacementChange={setActivePlacement}
-        hideCanvas
-        hideActions
-        activeLayers={activeLayersResolved}
-        selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
-        onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
-        onLayerChange={handleLayerChange}
-      />
-    ) : null
-
-    return (
-      <div className="design-tool-page">
-        {stepBar}
-        <div className="design-customize-layout">
-          {/* Mobile-only: collapsible adjustment panel */}
-          {placementEditorProps && (
-            <div className="design-customize-tools-mobile">
+      {/* Create product slide-over drawer */}
+      {isCreateDrawerOpen && isDraftEditor && (
+        <>
+          <div
+            className="design-tool-drawer-backdrop"
+            onClick={() => setIsCreateDrawerOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            className="design-tool-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label={isEditingPublishedProduct ? 'Update product' : 'Create product'}
+          >
+            <div className="design-tool-drawer-header">
+              <h3 className="design-tool-drawer-title">
+                {isEditingPublishedProduct ? 'Update product' : 'Create product'}
+              </h3>
               <button
                 type="button"
-                className="design-customize-tools-toggle"
-                onClick={() => setShowMobileTools((v) => !v)}
-                aria-expanded={showMobileTools}
+                className="design-tool-drawer-close"
+                onClick={() => setIsCreateDrawerOpen(false)}
+                aria-label="Close"
               >
-                {showMobileTools ? '▲ Hide adjustments' : '▼ Adjust positions'}
+                ✕
               </button>
-              {showMobileTools && (
-                <div className="design-customize-tools-panel">
-                  {placementEditorProps}
-                </div>
-              )}
             </div>
-          )}
-          {/* Main canvas — full width on desktop */}
-          <div className="design-customize-canvas">
-            <PreviewWorkspace
-              draftId={draftId}
-              authUserId={user?.id ?? null}
-              placementMockups={placementMockups.length > 0 ? placementMockups : null}
-              catalogFallbackUrl={catalogFallbackUrl || null}
-              catalogOnlyReference={mockupCatalogOnly}
-              selectedModelName={selectedModelName}
-              mockupImagesLoading={mockupImagesLoading || printfulPreviewLoading}
-              onImageSelect={(url) => setDesignData((prev) => ({ ...prev, imageUrl: url }))}
-              onPatternUploaded={handlePatternUploaded}
-              onImageClear={() => {
-                const placementImages = parsePlacementImages(designData)
-                const selectedId = selectedLayerByPlacement[activePlacement]
-                const layers = placementImages[activePlacement] ?? []
-                if (layers.length > 0) {
-                  const targetId = selectedId ?? layers[layers.length - 1].id
-                  handleLayerRemove(activePlacement, targetId)
-                } else if (localDraft?.pattern_image_url) {
-                  handlePatternClear()
-                } else {
-                  setDesignData((prev) => { const next = { ...prev }; delete next.imageUrl; return next })
+            <div className="design-tool-drawer-body">
+              <label htmlFor="dt-drawer-name" className="design-tool-label">
+                Product name
+              </label>
+              <input
+                id="dt-drawer-name"
+                type="text"
+                className="design-tool-input"
+                placeholder="Product name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-required
+              />
+              <label htmlFor="dt-drawer-price" className="design-tool-label">
+                Price ($)
+              </label>
+              <input
+                id="dt-drawer-price"
+                type="number"
+                min={0}
+                step={0.01}
+                className="design-tool-input"
+                placeholder="0.00"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                aria-required
+              />
+              {localDraft?.base_model_id &&
+                typeof localDraft.base_model_id === 'string' &&
+                printfulVariantId != null && (
+                  <PricingEstimatePanel
+                    productId={localDraft.base_model_id.trim()}
+                    variantId={printfulVariantId}
+                    quantity={1}
+                    listPriceInput={price}
+                    onEstimate={setPricingEstimate}
+                  />
+                )}
+              <label htmlFor="dt-drawer-category" className="design-tool-label">
+                Category
+              </label>
+              <select
+                id="dt-drawer-category"
+                className="design-tool-select"
+                value={categoryId === '' ? '' : String(categoryId)}
+                onChange={(e) =>
+                  setCategoryId(e.target.value === '' ? '' : Number(e.target.value))
                 }
-              }}
-              imageUrl={
-                localDraft?.pattern_image_url
-                  ? patternImageSignedUrl ?? undefined
-                  : typeof designData.imageUrl === 'string'
-                    ? designData.imageUrl
-                    : null
-              }
-              templateRows={templateRows}
-              templatesLoading={templatesLoading}
-              activePlacement={activePlacement}
-              onActivePlacementChange={setActivePlacement}
-              activeLayers={activeLayersResolved}
-              selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
-              onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
-              onLayerChange={handleLayerChange}
-              onAddTextLayer={handleAddTextLayer}
-              onSaveLayout={handleSavePlacementLayout}
-              onRefreshPrintfulPreview={handleRefreshPrintfulPreview}
-              saveLoading={placementSaveLoading}
-              previewLoading={printfulPreviewLoading}
-              hasPatternImage={hasPatternImage}
-              hasGeneratedMockups={hasGeneratedMockups}
-            />
+              >
+                <option value="">No category</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {createError && (
+                <p className="design-tool-form-error" role="alert">
+                  {createError}
+                </p>
+              )}
+              <div className="design-tool-drawer-actions">
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-draft"
+                  onClick={() => setIsCreateDrawerOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="design-tool-btn design-tool-btn-publish"
+                  disabled={createLoading}
+                  onClick={handleCreateProductFromDraft}
+                >
+                  {createLoading
+                    ? isEditingPublishedProduct
+                      ? 'Saving…'
+                      : 'Creating…'
+                    : isEditingPublishedProduct
+                      ? 'Save changes'
+                      : 'Create product'}
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ── PUBLISH STEP ────────────────────────────────────────────────────────────
-  return (
-    <div className="design-tool-page">
-      {stepBar}
-      <div className="design-publish-layout">
-        <div className="design-publish-form">
-          <h2 className="design-publish-title">Create your product</h2>
-          <p className="design-publish-subtitle">
-            Give your design a name and price, then publish it to your store.
-          </p>
-          <label htmlFor="dt-pub-name" className="design-tool-label">Product name</label>
-          <input
-            id="dt-pub-name"
-            type="text"
-            className="design-tool-input"
-            placeholder="e.g. Midnight Floral Sneakers"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            aria-required
-          />
-          <label htmlFor="dt-pub-price" className="design-tool-label">Price ($)</label>
-          <input
-            id="dt-pub-price"
-            type="number"
-            min={0}
-            step={0.01}
-            className="design-tool-input"
-            placeholder="0.00"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            aria-required
-          />
-          <label htmlFor="dt-pub-category" className="design-tool-label">Category</label>
-          <select
-            id="dt-pub-category"
-            className="design-tool-select"
-            value={categoryId === '' ? '' : String(categoryId)}
-            onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
-          >
-            <option value="">No category</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          {createError && (
-            <p className="design-tool-form-error" role="alert">{createError}</p>
-          )}
-          <div className="design-tool-form-actions design-publish-actions">
-            <button
-              type="button"
-              className="design-tool-btn design-tool-btn-draft"
-              disabled={createLoading}
-              onClick={handleSaveDraft}
-            >
-              {createLoading ? 'Saving…' : 'Save draft'}
-            </button>
-            <button
-              type="button"
-              className="design-tool-btn design-tool-btn-publish"
-              disabled={createLoading}
-              onClick={handleCreateProductFromDraft}
-            >
-              {createLoading ? 'Publishing…' : 'Publish to store'}
-            </button>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   )
 }

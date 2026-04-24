@@ -15,6 +15,45 @@
   min-height: 0;
 }
 
+/* Slimmer main nav on design-tool routes (subnavbar Explore/search removed there) */
+.design-tool-page-wrapper--editor .navbar-left {
+  height: 3.5rem;
+  gap: var(--spacing-md);
+}
+
+.design-tool-page-wrapper--editor .navbar-logo {
+  font-size: 1.05rem;
+}
+
+.design-tool-page-wrapper--editor .logo-icon {
+  width: 88px;
+}
+
+.design-tool-page-wrapper--editor .navbar-link {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.875rem;
+}
+
+.design-tool-page-wrapper--editor .navbar-button-design-tool {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.8125rem;
+}
+
+.design-tool-page-wrapper--editor .navbar-icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.design-tool-page-wrapper--editor .navbar-actions {
+  gap: var(--spacing-xs);
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .design-tool-page-wrapper--editor .navbar-container {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+}
+
 .design-tool-gate {
   flex: 1;
   display: flex;
@@ -845,11 +884,35 @@
 }
 
 .placement-editor-hint {
-  display: none;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-muted, #666);
+  margin: 0;
 }
 
-.placement-editor-hint code {
-  display: none;
+.placement-editor-field--tile {
+  margin-top: var(--spacing-sm);
+  gap: 6px;
+}
+
+.placement-editor-field--tile > .placement-editor-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--color-text, #1a1a1a);
+  margin: 0;
+}
+
+.placement-editor-field--tile > .placement-editor-checkbox input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
 .placement-editor-status,
@@ -1028,6 +1091,16 @@
   pointer-events: none;
 }
 
+/* Tiled layers extend past the “one tile” box; don’t clip the pattern preview */
+.placement-canvas-stage.placement-canvas-stage--repeat-overflow {
+  overflow: visible;
+}
+
+/* Floating toolbar + dropdowns sit below the layer; don’t clip menus (Flip / Opacity / Order / More) */
+.placement-canvas-stage:has(.placement-layer-toolbar-wrap) {
+  overflow: visible;
+}
+
 .placement-canvas-art {
   position: absolute;
   box-sizing: border-box;
@@ -1046,6 +1119,250 @@
   height: 100%;
   object-fit: fill;
   pointer-events: none;
+}
+
+/* Tiled image: one Moveable box; pattern fills via background on inner layer */
+.placement-canvas-art--repeat {
+  overflow: visible;
+}
+
+.placement-canvas-repeat-tiles {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Floating toolbar under selected layer (Figma-style) */
+.placement-layer-toolbar-wrap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  /* Above react-moveable control box (z-index 40 !important) */
+  z-index: 100;
+}
+
+.placement-layer-toolbar {
+  position: absolute;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  /* Stay inside the print-area stage; center may shift via inline `left` */
+  max-width: calc(100% - 6px);
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.placement-layer-toolbar__inner {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+  padding: 1px 2px;
+  background: #fff;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  max-width: 100%;
+  /* Don’t clip popovers; use visible so menus aren’t cut off */
+  overflow: visible;
+}
+
+.placement-layer-toolbar__group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.placement-layer-toolbar__sep {
+  width: 1px;
+  align-self: stretch;
+  min-height: 18px;
+  background: rgba(0, 0, 0, 0.08);
+  margin: 0 1px;
+  flex-shrink: 0;
+}
+
+.placement-layer-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 2px;
+  min-width: 22px;
+  min-height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #1a1a1a;
+  font-size: 0.625rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.placement-layer-toolbar__btn:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.placement-layer-toolbar__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.placement-layer-toolbar__btn--active {
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.placement-layer-toolbar__btn-icon {
+  display: flex;
+  color: #334155;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.placement-layer-toolbar__icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.placement-layer-toolbar__icon-btn:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.placement-layer-toolbar__icon-btn--danger:hover {
+  background: rgba(180, 35, 24, 0.1);
+  color: #b42318;
+}
+
+.placement-layer-toolbar__popover {
+  position: absolute;
+  /* Open upward so menus stay inside the print stage when it’s near the bottom */
+  top: auto;
+  bottom: calc(100% + 4px);
+  left: 0;
+  min-width: min(180px, 85vw);
+  padding: 3px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  z-index: 110;
+}
+
+.placement-layer-toolbar__popover--wide {
+  min-width: min(176px, 85vw);
+}
+
+.placement-layer-toolbar__popover--right {
+  left: auto;
+  right: 0;
+}
+
+.placement-layer-toolbar__popover--menu {
+  min-width: min(220px, 90vw);
+}
+
+.placement-layer-toolbar__popover button[role='menuitem'] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #1a1a1a;
+  cursor: pointer;
+}
+
+.placement-layer-toolbar__popover button[role='menuitem']:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.placement-layer-toolbar__popover button[role='menuitem']:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.placement-layer-toolbar__popover button[role='menuitem'].is-on {
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.placement-layer-toolbar__menu-danger {
+  color: #b42318 !important;
+}
+
+.placement-layer-toolbar__slider-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.placement-layer-toolbar__slider-label input[type='range'] {
+  width: 100%;
+}
+
+.placement-layer-toolbar__menu-slider {
+  padding: 5px 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.placement-layer-toolbar__menu-slider input[type='range'] {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.placement-layer-toolbar__kbd {
+  font-size: 0.58rem;
+  font-weight: 600;
+  font-family: ui-monospace, monospace;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.placement-canvas-stage:focus {
+  outline: none;
+}
+
+.placement-canvas-stage:focus-visible {
+  box-shadow:
+    inset 0 0 0 2px rgba(37, 99, 235, 0.35),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.placement-canvas-stage--overlay:focus-visible {
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.45),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
 
 .placement-canvas-stage--overlay .placement-canvas-img {
@@ -1090,6 +1407,50 @@
 /* Non-selected layers are slightly faded */
 .placement-canvas-art:not(.placement-canvas-art--selected) {
   opacity: 0.85;
+}
+
+.placement-canvas-art-target,
+.placement-canvas-text-target {
+  box-sizing: border-box;
+  touch-action: none;
+}
+
+.placement-canvas-delete {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  z-index: 25;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-navbar-dark, #1a1f3a);
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: var(--shadow-md, 0 2px 6px rgba(0, 0, 0, 0.25));
+}
+
+.placement-canvas-delete:hover {
+  background: var(--color-primary, #2563eb);
+  color: #fff;
+}
+
+.placement-canvas-delete:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+/* react-moveable controls above layer stacking */
+.placement-canvas-stage .moveable-control-box {
+  z-index: 40 !important;
 }
 
 .placement-editor-field-row {
@@ -1174,12 +1535,15 @@
 
 .shoe-design-overlay {
   position: absolute;
-  inset: 0;
+  /* Slightly inset vs .shoe-design-composite so the print UI doesn’t sit flush on the silhouette edge */
+  inset: 0%;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
 }
+
+
 
 .shoe-design-overlay-inner {
   pointer-events: auto;
@@ -1854,117 +2218,49 @@
   border: 0;
 }
 
-/* ─── Base model selection (step 1) ─────────────────────────────────────── */
-
-.base-model-page {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--color-background);
+/* Base model selection (step 1) */
+.base-model-selection-layout .design-tool-left {
   overflow-y: auto;
-  padding: var(--spacing-xl) var(--spacing-md) var(--spacing-2xl);
 }
 
-.base-model-container {
-  width: 100%;
-  max-width: 960px;
-  margin: 0 auto;
-}
-
-.base-model-header {
-  text-align: center;
-  margin-bottom: var(--spacing-xl);
-}
-
-.base-model-heading {
-  font-size: 1.75rem;
-  font-weight: 700;
+.design-tool-base-model-title {
+  font-size: 1.25rem;
+  font-weight: 600;
   color: var(--color-text);
-  margin: 0 0 var(--spacing-sm) 0;
-  letter-spacing: -0.01em;
-}
-
-.base-model-subheading {
-  font-size: 1rem;
-  color: var(--color-text-light);
-  margin: 0;
-  max-width: 420px;
-  margin-inline: auto;
-  line-height: 1.5;
-}
-
-@media (min-width: 1024px) {
-  .base-model-page {
-    padding: var(--spacing-2xl) var(--spacing-xl) var(--spacing-2xl);
-  }
-
-  .base-model-heading {
-    font-size: 2rem;
-  }
+  margin: 0 0 var(--spacing-lg) 0;
+  padding: var(--spacing-lg) var(--spacing-lg) 0;
 }
 
 .base-model-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-xl);
-}
-
-@media (min-width: 560px) {
-  .base-model-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--spacing-md);
-  }
-}
-
-@media (min-width: 768px) {
-  .base-model-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--spacing-md);
+  padding: 0 var(--spacing-lg) var(--spacing-lg);
 }
 
 .base-model-card {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
   border: 2px solid var(--color-border);
-  border-radius: var(--border-radius-lg);
+  border-radius: var(--border-radius-card);
   background: var(--color-background);
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  transition: var(--transition);
   text-align: center;
 }
 
 .base-model-card:hover {
   border-color: var(--color-primary);
-  background: #f5f9ff;
-  box-shadow: var(--shadow-sm);
+  background: var(--color-hover);
 }
 
 .base-model-card--selected {
   border-color: var(--color-primary);
-  background: #eef5ff;
-  box-shadow: 0 0 0 1px var(--color-primary), var(--shadow-sm);
-}
-
-.base-model-card-selected-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  background: var(--color-primary);
-  color: #fff;
-  border-radius: 50%;
-  font-size: 0.625rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
+  background: var(--color-background-light);
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 
 .base-model-card-image-wrap {
@@ -1993,7 +2289,7 @@
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--color-text);
-  line-height: 1.25;
+  line-height: 1.2;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -2005,21 +2301,30 @@
   color: var(--color-text-light);
 }
 
+
 .base-model-actions {
-  padding-top: var(--spacing-xl);
-  border-top: 1px solid var(--color-border);
-  margin-top: var(--spacing-lg);
+  padding: var(--spacing-lg);
 }
 
-.base-model-continue-btn {
-  width: 100%;
+.base-model-preview {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  min-height: 280px;
 }
 
-@media (min-width: 560px) {
-  .base-model-continue-btn {
-    width: auto;
-    min-width: 180px;
-  }
+.base-model-preview-image {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.base-model-preview-placeholder {
+  font-size: 0.9375rem;
+  color: var(--color-text-light);
+  margin: 0;
 }
 
 /* ─── PreviewWorkspace: upload hero ─────────────────────────────────────── */
@@ -2242,8 +2547,8 @@
 
 .design-tool-step--done {
   color: var(--color-text-light);
-  text-decoration: none;
-  opacity: 0.55;
+  text-decoration: line-through;
+  opacity: 0.6;
 }
 
 .design-tool-step--active {
@@ -2416,10 +2721,19 @@
   margin: 0;
 }
 
-/* ─── Structural color cards ─────────────────────────────────────────────── */
+/* ─── BaseModelSelection: variant preview loading ───────────────────────── */
+
+.base-model-preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* ─── Structural color cards (Issue 1) ──────────────────────────────────── */
 
 .base-model-color-section {
-  padding: var(--spacing-lg) 0;
+  padding: var(--spacing-lg);
   border-top: 1px solid var(--color-border);
 }
 
@@ -2439,7 +2753,6 @@
 .base-model-color-cards {
   display: flex;
   gap: var(--spacing-md);
-  max-width: 400px;
 }
 
 .base-model-color-card {
@@ -2670,263 +2983,130 @@
   justify-content: flex-end;
 }
 
-/* ── Step bar updates: clickable done steps, end-slot ───────────────────────── */
+/* ── Printful pricing estimate (create product drawer) ─────────────────────── */
 
-/* Tighten step bar padding now that there are 4 steps */
-.design-tool-step-bar {
-  padding: var(--spacing-sm) var(--spacing-lg);
+.design-tool-pricing-estimate {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--color-surface, #f9fafb);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--border-radius, 8px);
+  font-size: 0.875rem;
 }
 
-button.design-tool-step {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: default;
-  font: inherit;
-}
-
-.design-tool-step--link {
-  cursor: pointer !important;
-  text-decoration: none !important;
-  opacity: 1 !important;
-}
-
-.design-tool-step--link:hover {
-  color: var(--color-primary) !important;
-  opacity: 0.85 !important;
-}
-
-.design-tool-step--done {
-  text-decoration: none;
-  opacity: 0.55;
-}
-
-.design-tool-step-bar-end {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  flex-shrink: 0;
-  min-width: 80px;
-  justify-content: flex-end;
-}
-
-.design-tool-step-bar-action {
-  padding: var(--spacing-xs) var(--spacing-md);
-  font-size: 0.8125rem;
+.design-tool-pricing-estimate-title {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.9rem;
   font-weight: 600;
-  border-radius: var(--border-radius);
-  flex: none;
+  color: var(--color-text, #111827);
 }
 
-/* ── Design step: full-width centered chat ───────────────────────────────────── */
-
-.design-chat-layout {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--color-background);
-}
-
-.design-chat-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
-  min-height: 0;
-}
-
-/* Expand the panel to use the full space on narrow screens */
-@media (max-width: 799px) {
-  .design-chat-panel {
-    max-width: 100%;
-  }
-}
-
-/* ai-prompt-panel inside the full-width chat layout */
-.design-chat-panel .ai-prompt-panel {
-  flex: 1;
-  min-height: 0;
-}
-
-/* Variant grid gets more columns in the wide chat layout */
-@media (min-width: 560px) {
-  .design-chat-panel .ai-prompt-variants-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* Next / continue button */
-.ai-prompt-next-btn {
-  width: 100%;
-  margin-top: var(--spacing-sm);
-}
-
-/* ── Photo mode choice buttons ──────────────────────────────────────────────── */
-
-.ai-prompt-photo-choice {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.ai-prompt-photo-choice-label {
-  font-size: 0.8rem;
-  color: var(--color-text-light);
-  margin: 0;
-}
-
-.ai-prompt-photo-choice-btns {
-  display: flex;
-  gap: var(--spacing-xs);
-  flex-wrap: wrap;
-}
-
-.ai-prompt-photo-choice-btn {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: 0.8rem;
-  font-weight: 500;
-  background: var(--color-background);
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--border-radius);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  white-space: nowrap;
-}
-
-.ai-prompt-photo-choice-btn:hover {
-  border-color: var(--color-primary);
-  background: #f0f7ff;
-}
-
-.ai-prompt-reference-change {
-  background: none;
-  border: none;
+.design-tool-pricing-estimate-recipient {
+  margin: 0 0 0.5rem 0;
   font-size: 0.75rem;
-  color: var(--color-primary);
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-  margin-top: 2px;
+  color: var(--color-text-light, #6b7280);
+  line-height: 1.35;
 }
 
-.ai-prompt-reference-change:hover {
-  opacity: 0.75;
+.design-tool-pricing-estimate-status {
+  margin: 0;
+  color: var(--color-text-light, #6b7280);
 }
 
-/* ── Customize step layout ───────────────────────────────────────────────────── */
-
-.design-customize-layout {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-/* Mobile tools toggle bar */
-.design-customize-tools-mobile {
-  background: var(--color-background-light);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.design-customize-tools-toggle {
-  width: 100%;
-  padding: var(--spacing-sm) var(--spacing-lg);
+.design-tool-pricing-estimate-error {
+  margin: 0;
   font-size: 0.8125rem;
+  color: #b91c1c;
+}
+
+.design-tool-pricing-estimate-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.design-tool-pricing-estimate-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.design-tool-pricing-estimate-row:last-of-type {
+  border-bottom: none;
+}
+
+.design-tool-pricing-estimate-row--total {
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border, #d1d5db);
+  border-bottom: none;
+  font-weight: 600;
+}
+
+.design-tool-pricing-estimate-row--recommend {
+  border-bottom: none;
+  padding-top: 0.15rem;
   font-weight: 500;
-  color: var(--color-text);
-  background: none;
-  border: none;
-  text-align: left;
-  cursor: pointer;
 }
 
-.design-customize-tools-toggle:hover {
-  background: var(--color-hover);
-}
-
-.design-customize-tools-panel {
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-top: 1px solid var(--color-border);
-  overflow-y: auto;
-  max-height: 40vh;
-}
-
-/* On desktop, hide the mobile tools toggle entirely */
-@media (min-width: 1024px) {
-  .design-customize-tools-mobile {
-    display: none;
-  }
-}
-
-.design-customize-canvas {
-  flex: 1;
+.design-tool-pricing-estimate-label {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
+  gap: 0.15rem;
+  color: var(--color-text, #374151);
+  min-width: 0;
 }
 
-.design-customize-canvas .preview-workspace {
-  flex: 1;
+.design-tool-pricing-estimate-detail {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--color-text-light, #6b7280);
+  line-height: 1.3;
 }
 
-/* ── Publish step layout ─────────────────────────────────────────────────────── */
-
-.design-publish-layout {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: var(--spacing-2xl) var(--spacing-lg);
+.design-tool-pricing-estimate-amount {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
-.design-publish-form {
-  width: 100%;
-  max-width: 480px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.design-publish-title {
-  font-size: 1.5rem;
+.design-tool-pricing-estimate-amount--highlight {
+  color: var(--color-primary, #2563eb);
   font-weight: 700;
-  color: var(--color-text);
-  margin: 0 0 var(--spacing-xs) 0;
 }
 
-.design-publish-subtitle {
-  font-size: 0.9375rem;
-  color: var(--color-text-light);
-  margin: 0 0 var(--spacing-lg) 0;
-  line-height: 1.5;
+.design-tool-pricing-estimate-note {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.7rem;
+  color: var(--color-text-light, #6b7280);
+  line-height: 1.35;
 }
 
-.design-publish-actions {
-  margin-top: var(--spacing-md);
+.design-tool-pricing-estimate-note--muted {
+  opacity: 0.9;
 }
 
-/* Desktop: canvas section in customize fills available height */
-@media (min-width: 1024px) {
-  .design-customize-canvas .preview-shoe-canvas-section {
-    flex: 1;
-    overflow: hidden;
-  }
+.design-tool-pricing-estimate-block {
+  margin: 0.65rem 0 0 0;
+  padding: 0.5rem 0.6rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: #991b1b;
+}
 
-  .design-customize-canvas .preview-shoe-canvas-section .shoe-design-template-img {
-    width: auto;
-    max-width: min(480px, 100%);
-    height: auto;
-    max-height: calc(100vh - 260px);
-  }
-
-  .design-customize-canvas .preview-placement-actions {
-    flex-shrink: 0;
-    width: 100%;
-    margin-top: 0;
-  }
+.design-tool-pricing-estimate-warn {
+  margin: 0.65rem 0 0 0;
+  padding: 0.5rem 0.6rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: #92400e;
 }

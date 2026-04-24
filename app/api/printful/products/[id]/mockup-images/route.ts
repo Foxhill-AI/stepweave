@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import {
   createTaskAndPoll,
   mergeMockups,
   PRINTFUL_BASE,
   type PrintfulPrintfilesResult,
 } from '@/lib/printful/mockupTask'
+import {
+  PRINTFUL_SLOT_BUSY_CODE,
+  tryAcquirePrintfulMockupSlot,
+  releasePrintfulMockupSlot,
+} from '@/lib/printful/mockupSlot'
 import {
   buildMockupFileEntries,
   buildPrintfileById,
@@ -130,7 +136,35 @@ export async function GET(
         mockup_url: urlByPlacement.get(placement) ?? '',
       }))
 
-    const batch = await createTaskAndPoll(productId, variantId, allFiles, headers)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const admin =
+      supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null
+
+    const slotHolder = crypto.randomUUID()
+    const slot = admin
+      ? await tryAcquirePrintfulMockupSlot(admin, slotHolder)
+      : 'skipped'
+    if (slot === 'busy') {
+      return NextResponse.json(
+        {
+          error: 'Another preview is generating. Please wait a moment and try again.',
+          code: PRINTFUL_SLOT_BUSY_CODE,
+          retry_after_ms: 2000,
+        },
+        { status: 503 }
+      )
+    }
+
+    let batch: Awaited<ReturnType<typeof createTaskAndPoll>>
+    try {
+      batch = await createTaskAndPoll(productId, variantId, allFiles, headers)
+    } finally {
+      if (admin && slot === 'granted') {
+        await releasePrintfulMockupSlot(admin, slotHolder)
+      }
+    }
+
     if (batch.ok) {
       mergeMockups(urlByPlacement, batch.mockups)
     } else {

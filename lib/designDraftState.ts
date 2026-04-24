@@ -21,6 +21,9 @@ export type PlacementCompactTransform = {
   s: number
   dx: number
   dy: number
+  /** When both set, Printful position uses these sizes (printfile px) instead of s × area */
+  width?: number
+  height?: number
 }
 
 export type PrintfulPlacementsState = Record<string, PlacementCompactTransform>
@@ -39,7 +42,9 @@ export function parsePrintfulPlacements(raw: unknown): PrintfulPlacementsState {
     const s = typeof t.s === 'number' && t.s > 0 && t.s <= 1 ? t.s : 1
     const dx = typeof t.dx === 'number' ? t.dx : 0
     const dy = typeof t.dy === 'number' ? t.dy : 0
-    out[k] = { s, dx, dy }
+    const width = typeof t.width === 'number' && t.width > 0 ? t.width : undefined
+    const height = typeof t.height === 'number' && t.height > 0 ? t.height : undefined
+    out[k] = { s, dx, dy, width, height }
   }
   return out
 }
@@ -49,9 +54,16 @@ export function compactToPrintfulPosition(
   areaHeight: number,
   t: PlacementCompactTransform
 ): PrintfulPosition {
-  const s = Math.min(1, Math.max(0.05, t.s))
-  const width = Math.max(1, Math.round(areaWidth * s))
-  const height = Math.max(1, Math.round(areaHeight * s))
+  let width: number
+  let height: number
+  if (t.width != null && t.height != null && t.width > 0 && t.height > 0) {
+    width = Math.max(1, Math.round(t.width))
+    height = Math.max(1, Math.round(t.height))
+  } else {
+    const s = Math.min(1, Math.max(0.05, t.s))
+    width = Math.max(1, Math.round(areaWidth * s))
+    height = Math.max(1, Math.round(areaHeight * s))
+  }
   const left = Math.round((areaWidth - width) / 2 + t.dx)
   const top = Math.round((areaHeight - height) / 2 + t.dy)
   return {
@@ -73,13 +85,54 @@ export function clampCompactTransformInArea(
   t: PlacementCompactTransform
 ): PlacementCompactTransform {
   const s = Math.min(1, Math.max(0.05, t.s))
-  const w = areaWidth * s
-  const h = areaHeight * s
+  let w: number
+  let h: number
+  if (t.width != null && t.height != null && t.width > 0 && t.height > 0) {
+    w = t.width
+    h = t.height
+  } else {
+    w = areaWidth * s
+    h = areaHeight * s
+  }
   const maxDx = Math.max(0, (areaWidth - w) / 2)
   const maxDy = Math.max(0, (areaHeight - h) / 2)
   const dx = Math.min(maxDx, Math.max(-maxDx, t.dx))
   const dy = Math.min(maxDy, Math.max(-maxDy, t.dy))
-  return { s, dx, dy }
+  return { s, dx, dy, width: t.width, height: t.height }
+}
+
+/**
+ * Absolute anchor (center of text) in printfile pixels, clamped so glyphs stay inside the canvas.
+ * Must match `lib/printful/compositeImages.ts` (renderTextToBuffer).
+ */
+export function clampTextAnchorInPrintfile(
+  w: number,
+  h: number,
+  x: number,
+  y: number,
+  fontSize: number
+): { x: number; y: number } {
+  const rawPad = Math.max(4, Math.ceil(fontSize * 0.55))
+  const pad = Math.min(rawPad, Math.max(0, Math.floor(w / 2) - 1), Math.max(0, Math.floor(h / 2) - 1))
+  const px = pad > 0 ? Math.max(pad, Math.min(w - pad, x)) : w / 2
+  const py = pad > 0 ? Math.max(pad, Math.min(h - pad, y)) : h / 2
+  return { x: px, y: py }
+}
+
+/**
+ * Compact text offsets (dx/dy from center) clamped to the same bounds as server composites.
+ */
+export function clampTextDxDyInPrintArea(
+  areaWidth: number,
+  areaHeight: number,
+  dx: number,
+  dy: number,
+  fontSize: number
+): { dx: number; dy: number } {
+  const w = Math.max(1, Math.round(areaWidth))
+  const h = Math.max(1, Math.round(areaHeight))
+  const c = clampTextAnchorInPrintfile(w, h, w / 2 + dx, h / 2 + dy, fontSize)
+  return { dx: c.x - w / 2, dy: c.y - h / 2 }
 }
 
 /** Merge a patch then clamp so the box stays inside the print area. */
@@ -93,6 +146,8 @@ export function mergeAndClampPlacement(
     s: patch.s ?? prev.s,
     dx: patch.dx ?? prev.dx,
     dy: patch.dy ?? prev.dy,
+    width: patch.width ?? prev.width,
+    height: patch.height ?? prev.height,
   })
 }
 
@@ -119,6 +174,8 @@ export function updatePlacementTransform(
       s: patch.s ?? prev.s,
       dx: patch.dx ?? prev.dx,
       dy: patch.dy ?? prev.dy,
+      width: patch.width ?? prev.width,
+      height: patch.height ?? prev.height,
     },
   }
 }
@@ -136,10 +193,24 @@ export const DESIGN_STATE_KEYS = {
 /** One image layer within a placement — stores both the storage path and its transform. */
 export type PlacementImageLayer = {
   id: string
-  path: string  // Supabase storage path (private bucket)
-  s: number     // scale (0.05–1)
-  dx: number    // x offset from center in printfile pixels
-  dy: number    // y offset from center in printfile pixels
+  path: string // Supabase storage path (private bucket)
+  /** Uniform scale vs print area (legacy); ignored when `w` and `h` are set */
+  s: number
+  /** Explicit size in printfile px (optional; takes precedence over s-derived box) */
+  w?: number
+  h?: number
+  dx: number
+  dy: number
+  /** Degrees, clockwise */
+  rotation?: number
+  /** When true, tile this image on a grid (tile size = w×h) to cover the print area; forces server composite. */
+  repeat?: boolean
+  /** Mirror horizontally (after rotation, in layer-local space). */
+  flipH?: boolean
+  /** Mirror vertically. */
+  flipV?: boolean
+  /** 0–1; forces server composite when below 1. */
+  opacity?: number
 }
 
 /** Same as PlacementImageLayer but with the signed URL resolved for display. */
@@ -152,11 +223,16 @@ export type PlacementTextLayer = {
   id: string
   type: 'text'
   text: string
-  fontFamily: string   // Font value from lib/fonts.ts
-  fontSize: number     // Font size in printfile pixels
-  color: string        // CSS color string, e.g. '#ffffff'
-  dx: number           // x offset from center in printfile pixels
-  dy: number           // y offset from center in printfile pixels
+  fontFamily: string // Font value from lib/fonts.ts
+  fontSize: number // Font size in printfile pixels
+  color: string // CSS color string, e.g. '#ffffff'
+  dx: number
+  dy: number
+  /** Degrees, clockwise */
+  rotation?: number
+  flipH?: boolean
+  flipV?: boolean
+  opacity?: number
 }
 
 /** Resolved text layer — same structure (no async resolution needed). */
@@ -171,13 +247,23 @@ export type ResolvedPlacementLayer = ResolvedPlacementImageLayer | ResolvedPlace
 /** Patch type accepted by onLayerChange for any layer. */
 export type PlacementLayerPatch = Partial<{
   s: number
+  w: number
+  h: number
   dx: number
   dy: number
+  rotation: number
   fontSize: number
   text: string
   fontFamily: string
   color: string
+  repeat: boolean
+  flipH: boolean
+  flipV: boolean
+  opacity: number
 }>
+
+/** Stack order change for a layer within its placement (array index:0 = back, length-1 = front). */
+export type PlacementLayerReorderOp = 'forward' | 'backward' | 'front' | 'back'
 
 export function isTextLayer(l: PlacementLayer): l is PlacementTextLayer {
   return (l as PlacementTextLayer).type === 'text'
@@ -185,6 +271,132 @@ export function isTextLayer(l: PlacementLayer): l is PlacementTextLayer {
 
 export function isImageLayer(l: PlacementLayer): l is PlacementImageLayer {
   return (l as PlacementTextLayer).type !== 'text'
+}
+
+/** Printfile pixel size for an image layer (`w`/`h` override or legacy `s` box). */
+export function getImageLayerDimensions(
+  layer: Pick<PlacementImageLayer, 's' | 'w' | 'h'>,
+  areaWidth: number,
+  areaHeight: number
+): { w: number; h: number } {
+  if (typeof layer.w === 'number' && typeof layer.h === 'number' && layer.w > 0 && layer.h > 0) {
+    return { w: Math.round(layer.w), h: Math.round(layer.h) }
+  }
+  const s = Math.min(1, Math.max(0.05, layer.s))
+  return {
+    w: Math.max(1, Math.round(areaWidth * s)),
+    h: Math.max(1, Math.round(areaHeight * s)),
+  }
+}
+
+function clampCenteredRectInPrintArea(
+  areaWidth: number,
+  areaHeight: number,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  rotationDeg: number
+): { cx: number; cy: number } {
+  const rot = (rotationDeg * Math.PI) / 180
+  const hw = w / 2
+  const hh = h / 2
+  const cos = Math.abs(Math.cos(rot))
+  const sin = Math.abs(Math.sin(rot))
+  const halfW = hw * cos + hh * sin
+  const halfH = hw * sin + hh * cos
+  const ncx = Math.min(areaWidth - halfW, Math.max(halfW, cx))
+  const ncy = Math.min(areaHeight - halfH, Math.max(halfH, cy))
+  return { cx: ncx, cy: ncy }
+}
+
+export function clampImageLayerDxDy(
+  areaWidth: number,
+  areaHeight: number,
+  layer: Pick<PlacementImageLayer, 's' | 'w' | 'h' | 'dx' | 'dy' | 'rotation'>
+): { dx: number; dy: number } {
+  const { w, h } = getImageLayerDimensions(layer, areaWidth, areaHeight)
+  const cx = areaWidth / 2 + layer.dx
+  const cy = areaHeight / 2 + layer.dy
+  const c = clampCenteredRectInPrintArea(areaWidth, areaHeight, cx, cy, w, h, layer.rotation ?? 0)
+  return { dx: c.cx - areaWidth / 2, dy: c.cy - areaHeight / 2 }
+}
+
+/** Rough bbox for single-line text (editor Moveable + clamp). */
+export function estimateTextLayerBox(text: string, fontSize: number): { w: number; h: number } {
+  const ch = Math.max(1, (text || ' ').length)
+  const w = Math.max(Math.ceil(fontSize * 2), Math.ceil(fontSize * ch * 0.55))
+  const h = Math.ceil(fontSize * 1.35)
+  return { w, h }
+}
+
+export function clampTextLayerDxDy(
+  areaWidth: number,
+  areaHeight: number,
+  layer: Pick<PlacementTextLayer, 'dx' | 'dy' | 'fontSize' | 'text' | 'rotation'>
+): { dx: number; dy: number } {
+  const { w, h } = estimateTextLayerBox(layer.text, layer.fontSize)
+  const cx = areaWidth / 2 + layer.dx
+  const cy = areaHeight / 2 + layer.dy
+  const c = clampCenteredRectInPrintArea(areaWidth, areaHeight, cx, cy, w, h, layer.rotation ?? 0)
+  return { dx: c.cx - areaWidth / 2, dy: c.cy - areaHeight / 2 }
+}
+
+/** Single-image direct URL to Printful is only valid without text, a single bitmap, and no rotation. */
+function singleImageNeedsComposite(img: PlacementImageLayer): boolean {
+  if ((img.rotation ?? 0) !== 0) return true
+  if (img.repeat === true) return true
+  if (img.flipH === true || img.flipV === true) return true
+  const o = img.opacity
+  if (typeof o === 'number' && o < 1 - 1e-6) return true
+  return false
+}
+
+export function placementLayersNeedServerComposite(layers: PlacementLayer[]): boolean {
+  if (layers.length === 0) return false
+  const hasText = layers.some(isTextLayer)
+  const imageLayers = layers.filter(isImageLayer)
+  if (hasText || imageLayers.length > 1) return true
+  if (imageLayers.length === 1 && singleImageNeedsComposite(imageLayers[0])) return true
+  return false
+}
+
+/** Override for `printful_placements` / mockup `position` when using one raster per placement. */
+export function imageLayerToPlacementOverride(
+  layer: PlacementImageLayer,
+  areaWidth: number,
+  areaHeight: number
+): PlacementCompactTransform {
+  const { w, h } = getImageLayerDimensions(layer, areaWidth, areaHeight)
+  return {
+    s: layer.s,
+    dx: layer.dx,
+    dy: layer.dy,
+    width: w,
+    height: h,
+  }
+}
+
+/**
+ * After printfile dimensions are known: set explicit width/height on direct (non-composite) image placements.
+ */
+export function enrichDirectImagePlacementOverrides(
+  overrides: Record<string, PlacementCompactTransform>,
+  perPlacementPaths: Record<string, PlacementLayer[]>,
+  getAreaForPlacement: (placement: string) => { width: number; height: number }
+): Record<string, PlacementCompactTransform> {
+  const out: Record<string, PlacementCompactTransform> = {}
+  for (const [placement, t] of Object.entries(overrides)) {
+    const layers = perPlacementPaths[placement]
+    const imgs = layers?.filter(isImageLayer) ?? []
+    if (layers && imgs.length === 1 && !placementLayersNeedServerComposite(layers)) {
+      const { width, height } = getAreaForPlacement(placement)
+      out[placement] = imageLayerToPlacementOverride(imgs[0], width, height)
+    } else {
+      out[placement] = t
+    }
+  }
+  return out
 }
 
 /** Per-placement layers keyed by Printful placement name. */
@@ -198,6 +410,10 @@ function parseLayer(v: unknown): PlacementLayer | null {
   // Text layer
   if (o.type === 'text') {
     if (typeof o.text !== 'string') return null
+    const rot = typeof o.rotation === 'number' && Number.isFinite(o.rotation) ? o.rotation : undefined
+    const opRaw = typeof o.opacity === 'number' && Number.isFinite(o.opacity) ? o.opacity : undefined
+    const opacity =
+      opRaw !== undefined ? Math.min(1, Math.max(0, opRaw)) : undefined
     return {
       id: typeof o.id === 'string' && o.id.trim() ? o.id : crypto.randomUUID(),
       type: 'text',
@@ -207,16 +423,32 @@ function parseLayer(v: unknown): PlacementLayer | null {
       color: typeof o.color === 'string' && o.color.trim() ? o.color : '#000000',
       dx: typeof o.dx === 'number' ? o.dx : 0,
       dy: typeof o.dy === 'number' ? o.dy : 0,
+      ...(rot !== undefined ? { rotation: rot } : {}),
+      ...(o.flipH === true ? { flipH: true } : {}),
+      ...(o.flipV === true ? { flipV: true } : {}),
+      ...(opacity !== undefined && opacity < 1 ? { opacity } : {}),
     }
   }
   // Image layer (no type field, or type !== 'text')
   if (typeof o.path !== 'string' || !o.path.trim()) return null
+  const w = typeof o.w === 'number' && o.w > 0 ? o.w : undefined
+  const h = typeof o.h === 'number' && o.h > 0 ? o.h : undefined
+  const rot = typeof o.rotation === 'number' && Number.isFinite(o.rotation) ? o.rotation : undefined
+  const opRaw = typeof o.opacity === 'number' && Number.isFinite(o.opacity) ? o.opacity : undefined
+  const opacity =
+    opRaw !== undefined ? Math.min(1, Math.max(0, opRaw)) : undefined
   return {
     id: typeof o.id === 'string' && o.id.trim() ? o.id : crypto.randomUUID(),
     path: o.path,
     s: typeof o.s === 'number' && o.s > 0 && o.s <= 1 ? o.s : 1,
     dx: typeof o.dx === 'number' ? o.dx : 0,
     dy: typeof o.dy === 'number' ? o.dy : 0,
+    ...(w !== undefined && h !== undefined ? { w, h } : {}),
+    ...(rot !== undefined ? { rotation: rot } : {}),
+    ...(o.repeat === true ? { repeat: true } : {}),
+    ...(o.flipH === true ? { flipH: true } : {}),
+    ...(o.flipV === true ? { flipV: true } : {}),
+    ...(opacity !== undefined && opacity < 1 ? { opacity } : {}),
   }
 }
 
@@ -301,6 +533,101 @@ export function removePlacementImageLayer(
   if (layers.length > 0) next[placement] = layers
   else delete next[placement]
   return next
+}
+
+/** Change z-order of one layer (forward = toward front / end of array). */
+export function reorderPlacementLayer(
+  current: PlacementImagesState,
+  placement: string,
+  layerId: string,
+  op: PlacementLayerReorderOp
+): PlacementImagesState {
+  const list = [...(current[placement] ?? [])]
+  const idx = list.findIndex((l) => l.id === layerId)
+  if (idx < 0) return current
+  const [item] = list.splice(idx, 1)
+  let insertAt: number
+  switch (op) {
+    case 'forward':
+      insertAt = Math.min(idx + 1, list.length)
+      break
+    case 'backward':
+      insertAt = Math.max(idx - 1, 0)
+      break
+    case 'front':
+      insertAt = list.length
+      break
+    case 'back':
+      insertAt = 0
+      break
+    default:
+      insertAt = idx
+  }
+  list.splice(insertAt, 0, item)
+  return { ...current, [placement]: list }
+}
+
+/** Clone the layer after its current index (slight offset). Returns null if not found. */
+export function duplicatePlacementLayer(
+  current: PlacementImagesState,
+  placement: string,
+  layerId: string,
+  offsetDx = 14,
+  offsetDy = 14
+): { next: PlacementImagesState; newId: string } | null {
+  const list = current[placement] ?? []
+  const idx = list.findIndex((l) => l.id === layerId)
+  if (idx < 0) return null
+  const layer = list[idx]
+  const newId = crypto.randomUUID()
+  const clone: PlacementLayer = isTextLayer(layer)
+    ? {
+        ...layer,
+        id: newId,
+        dx: layer.dx + offsetDx,
+        dy: layer.dy + offsetDy,
+      }
+    : {
+        ...layer,
+        id: newId,
+        dx: layer.dx + offsetDx,
+        dy: layer.dy + offsetDy,
+      }
+  const nextList = [...list.slice(0, idx + 1), clone, ...list.slice(idx + 1)]
+  return { next: { ...current, [placement]: nextList }, newId }
+}
+
+/** Strip runtime-only fields for clipboard / persistence. */
+export function placementLayerToSerializable(layer: ResolvedPlacementLayer): PlacementLayer {
+  if (isTextLayer(layer)) return { ...layer }
+  const { signedUrl: _s, ...rest } = layer
+  return rest
+}
+
+/** Append a clone of `layer` (new id, optional offset) at the top of the stack. */
+export function appendPlacementLayerClone(
+  current: PlacementImagesState,
+  placement: string,
+  layer: PlacementLayer,
+  offsetDx = 14,
+  offsetDy = 14
+): { next: PlacementImagesState; newId: string } {
+  const newId = crypto.randomUUID()
+  const nextLayer: PlacementLayer = isTextLayer(layer)
+    ? {
+        ...layer,
+        id: newId,
+        dx: layer.dx + offsetDx,
+        dy: layer.dy + offsetDy,
+      }
+    : {
+        ...layer,
+        id: newId,
+        dx: layer.dx + offsetDx,
+        dy: layer.dy + offsetDy,
+      }
+  const list = [...(current[placement] ?? []), nextLayer]
+  return { next: { ...current, [placement]: list }, newId }
 }
 
 // Keep legacy exports for callers that haven't migrated yet

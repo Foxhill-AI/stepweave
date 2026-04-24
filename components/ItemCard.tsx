@@ -1,3 +1,6 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Heart, Eye, Download, Star } from 'lucide-react'
 import ProductImage from './ProductImage'
@@ -14,6 +17,8 @@ interface ItemCardProps {
   likes?: number
   downloads?: number
   author?: string
+  /** When set, the author name links to this profile URL. */
+  authorProfileUrl?: string
   price?: string
   rating?: number
   badge?: string
@@ -32,11 +37,16 @@ export default function ItemCard({
   likes = 0,
   downloads = 0,
   author,
+  authorProfileUrl,
   price,
   rating = 0,
   badge,
   layout = 'grid',
 }: ItemCardProps) {
+  const [staticImgFailed, setStaticImgFailed] = useState(false)
+  useEffect(() => {
+    setStaticImgFailed(false)
+  }, [id, image])
   const useProductImage = productId != null && designData?.source === 'design_draft'
   const renderStars = (rating: number) => {
     const fullStars = Math.floor(rating)
@@ -79,12 +89,13 @@ export default function ItemCard({
                   </div>
                 }
               />
-            ) : image ? (
+            ) : image && !staticImgFailed ? (
               <img
                 src={image}
                 alt={title}
                 className="item-card-image"
                 loading="lazy"
+                onError={() => setStaticImgFailed(true)}
               />
             ) : (
               <div className="item-card-image-fallback">
@@ -101,8 +112,24 @@ export default function ItemCard({
 
         <div className="item-card-content">
           <h3 className="item-card-title">{title}</h3>
-          {author && (
-            <p className="item-card-author">by {author}</p>
+          {(author || (category && category !== 'Uncategorized')) && (
+            <p className="item-card-subline">
+              {author ? (
+                authorProfileUrl ? (
+                  <Link
+                    href={authorProfileUrl}
+                    className="item-card-subline-link"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {author}
+                  </Link>
+                ) : (
+                  author
+                )
+              ) : (
+                category
+              )}
+            </p>
           )}
           {rating > 0 && renderStars(rating)}
           <div className="item-card-meta">
@@ -125,16 +152,13 @@ export default function ItemCard({
               </span>
             )}
           </div>
-          <div className="item-card-footer">
-            {category && (
-              <span className="item-card-category">{category}</span>
-            )}
-            {price && (
+          {price && (
+            <div className="item-card-footer">
               <span className="item-card-price" aria-label={`Price: ${price}`}>
                 {price}
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </Link>
     </article>

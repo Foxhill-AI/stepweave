@@ -2,7 +2,13 @@
 
 import { useMemo, useRef, useEffect } from 'react'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
-import type { ResolvedPlacementLayer, PlacementLayerPatch } from '@/lib/designDraftState'
+import type {
+  ResolvedPlacementLayer,
+  PlacementLayerPatch,
+  PlacementLayer,
+  PlacementLayerReorderOp,
+} from '@/lib/designDraftState'
+import type { MutableRefObject } from 'react'
 import PlacementCanvasPreview from './PlacementCanvasPreview'
 
 /** Pre-layout/decode `offsetWidth` can be ~2px; never lock `.shoe-design-composite` to that (img is width:100%). */
@@ -18,6 +24,11 @@ export type ShoeDesignEditorProps = {
   selectedLayerId?: string | null
   onLayerSelect?: (id: string) => void
   onLayerChange: (layerId: string, patch: PlacementLayerPatch) => void
+  onLayerDelete?: (layerId: string) => void
+  onLayerReorder?: (layerId: string, op: PlacementLayerReorderOp) => void
+  onLayerDuplicate?: (layerId: string) => void
+  onPasteLayer?: (layer: PlacementLayer) => void
+  layerClipboardRef?: MutableRefObject<PlacementLayer | null>
   disabled?: boolean
 }
 
@@ -33,6 +44,11 @@ export default function ShoeDesignEditor({
   selectedLayerId,
   onLayerSelect,
   onLayerChange,
+  onLayerDelete,
+  onLayerReorder,
+  onLayerDuplicate,
+  onPasteLayer,
+  layerClipboardRef,
   disabled = false,
 }: ShoeDesignEditorProps) {
   const rows = useMemo(
@@ -74,28 +90,6 @@ export default function ShoeDesignEditor({
         composite.style.removeProperty('width')
         composite.style.height = '200px'
       }
-
-      // #region agent log
-      fetch('http://127.0.0.1:7893/ingest/8125b979-4f7a-423b-8878-365342928e92', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ffdcdb' },
-        body: JSON.stringify({
-          sessionId: 'ffdcdb',
-          runId: 'post-fix',
-          hypothesisId: 'F',
-          location: 'ShoeDesignEditor.tsx:sync',
-          message: 'template composite sync',
-          data: {
-            ow: w,
-            oh: h,
-            complete: img.complete,
-            nw,
-            appliedPx: layoutReady,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
     }
 
     sync()
@@ -177,6 +171,11 @@ export default function ShoeDesignEditor({
               selectedLayerId={selectedLayerId}
               onLayerSelect={onLayerSelect}
               onLayerChange={onLayerChange}
+              onLayerDelete={onLayerDelete}
+              onLayerReorder={onLayerReorder}
+              onLayerDuplicate={onLayerDuplicate}
+              onPasteLayer={onPasteLayer}
+              layerClipboardRef={layerClipboardRef}
               disabled={disabled}
               variant="overlay"
               hideHint
