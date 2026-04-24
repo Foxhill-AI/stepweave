@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { createDesignDraft } from '@/lib/supabaseClient'
@@ -8,8 +8,6 @@ import type { PrintfulShoeProduct } from '@/app/api/printful/products/route'
 import '../../styles/DesignTool.css'
 
 const PENDING_SELECTION_KEY = 'design-tool-pending-selection'
-
-type VariantInfo = { id: number; color: string; image: string }
 
 export default function BaseModelSelection() {
   const router = useRouter()
@@ -20,11 +18,6 @@ export default function BaseModelSelection() {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
   const [structuralColor, setStructuralColor] = useState<'white' | 'black'>('white')
   const [continueLoading, setContinueLoading] = useState(false)
-  /** Variants cached per model id — fetched eagerly on model selection for preview sync. */
-  const [variantsByModelId, setVariantsByModelId] = useState<Record<string, VariantInfo[]>>({})
-  const [variantsLoadingId, setVariantsLoadingId] = useState<string | null>(null)
-  /** Tracks which model ids have already been fetched (avoids refetch on re-render). */
-  const fetchedModelIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     let cancelled = false
@@ -51,25 +44,6 @@ export default function BaseModelSelection() {
       })
     return () => { cancelled = true }
   }, [])
-
-  // Eagerly fetch variants for the selected model so the preview can show the
-  // correct color-matched image before the user clicks Continue.
-  useEffect(() => {
-    if (!selectedModelId) return
-    if (fetchedModelIdsRef.current.has(selectedModelId)) return
-    fetchedModelIdsRef.current.add(selectedModelId)
-    let cancelled = false
-    setVariantsLoadingId(selectedModelId)
-    fetch(`/api/printful/products/${encodeURIComponent(selectedModelId)}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('failed'))))
-      .then((body: { variants?: VariantInfo[] }) => {
-        if (!cancelled)
-          setVariantsByModelId((prev) => ({ ...prev, [selectedModelId]: body.variants ?? [] }))
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setVariantsLoadingId(null) })
-    return () => { cancelled = true }
-  }, [selectedModelId])
 
   useEffect(() => {
     if (loading || products.length === 0) return
@@ -149,158 +123,115 @@ export default function BaseModelSelection() {
   }
 
   return (
-    <div className="design-tool-page">
-      <div className="design-tool-layout base-model-selection-layout">
-        <section
-          className="design-tool-left"
-          id="base-model-selection-panel"
-          aria-labelledby="base-model-heading"
-          role="region"
-        >
-          <h2 id="base-model-heading" className="design-tool-base-model-title">
-            Choose your shoe model
-          </h2>
+    <div className="base-model-page">
+      <div className="base-model-container">
+        <div className="base-model-header">
+          <h1 className="base-model-heading">Choose your shoe</h1>
+          <p className="base-model-subheading">
+            Pick a model to start designing. You&apos;ll customize the look in the next step.
+          </p>
+        </div>
 
-          {loading && (
-            <p className="design-tool-loading" aria-live="polite">
-              Loading models…
-            </p>
-          )}
+        {loading && (
+          <p className="design-tool-loading" aria-live="polite">
+            Loading models…
+          </p>
+        )}
 
-          {error && !loading && (
-            <p className="design-tool-form-error" role="alert">
-              {error}
-            </p>
-          )}
+        {error && !loading && (
+          <p className="design-tool-form-error" role="alert">
+            {error}
+          </p>
+        )}
 
-          {!loading && !error && products.length > 0 && (
-            <>
-              <div className="base-model-grid" role="listbox" aria-label="Shoe models">
-                {products.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    role="option"
-                    aria-selected={selectedModelId === p.id}
-                    className={`base-model-card ${selectedModelId === p.id ? 'base-model-card--selected' : ''}`}
-                    onClick={() => setSelectedModelId(p.id)}
-                  >
-                    <span className="base-model-card-image-wrap">
-                      {p.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.image}
-                          alt=""
-                          width={120}
-                          height={120}
-                          className="base-model-card-image"
-                        />
-                      ) : (
-                        <span className="base-model-card-placeholder">No image</span>
-                      )}
-                    </span>
-                    <span className="base-model-card-name">{p.name}</span>
-                    {p.brand && (
-                      <span className="base-model-card-brand">{p.brand}</span>
+        {!loading && !error && products.length > 0 && (
+          <>
+            <div className="base-model-grid" role="listbox" aria-label="Shoe models">
+              {products.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selectedModelId === p.id}
+                  className={`base-model-card${selectedModelId === p.id ? ' base-model-card--selected' : ''}`}
+                  onClick={() => setSelectedModelId(p.id)}
+                >
+                  <span className="base-model-card-image-wrap">
+                    {p.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.image}
+                        alt=""
+                        width={160}
+                        height={160}
+                        className="base-model-card-image"
+                      />
+                    ) : (
+                      <span className="base-model-card-placeholder">No image</span>
                     )}
-                  </button>
+                  </span>
+                  <span className="base-model-card-name">{p.name}</span>
+                  {p.brand && (
+                    <span className="base-model-card-brand">{p.brand}</span>
+                  )}
+                  {selectedModelId === p.id && (
+                    <span className="base-model-card-selected-badge" aria-hidden="true">✓</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="base-model-color-section">
+              <p className="base-model-color-section-title">Structural color</p>
+              <p className="base-model-color-hint">
+                Laces, sole, and inside of the shoe
+              </p>
+              <div className="base-model-color-cards" role="radiogroup" aria-label="Structural color">
+                {(['white', 'black'] as const).map((color) => (
+                  <label
+                    key={color}
+                    className={`base-model-color-card${structuralColor === color ? ' base-model-color-card--selected' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="structural-color"
+                      value={color}
+                      checked={structuralColor === color}
+                      onChange={() => setStructuralColor(color)}
+                      className="sr-only"
+                      aria-label={color === 'white' ? 'White' : 'Black'}
+                    />
+                    <span
+                      className={`base-model-color-card-swatch base-model-color-card-swatch--${color}`}
+                      aria-hidden="true"
+                    />
+                    <span className="base-model-color-card-name">
+                      {color === 'white' ? 'White' : 'Black'}
+                    </span>
+                    {structuralColor === color && (
+                      <span className="base-model-color-card-check" aria-hidden="true">✓</span>
+                    )}
+                  </label>
                 ))}
               </div>
+            </div>
 
-              <div className="base-model-color-section">
-                <p className="base-model-color-section-title">Structural color</p>
-                <p className="base-model-color-hint">
-                  Laces, sole, and inside of the shoe
-                </p>
-                <div className="base-model-color-cards" role="radiogroup" aria-label="Structural color">
-                  {(['white', 'black'] as const).map((color) => (
-                    <label
-                      key={color}
-                      className={`base-model-color-card${structuralColor === color ? ' base-model-color-card--selected' : ''}`}
-                    >
-                      <input
-                        type="radio"
-                        name="structural-color"
-                        value={color}
-                        checked={structuralColor === color}
-                        onChange={() => setStructuralColor(color)}
-                        className="sr-only"
-                        aria-label={color === 'white' ? 'White' : 'Black'}
-                      />
-                      <span
-                        className={`base-model-color-card-swatch base-model-color-card-swatch--${color}`}
-                        aria-hidden="true"
-                      />
-                      <span className="base-model-color-card-name">
-                        {color === 'white' ? 'White' : 'Black'}
-                      </span>
-                      {structuralColor === color && (
-                        <span className="base-model-color-card-check" aria-hidden="true">✓</span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              </div>
+            <div className="base-model-actions">
+              <button
+                type="button"
+                className="design-tool-btn design-tool-btn-publish base-model-continue-btn"
+                disabled={!selectedModelId || continueLoading}
+                onClick={handleContinue}
+              >
+                {continueLoading ? 'Creating…' : 'Continue'}
+              </button>
+            </div>
+          </>
+        )}
 
-              <div className="design-tool-form-actions base-model-actions">
-                <button
-                  type="button"
-                  className="design-tool-btn design-tool-btn-publish"
-                  disabled={!selectedModelId || continueLoading}
-                  onClick={handleContinue}
-                >
-                  {continueLoading ? 'Creating…' : 'Continue'}
-                </button>
-              </div>
-            </>
-          )}
-
-          {!loading && !error && products.length === 0 && (
-            <p className="design-tool-loading">No shoe models available.</p>
-          )}
-        </section>
-
-        <section className="design-tool-right" aria-label="Preview" role="region">
-          <div className="base-model-preview">
-            {selectedModelId ? (
-              (() => {
-                const selectedProduct = products.find((p) => p.id === selectedModelId)
-                const cachedVariants = variantsByModelId[selectedModelId] ?? []
-                const colorMatch = cachedVariants.find(
-                  (v) => (v.color ?? '').toLowerCase() === structuralColor
-                )
-                const previewImage = colorMatch?.image || selectedProduct?.image || ''
-                const isLoadingPreview = variantsLoadingId === selectedModelId
-
-                if (isLoadingPreview) {
-                  return (
-                    <div className="base-model-preview-loading">
-                      <div className="preview-loading-spinner" aria-hidden="true" />
-                      <p className="base-model-preview-placeholder">Loading preview…</p>
-                    </div>
-                  )
-                }
-                if (previewImage) {
-                  return (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={previewImage}
-                      alt={selectedProduct?.name ?? 'Selected model'}
-                      width={320}
-                      height={320}
-                      className="base-model-preview-image"
-                    />
-                  )
-                }
-                return <p className="base-model-preview-placeholder">No preview available</p>
-              })()
-            ) : (
-              <p className="base-model-preview-placeholder">
-                Select a model to preview
-              </p>
-            )}
-          </div>
-        </section>
+        {!loading && !error && products.length === 0 && (
+          <p className="design-tool-loading">No shoe models available.</p>
+        )}
       </div>
     </div>
   )

@@ -1854,49 +1854,117 @@
   border: 0;
 }
 
-/* Base model selection (step 1) */
-.base-model-selection-layout .design-tool-left {
+/* ─── Base model selection (step 1) ─────────────────────────────────────── */
+
+.base-model-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-background);
   overflow-y: auto;
+  padding: var(--spacing-xl) var(--spacing-md) var(--spacing-2xl);
 }
 
-.design-tool-base-model-title {
-  font-size: 1.25rem;
-  font-weight: 600;
+.base-model-container {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.base-model-header {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.base-model-heading {
+  font-size: 1.75rem;
+  font-weight: 700;
   color: var(--color-text);
-  margin: 0 0 var(--spacing-lg) 0;
-  padding: var(--spacing-lg) var(--spacing-lg) 0;
+  margin: 0 0 var(--spacing-sm) 0;
+  letter-spacing: -0.01em;
+}
+
+.base-model-subheading {
+  font-size: 1rem;
+  color: var(--color-text-light);
+  margin: 0;
+  max-width: 420px;
+  margin-inline: auto;
+  line-height: 1.5;
+}
+
+@media (min-width: 1024px) {
+  .base-model-page {
+    padding: var(--spacing-2xl) var(--spacing-xl) var(--spacing-2xl);
+  }
+
+  .base-model-heading {
+    font-size: 2rem;
+  }
 }
 
 .base-model-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: var(--spacing-md);
-  padding: 0 var(--spacing-lg) var(--spacing-lg);
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xl);
+}
+
+@media (min-width: 560px) {
+  .base-model-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-md);
+  }
+}
+
+@media (min-width: 768px) {
+  .base-model-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .base-model-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
   border: 2px solid var(--color-border);
-  border-radius: var(--border-radius-card);
+  border-radius: var(--border-radius-lg);
   background: var(--color-background);
   cursor: pointer;
-  transition: var(--transition);
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   text-align: center;
 }
 
 .base-model-card:hover {
   border-color: var(--color-primary);
-  background: var(--color-hover);
+  background: #f5f9ff;
+  box-shadow: var(--shadow-sm);
 }
 
 .base-model-card--selected {
   border-color: var(--color-primary);
-  background: var(--color-background-light);
-  box-shadow: 0 0 0 1px var(--color-primary);
+  background: #eef5ff;
+  box-shadow: 0 0 0 1px var(--color-primary), var(--shadow-sm);
+}
+
+.base-model-card-selected-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 0.625rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .base-model-card-image-wrap {
@@ -1925,7 +1993,7 @@
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--color-text);
-  line-height: 1.2;
+  line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1937,30 +2005,21 @@
   color: var(--color-text-light);
 }
 
-
 .base-model-actions {
-  padding: var(--spacing-lg);
+  padding-top: var(--spacing-xl);
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--spacing-lg);
 }
 
-.base-model-preview {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-xl);
-  min-height: 280px;
+.base-model-continue-btn {
+  width: 100%;
 }
 
-.base-model-preview-image {
-  max-width: 100%;
-  height: auto;
-  object-fit: contain;
-}
-
-.base-model-preview-placeholder {
-  font-size: 0.9375rem;
-  color: var(--color-text-light);
-  margin: 0;
+@media (min-width: 560px) {
+  .base-model-continue-btn {
+    width: auto;
+    min-width: 180px;
+  }
 }
 
 /* ─── PreviewWorkspace: upload hero ─────────────────────────────────────── */
@@ -2183,8 +2242,8 @@
 
 .design-tool-step--done {
   color: var(--color-text-light);
-  text-decoration: line-through;
-  opacity: 0.6;
+  text-decoration: none;
+  opacity: 0.55;
 }
 
 .design-tool-step--active {
@@ -2357,19 +2416,10 @@
   margin: 0;
 }
 
-/* ─── BaseModelSelection: variant preview loading ───────────────────────── */
-
-.base-model-preview-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-/* ─── Structural color cards (Issue 1) ──────────────────────────────────── */
+/* ─── Structural color cards ─────────────────────────────────────────────── */
 
 .base-model-color-section {
-  padding: var(--spacing-lg);
+  padding: var(--spacing-lg) 0;
   border-top: 1px solid var(--color-border);
 }
 
@@ -2389,6 +2439,7 @@
 .base-model-color-cards {
   display: flex;
   gap: var(--spacing-md);
+  max-width: 400px;
 }
 
 .base-model-color-card {
@@ -2617,4 +2668,265 @@
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+}
+
+/* ── Step bar updates: clickable done steps, end-slot ───────────────────────── */
+
+/* Tighten step bar padding now that there are 4 steps */
+.design-tool-step-bar {
+  padding: var(--spacing-sm) var(--spacing-lg);
+}
+
+button.design-tool-step {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+  font: inherit;
+}
+
+.design-tool-step--link {
+  cursor: pointer !important;
+  text-decoration: none !important;
+  opacity: 1 !important;
+}
+
+.design-tool-step--link:hover {
+  color: var(--color-primary) !important;
+  opacity: 0.85 !important;
+}
+
+.design-tool-step--done {
+  text-decoration: none;
+  opacity: 0.55;
+}
+
+.design-tool-step-bar-end {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+  min-width: 80px;
+  justify-content: flex-end;
+}
+
+.design-tool-step-bar-action {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: var(--border-radius);
+  flex: none;
+}
+
+/* ── Design step: full-width centered chat ───────────────────────────────────── */
+
+.design-chat-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-background);
+}
+
+.design-chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  min-height: 0;
+}
+
+/* Expand the panel to use the full space on narrow screens */
+@media (max-width: 799px) {
+  .design-chat-panel {
+    max-width: 100%;
+  }
+}
+
+/* ai-prompt-panel inside the full-width chat layout */
+.design-chat-panel .ai-prompt-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Variant grid gets more columns in the wide chat layout */
+@media (min-width: 560px) {
+  .design-chat-panel .ai-prompt-variants-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Next / continue button */
+.ai-prompt-next-btn {
+  width: 100%;
+  margin-top: var(--spacing-sm);
+}
+
+/* ── Photo mode choice buttons ──────────────────────────────────────────────── */
+
+.ai-prompt-photo-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.ai-prompt-photo-choice-label {
+  font-size: 0.8rem;
+  color: var(--color-text-light);
+  margin: 0;
+}
+
+.ai-prompt-photo-choice-btns {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.ai-prompt-photo-choice-btn {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: var(--color-background);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.ai-prompt-photo-choice-btn:hover {
+  border-color: var(--color-primary);
+  background: #f0f7ff;
+}
+
+.ai-prompt-reference-change {
+  background: none;
+  border: none;
+  font-size: 0.75rem;
+  color: var(--color-primary);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  margin-top: 2px;
+}
+
+.ai-prompt-reference-change:hover {
+  opacity: 0.75;
+}
+
+/* ── Customize step layout ───────────────────────────────────────────────────── */
+
+.design-customize-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Mobile tools toggle bar */
+.design-customize-tools-mobile {
+  background: var(--color-background-light);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.design-customize-tools-toggle {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.design-customize-tools-toggle:hover {
+  background: var(--color-hover);
+}
+
+.design-customize-tools-panel {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+  overflow-y: auto;
+  max-height: 40vh;
+}
+
+/* On desktop, hide the mobile tools toggle entirely */
+@media (min-width: 1024px) {
+  .design-customize-tools-mobile {
+    display: none;
+  }
+}
+
+.design-customize-canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.design-customize-canvas .preview-workspace {
+  flex: 1;
+}
+
+/* ── Publish step layout ─────────────────────────────────────────────────────── */
+
+.design-publish-layout {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+}
+
+.design-publish-form {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.design-publish-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.design-publish-subtitle {
+  font-size: 0.9375rem;
+  color: var(--color-text-light);
+  margin: 0 0 var(--spacing-lg) 0;
+  line-height: 1.5;
+}
+
+.design-publish-actions {
+  margin-top: var(--spacing-md);
+}
+
+/* Desktop: canvas section in customize fills available height */
+@media (min-width: 1024px) {
+  .design-customize-canvas .preview-shoe-canvas-section {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .design-customize-canvas .preview-shoe-canvas-section .shoe-design-template-img {
+    width: auto;
+    max-width: min(480px, 100%);
+    height: auto;
+    max-height: calc(100vh - 260px);
+  }
+
+  .design-customize-canvas .preview-placement-actions {
+    flex-shrink: 0;
+    width: 100%;
+    margin-top: 0;
+  }
 }
