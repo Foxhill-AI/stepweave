@@ -4,13 +4,14 @@
 
 In `.env`:
 
-- **`NEXT_PUBLIC_ENABLE_BLOG`** — Set to `true` to enable the blog. When `false`, `/blog` and `/blog/[slug]` return 404 and the Blog link is hidden in the navbar and footer.
+- **`NEXT_PUBLIC_ENABLE_BLOG`** — Blog is **enabled by default** (nav + `/blog` routes). Set to `false` (or `0` / `no` / `off`) to disable: `/blog` and `/blog/[slug]` return 404 and the Blog link is hidden in the navbar and footer.
 - **`NEXT_PUBLIC_ARTICLE_SEARCH_ENABLED`** — Set to `true` to show the search bar on the blog index and use server-side search (by title, summary, content).
 
 Example:
 
 ```env
-NEXT_PUBLIC_ENABLE_BLOG=true
+# Optional — omit or leave unset to keep the blog on
+# NEXT_PUBLIC_ENABLE_BLOG=false
 NEXT_PUBLIC_ARTICLE_SEARCH_ENABLED=true
 ```
 
