@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronRight } from 'lucide-react'
@@ -33,6 +34,8 @@ interface ContentSectionProps {
   gridLayout?: 'auto' | 'single-column' | 'responsive-trending'
   /** Slug for “View all” → `/explore/[slug]` (carousel or paged grid). */
   sectionSlug?: string
+  /** Shown under the title in the paged-grid header (e.g. save count). */
+  subtitle?: string
   /**
    * Home / marketplace: responsive grid, show `HOME_SECTION_GRID_INITIAL_COUNT` items first,
    * then “View more” in steps of `HOME_SECTION_GRID_LOAD_MORE_COUNT` (see `lib/homeSectionGridConfig.ts`).
@@ -42,6 +45,8 @@ interface ContentSectionProps {
   initialVisibleCount?: number
   /** Optional override of each “View more” increment (defaults from config). */
   loadMoreCount?: number
+  /** Extra block below each card (paged grid only), e.g. My Saves actions. */
+  renderBelowCard?: (item: Item) => ReactNode
 }
 
 export default function ContentSection({
@@ -51,9 +56,11 @@ export default function ContentSection({
   showAsGrid = false,
   gridLayout = 'auto',
   sectionSlug,
+  subtitle,
   pagedGrid = false,
   initialVisibleCount,
   loadMoreCount,
+  renderBelowCard,
 }: ContentSectionProps) {
   const resolvedInitial = initialVisibleCount ?? HOME_SECTION_GRID_INITIAL_COUNT
   const resolvedStep = loadMoreCount ?? HOME_SECTION_GRID_LOAD_MORE_COUNT
@@ -79,9 +86,12 @@ export default function ContentSection({
         aria-labelledby={`section-${title.toLowerCase().replace(/\s+/g, '-')}`}
       >
         <div className="content-section-header">
-          <h2 id={`section-${title.toLowerCase().replace(/\s+/g, '-')}`} className="content-section-heading">
-            {title}
-          </h2>
+          <div className="content-section-header-text">
+            <h2 id={`section-${title.toLowerCase().replace(/\s+/g, '-')}`} className="content-section-heading">
+              {title}
+            </h2>
+            {subtitle ? <p className="content-section-subtitle">{subtitle}</p> : null}
+          </div>
           {exploreHref && (
             <Link href={exploreHref} className="content-section-view-all">
               View all
@@ -99,7 +109,10 @@ export default function ContentSection({
           }`}
         >
           {visibleItems.map((item) => (
-            <ItemCard key={item.id} {...item} />
+            <div key={item.id} className="content-section-grid-item">
+              <ItemCard {...item} />
+              {renderBelowCard?.(item)}
+            </div>
           ))}
         </div>
         {(hasMoreInline || exploreHref) && (

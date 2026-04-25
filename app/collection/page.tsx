@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import '../homepage.css'
 import Navbar from '@/components/Navbar'
 import Subnavbar from '@/components/Subnavbar'
 import Footer from '@/components/Footer'
