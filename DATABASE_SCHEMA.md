@@ -85,13 +85,9 @@ interface Advertisement {
 ```
 
 ### 1.5 Categories
-**Used in:** `ExploreDropdown`, `Subnavbar`
+**Used in:** `Subnavbar` (Advanced Search modal — `getCategories()` when the DB returns rows)
 
-Currently hardcoded arrays:
-- **Browse Links:** Marketplace, For You, Trending, Popular, Paid, Makes, Videos, New Uploads, Downloads, Leagues, Hall of Fame
-- **Categories:** 13 categories including "3D Printer Parts & Accessories", "Art & Decor", "Costumes & Cosplay", etc.
-- **Trending Searches:** Array of search terms (e.g., "gridfinity", "fidget spinner")
-- **Trending Tags:** Array of tag strings
+The old `ExploreDropdown` UI was removed; category data for search filters comes from Supabase when available.
 
 ### 1.6 User (Implicit - UI State Only)
 Currently managed as UI state:
@@ -113,7 +109,7 @@ No actual user data structure exists - just UI toggle state.
 3. **Hardcoded arrays:** Author names, titles, categories are hardcoded in the code
 4. **Cart data:** Exists in `data/cartData.json` but is also duplicated/hardcoded in `CartPage.tsx`
 5. **Hero profiles:** Hardcoded arrays in `app/page.tsx`
-6. **Categories/Tags:** Hardcoded arrays in `ExploreDropdown.tsx`
+6. **Categories/Tags:** From Supabase for Advanced Search in `Subnavbar`; marketplace filtering uses category slugs (e.g. `lib/marketplaceConfig.ts`).
 
 ### Summary:
 - ❌ No database connection

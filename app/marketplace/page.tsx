@@ -1,21 +1,27 @@
 'use client'
 
 import { Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Subnavbar from '@/components/Subnavbar'
 import Footer from '@/components/Footer'
 import Marketplace from '@/components/Marketplace'
+import '@/styles/MyCollection.css'
+import '../homepage.css'
 
 function MarketplaceInner() {
-  const searchParams = useSearchParams()
-  const categorySlug = searchParams.get('category')
-
   return (
-    <div className="marketplace-page-wrapper">
+    <div className="collection-page-wrapper">
       <Navbar />
       <Subnavbar />
-      <Marketplace categorySlug={categorySlug} />
+      <main className="collection-main" role="main">
+        <div className="my-collection">
+          <div className="collection-container">
+            <div className="container">
+              <Marketplace />
+            </div>
+          </div>
+        </div>
+      </main>
       <Footer />
     </div>
   )
@@ -23,7 +29,26 @@ function MarketplaceInner() {
 
 export default function MarketplacePage() {
   return (
-    <Suspense fallback={<div className="marketplace-page-wrapper"><Navbar /><Subnavbar /><Footer /></div>}>
+    <Suspense
+      fallback={
+        <div className="collection-page-wrapper">
+          <Navbar />
+          <Subnavbar />
+          <main className="collection-main" role="main">
+            <div className="my-collection">
+              <div className="collection-container">
+                <div className="container">
+                  <p className="homepage-loading" aria-live="polite">
+                    Loading…
+                  </p>
+                </div>
+              </div>
+            </div>
+          </main>
+          <Footer />
+        </div>
+      }
+    >
       <MarketplaceInner />
     </Suspense>
   )

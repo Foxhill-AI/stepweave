@@ -77,6 +77,12 @@
     max-width: 600px;
     margin-left: auto;
   }
+
+  /* When Explore is removed, let the search span the bar instead of hugging the right edge. */
+  .subnavbar-container > .subnavbar-search:only-child {
+    max-width: 100%;
+    margin-left: 0;
+  }
 }
 
 .search-wrapper {

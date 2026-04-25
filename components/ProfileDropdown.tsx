@@ -86,7 +86,7 @@ export default function ProfileDropdown({
         </Link>
         <Link href="/collection" className="profile-dropdown-item" onClick={onClose}>
           <Bookmark size={18} aria-hidden="true" />
-          <span>Collections</span>
+          <span>My Saves</span>
         </Link>
         <Link href="/profile?tab=liked" className="profile-dropdown-item" onClick={onClose}>
           <Heart size={18} aria-hidden="true" />

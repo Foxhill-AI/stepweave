@@ -171,14 +171,11 @@ function NavbarInner(_props?: NavbarProps) {
               Blog
             </Link>
           )}
-          <Link href="/digital-store" className={`navbar-link ${isActive('/digital-store') ? 'navbar-link-active' : ''}`}>
-            Digital Store
-          </Link>
           <Link href="/marketplace" className={`navbar-link ${isActive('/marketplace') ? 'navbar-link-active' : ''}`}>
             Marketplace
           </Link>
           <Link href="/collection" className={`navbar-link ${isActive('/collection') ? 'navbar-link-active' : ''}`}>
-            My Collection
+            My Saves
           </Link>
           
           <Link href="/pricing" className={`navbar-link ${isActive('/pricing') ? 'navbar-link-active' : ''}`}>
@@ -322,13 +319,6 @@ function NavbarInner(_props?: NavbarProps) {
             </Link>
           )}
           <Link
-            href="/digital-store"
-            className={`navbar-mobile-link ${isActive('/digital-store') ? 'navbar-mobile-link-active' : ''}`}
-            onClick={toggleMobileMenu}
-          >
-            Digital Store
-          </Link>
-          <Link
             href="/marketplace"
             className={`navbar-mobile-link ${isActive('/marketplace') ? 'navbar-mobile-link-active' : ''}`}
             onClick={toggleMobileMenu}
@@ -340,7 +330,7 @@ function NavbarInner(_props?: NavbarProps) {
             className={`navbar-mobile-link ${isActive('/collection') ? 'navbar-mobile-link-active' : ''}`}
             onClick={toggleMobileMenu}
           >
-            My Collection
+            My Saves
           </Link>
           <Link
             href="/pricing"
