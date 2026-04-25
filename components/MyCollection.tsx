@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import ItemCard from './ItemCard'
+import ContentSection from './ContentSection'
 import { Bookmark, ShoppingCart } from 'lucide-react'
 import '../styles/MyCollection.css'
 
@@ -30,53 +30,49 @@ export default function MyCollection({ items, onUnsave }: MyCollectionProps) {
   const savedItems = items ?? []
   const isLoading = items === undefined
 
+  const subtitle =
+    !isLoading && savedItems.length > 0
+      ? `${savedItems.length} ${savedItems.length === 1 ? 'item' : 'items'} saved`
+      : undefined
+
   return (
     <div className="my-collection">
       <div className="collection-container">
-        <header className="collection-header">
-          <div className="collection-header-content">
-            <h1 className="collection-title">My Saves</h1>
-            {!isLoading && (
-              <p className="collection-subtitle">
-                {savedItems.length} {savedItems.length === 1 ? 'item' : 'items'} saved
-              </p>
-            )}
-          </div>
-        </header>
-
+        <div className="container">
         {isLoading ? (
           <div className="collection-loading">
             <p>Loading your saves…</p>
           </div>
         ) : savedItems.length > 0 ? (
-          <div className="collection-masonry">
-            {savedItems.map((item) => (
-              <div key={item.id} className="collection-item-wrapper">
-                <ItemCard {...item} />
-                <div className="collection-item-actions">
-                  {onUnsave && (
-                    <button
-                      type="button"
-                      className="collection-item-unsave"
-                      onClick={() => onUnsave(Number(item.id))}
-                      aria-label={`Remove ${item.title} from My Saves`}
-                    >
-                      <Bookmark size={16} />
-                      Unsave
-                    </button>
-                  )}
-                  <Link
-                    href={`/item/${item.id}`}
-                    className="collection-item-add-to-cart"
-                    aria-label={`Add ${item.title} to cart`}
+          <ContentSection
+            title="My Saves"
+            subtitle={subtitle}
+            items={savedItems}
+            pagedGrid
+            renderBelowCard={(item) => (
+              <div className="collection-item-actions">
+                {onUnsave && (
+                  <button
+                    type="button"
+                    className="collection-item-unsave"
+                    onClick={() => onUnsave(Number(item.id))}
+                    aria-label={`Remove ${item.title} from My Saves`}
                   >
-                    <ShoppingCart size={16} />
-                    Add to cart
-                  </Link>
-                </div>
+                    <Bookmark size={16} />
+                    Unsave
+                  </button>
+                )}
+                <Link
+                  href={`/item/${item.id}`}
+                  className="collection-item-add-to-cart"
+                  aria-label={`Add ${item.title} to cart`}
+                >
+                  <ShoppingCart size={16} />
+                  Add to cart
+                </Link>
               </div>
-            ))}
-          </div>
+            )}
+          />
         ) : (
           <div className="collection-empty" role="status">
             <div className="collection-empty-content">
@@ -101,6 +97,7 @@ export default function MyCollection({ items, onUnsave }: MyCollectionProps) {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   )
