@@ -51,7 +51,6 @@ export const SECTION_SLUG_TO_TITLE: Record<string, string> = {
   'trending-now': 'Trending Now',
   'most-popular': 'Most Popular',
   'brand-new': 'Brand New',
-  'digital-designs': 'Digital Designs',
 }
 
 export const VALID_SECTION_SLUGS = Object.keys(SECTION_SLUG_TO_TITLE)

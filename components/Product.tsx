@@ -680,7 +680,7 @@ export default function Product({
                   type="button"
                   className={`product-action-button ${isSaved ? 'saved' : ''}`}
                   onClick={handleSaveClick}
-                  aria-label={isSaved ? 'Remove from collection' : 'Save to collection'}
+                  aria-label={isSaved ? 'Remove from My Saves' : 'Save to My Saves'}
                 >
                   <Bookmark size={20} fill={isSaved ? 'currentColor' : 'none'} />
                   <span>{isSaved ? 'Saved' : 'Save'}</span>

@@ -4,6 +4,7 @@ import {
   buildFeaturedCreatorsFromProductRows,
   getPopularProductsWithEngagement,
 } from '@/lib/supabaseClient'
+import { MARKETPLACE_SHOES_CATEGORY_SLUG } from '@/lib/marketplaceConfig'
 
 /** Always fresh data so new publishes show on the homepage without stale cache. */
 export const dynamic = 'force-dynamic'
@@ -18,15 +19,25 @@ export const revalidate = 0
 export async function GET() {
   try {
     const [products, popular] = await Promise.all([
-      getActiveProducts(),
+      getActiveProducts(MARKETPLACE_SHOES_CATEGORY_SLUG),
       getPopularProductsWithEngagement(12),
     ])
+    const popularProducts = popular.products.filter((product) =>
+      product.product_category?.some(
+        (pc) => pc.category?.slug === MARKETPLACE_SHOES_CATEGORY_SLUG
+      )
+    )
+    const popularEngagement = Object.fromEntries(
+      Object.entries(popular.engagementByProductId).filter(([productId]) =>
+        popularProducts.some((product) => String(product.id) === productId)
+      )
+    )
     const featuredCreators = await buildFeaturedCreatorsFromProductRows(products)
     return NextResponse.json({
       products,
       featuredCreators,
-      popularProducts: popular.products,
-      popularEngagement: popular.engagementByProductId,
+      popularProducts,
+      popularEngagement,
     })
   } catch (e) {
     console.error('[api/home-products]', e)

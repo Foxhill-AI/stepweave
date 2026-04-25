@@ -14,6 +14,7 @@ import {
   VALID_SECTION_SLUGS,
   type HomeItem,
 } from '@/lib/productsForHome'
+import { MARKETPLACE_SHOES_CATEGORY_SLUG } from '@/lib/marketplaceConfig'
 import '../../homepage.css'
 
 export default function ExploreSectionPage() {
@@ -60,7 +61,7 @@ export default function ExploreSectionPage() {
       }
     }
 
-    getActiveProducts()
+    getActiveProducts(MARKETPLACE_SHOES_CATEGORY_SLUG)
       .then((rows) => {
         if (cancelled) return
         let list = rows.map(productToHomeItem)
@@ -107,13 +108,11 @@ export default function ExploreSectionPage() {
               Loading…
             </p>
           ) : (
-            <>
-              <ContentSection
-                title={title ?? sectionSlug}
-                items={items}
-                showAsGrid={true}
-              />
-            </>
+            <ContentSection
+              title={title ?? sectionSlug}
+              items={items}
+              showAsGrid
+            />
           )}
         </div>
       </main>

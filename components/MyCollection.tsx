@@ -22,7 +22,7 @@ interface Item {
 interface MyCollectionProps {
   /** Saved items from Supabase; undefined = loading, [] = empty */
   items?: Item[] | undefined
-  /** Called when user unsaves an item (remove from collection). */
+  /** Called when user unsaves an item (remove from My Saves). */
   onUnsave?: (productId: number) => void
 }
 
@@ -35,7 +35,7 @@ export default function MyCollection({ items, onUnsave }: MyCollectionProps) {
       <div className="collection-container">
         <header className="collection-header">
           <div className="collection-header-content">
-            <h1 className="collection-title">My Collection</h1>
+            <h1 className="collection-title">My Saves</h1>
             {!isLoading && (
               <p className="collection-subtitle">
                 {savedItems.length} {savedItems.length === 1 ? 'item' : 'items'} saved
@@ -46,7 +46,7 @@ export default function MyCollection({ items, onUnsave }: MyCollectionProps) {
 
         {isLoading ? (
           <div className="collection-loading">
-            <p>Loading your collection…</p>
+            <p>Loading your saves…</p>
           </div>
         ) : savedItems.length > 0 ? (
           <div className="collection-masonry">
@@ -59,7 +59,7 @@ export default function MyCollection({ items, onUnsave }: MyCollectionProps) {
                       type="button"
                       className="collection-item-unsave"
                       onClick={() => onUnsave(Number(item.id))}
-                      aria-label={`Remove ${item.title} from collection`}
+                      aria-label={`Remove ${item.title} from My Saves`}
                     >
                       <Bookmark size={16} />
                       Unsave
@@ -94,9 +94,9 @@ export default function MyCollection({ items, onUnsave }: MyCollectionProps) {
                   <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                 </svg>
               </div>
-              <h2 className="collection-empty-title">No items in your collection yet</h2>
+              <h2 className="collection-empty-title">No saved items yet</h2>
               <p className="collection-empty-description">
-                Save products from their pages to see them here
+                Use Save on a product page to add it here
               </p>
             </div>
           </div>

@@ -3,7 +3,6 @@
 import { Suspense, useState, useEffect } from 'react'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { useSearchParams, usePathname, useRouter } from 'next/navigation'
-import ExploreDropdown from './ExploreDropdown'
 import AdvancedSearchModal, { type AdvancedSearchParams } from './AdvancedSearchModal'
 import { getCategories, type CategoryRow } from '@/lib/supabaseClient'
 import '../styles/Subnavbar.css'
@@ -11,7 +10,6 @@ import '../styles/Subnavbar.css'
 function SubnavbarInner() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showFilters, setShowFilters] = useState(false)
-  const [showExploreDropdown, setShowExploreDropdown] = useState(false)
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const searchParams = useSearchParams()
   const pathname = usePathname()
@@ -69,39 +67,20 @@ function SubnavbarInner() {
   return (
     <nav className="subnavbar" role="navigation" aria-label="Secondary navigation">
       <div className="subnavbar-container">
-        <div className="subnavbar-links">
-          <div className="subnavbar-link-wrapper">
-            <button
-              className="subnavbar-link"
-              onClick={(e) => {
-                e.preventDefault()
-                setShowExploreDropdown(!showExploreDropdown)
-              }}
-              aria-expanded={showExploreDropdown}
-              aria-haspopup="true"
-            >
-              Explore
-            </button>
-            {showExploreDropdown && (
-              <ExploreDropdown
-                isOpen={showExploreDropdown}
-                onClose={() => setShowExploreDropdown(false)}
-                categories={categories}
-              />
-            )}
-          </div>
-        </div>
-
-        <form className="subnavbar-search" onSubmit={handleSearch}>
+        <form className="subnavbar-search" onSubmit={handleSearch} autoComplete="off">
           <div className="search-wrapper">
             <Search className="search-icon" size={20} aria-hidden="true" />
             <input
               type="text"
-              placeholder="Search designs, products, creators..."
+              name="sw-site-search"
+              placeholder="Search products, creators..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="search-input"
-              aria-label="Search content"
+              aria-label="Search products and creators"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
             />
             {searchQuery && (
               <button

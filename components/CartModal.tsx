@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Minus, Plus, Trash2, Download, Package, ShoppingBag, ArrowLeft } from 'lucide-react'
+import { Minus, Plus, Trash2, Package, ShoppingBag, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import Modal from './ui/Modal'
 import { useAuth } from '@/components/AuthProvider'
@@ -37,7 +37,6 @@ function mapCartItemRowToItem(row: CartItemRow): CartItem {
     image: designData?.imageUrl ?? '',
     price: Number(row.unit_price_at_added),
     quantity: row.quantity,
-    type: 'print',
     delivery: 'Ships in 3-5 business days',
     variantLabel,
   }
@@ -52,7 +51,6 @@ interface CartItem {
   image: string
   price: number
   quantity: number
-  type: 'digital' | 'print'
   delivery: string
   variantLabel?: string
 }
@@ -89,7 +87,7 @@ export default function CartModal({ isOpen, onClose }: CartModalProps) {
     (sum, item) => sum + item.price * item.quantity,
     0
   )
-  const shipping = cartItems.some((item) => item.type === 'print') ? 5.99 : 0
+  const shipping = cartItems.length > 0 ? 5.99 : 0
   const taxRate = 0.08
   const taxes = subtotal * taxRate
 
@@ -221,9 +219,7 @@ function CartItemCard({
             <span>{item.title.charAt(0).toUpperCase()}</span>
           </div>
         )}
-        <span className={`cart-item-badge ${item.type === 'digital' ? 'badge-digital' : 'badge-print'}`}>
-          {item.type === 'digital' ? 'Digital' : 'Print'}
-        </span>
+        <span className="cart-item-badge badge-print">Physical</span>
       </div>
 
       <div className="cart-item-details">
@@ -233,11 +229,7 @@ function CartItemCard({
         )}
         <p className="cart-item-author">by {item.author}</p>
         <div className="cart-item-delivery">
-          {item.type === 'digital' ? (
-            <Download size={14} aria-hidden="true" />
-          ) : (
-            <Package size={14} aria-hidden="true" />
-          )}
+          <Package size={14} aria-hidden="true" />
           <span>{item.delivery}</span>
         </div>
 
@@ -367,14 +359,14 @@ function EmptyCart({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="empty-cart-actions">
-          <button className="empty-cart-button">
+          <Link
+            href="/marketplace"
+            className="empty-cart-button"
+            onClick={() => onClose()}
+          >
             <Package size={20} aria-hidden="true" />
-            <span>Shop for Prints</span>
-          </button>
-          <button className="empty-cart-button">
-            <Download size={20} aria-hidden="true" />
-            <span>Shop for Model Downloads</span>
-          </button>
+            <span>Shop Shoes</span>
+          </Link>
         </div>
       </div>
 
