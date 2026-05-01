@@ -1091,10 +1091,7 @@
   pointer-events: none;
 }
 
-/* Tiled layers extend past the “one tile” box; don’t clip the pattern preview */
-.placement-canvas-stage.placement-canvas-stage--repeat-overflow {
-  overflow: visible;
-}
+/* Tiled layers are now rendered as stage-filling CSS backgrounds — no overflow needed */
 
 /* Floating toolbar + dropdowns sit below the layer; don’t clip menus (Flip / Opacity / Order / More) */
 .placement-canvas-stage:has(.placement-layer-toolbar-wrap) {
@@ -3109,4 +3106,425 @@
   border-radius: 6px;
   font-size: 0.78rem;
   color: #92400e;
+}
+
+/* ─── Customize step: canvas and mockups fill all available space ────────── */
+
+/* Make each layer in the flex chain fill remaining height */
+.design-customize-canvas .preview-workspace {
+  flex: 1;
+  overflow: hidden;
+}
+
+.design-customize-canvas .preview-shoe-canvas-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.design-customize-canvas .shoe-design-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Let shoe-design-tabs stay at natural height */
+.design-customize-canvas .shoe-design-tabs {
+  flex-shrink: 0;
+}
+
+/* Composite fills remaining space (JS will still set explicit px width from img) */
+.design-customize-canvas .shoe-design-composite {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Template image fills the composite, constrained by the container */
+.design-customize-canvas .shoe-design-template-img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* ─── Canvas header: placement tabs + Preview button ─────────────────────── */
+
+.preview-canvas-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.preview-canvas-header-tabs {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.preview-canvas-header-preview-btn {
+  flex-shrink: 0;
+  padding: var(--spacing-xs) var(--spacing-lg);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.preview-canvas-header-preview-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.preview-canvas-header-preview-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.preview-canvas-header-back-btn {
+  flex-shrink: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.preview-canvas-header-back-btn:hover {
+  opacity: 0.75;
+}
+
+/* ─── Mockups section: full-height image display ─────────────────────────── */
+
+.preview-mockups-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.preview-mockup-fullview {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: var(--spacing-md);
+  background: var(--color-background-light);
+}
+
+.preview-mockup-fullview-img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--border-radius);
+  display: block;
+}
+
+/* ─── BaseModelSelection: full-width centered layout (step 1) ─────────────── */
+
+.base-model-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-xl) var(--spacing-md);
+  background: var(--color-background);
+}
+
+.base-model-container {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.base-model-header {
+  text-align: center;
+}
+
+.base-model-heading {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.base-model-subheading {
+  font-size: 1rem;
+  color: var(--color-text-light);
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .base-model-heading {
+    font-size: 2.25rem;
+  }
+}
+
+/* Override grid for full-width layout */
+.base-model-container .base-model-grid {
+  grid-template-columns: repeat(2, 1fr);
+  padding: 0;
+}
+
+@media (min-width: 560px) {
+  .base-model-container .base-model-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .base-model-container .base-model-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.base-model-card-selected-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* Ensure card has position:relative for badge positioning */
+.base-model-container .base-model-card {
+  position: relative;
+}
+
+.base-model-container .base-model-color-section {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--spacing-lg);
+}
+
+.base-model-container .base-model-actions {
+  padding: 0;
+}
+
+.base-model-continue-btn {
+  width: 100%;
+}
+
+@media (min-width: 560px) {
+  .base-model-continue-btn {
+    width: auto;
+    min-width: 180px;
+  }
+}
+
+/* ─── Design step: full-width chat layout ─────────────────────────────────── */
+
+.design-chat-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-lg) var(--spacing-md);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.design-chat-panel {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+@media (min-width: 1024px) {
+  .design-chat-layout {
+    padding: var(--spacing-xl) var(--spacing-md);
+  }
+}
+
+/* ─── AI prompt: photo choice buttons ────────────────────────────────────── */
+
+.ai-prompt-photo-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.ai-prompt-photo-choice-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-light);
+  margin: 0;
+  line-height: 1.35;
+}
+
+.ai-prompt-photo-choice-btns {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.ai-prompt-photo-choice-btn {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--color-background);
+  border: 1.5px solid var(--color-primary);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.ai-prompt-photo-choice-btn:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+/* ─── AI prompt: change mode link ────────────────────────────────────────── */
+
+.ai-prompt-reference-change {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: opacity 0.15s;
+}
+
+.ai-prompt-reference-change:hover {
+  opacity: 0.75;
+}
+
+/* ─── AI prompt: full-width continue/next button ─────────────────────────── */
+
+.ai-prompt-next-btn {
+  width: 100%;
+  margin-top: var(--spacing-sm);
+}
+
+/* ─── Customize step: full-width canvas layout ───────────────────────────── */
+
+.design-customize-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.design-customize-canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Mobile-only: collapsible adjustment panel */
+.design-customize-tools-mobile {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+@media (min-width: 1024px) {
+  .design-customize-tools-mobile {
+    display: none;
+  }
+}
+
+.design-customize-tools-toggle {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--color-background-light);
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.design-customize-tools-toggle:hover {
+  background: var(--color-hover);
+}
+
+.design-customize-tools-panel {
+  padding: var(--spacing-md) var(--spacing-lg);
+  overflow-y: auto;
+  max-height: 40vh;
+  background: var(--color-background);
+}
+
+/* ─── Step bar: clickable back step + right-side action ──────────────────── */
+
+.design-tool-step--btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  transition: color 0.15s;
+}
+
+.design-tool-step--btn:hover {
+  color: var(--color-primary);
+}
+
+.design-tool-step-bar-end {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.design-tool-step-bar-action {
+  flex: none;
+  padding: var(--spacing-xs) var(--spacing-lg);
+  font-size: 0.875rem;
 }

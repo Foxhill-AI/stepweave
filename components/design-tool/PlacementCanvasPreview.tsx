@@ -186,16 +186,11 @@ export default function PlacementCanvasPreview({
     ]
   }, [layers, effectiveSelectedId])
 
-  const stageRepeatOverflow = useMemo(
-    () => layers.some((l) => isImageLayer(l) && l.repeat === true),
-    [layers]
-  )
-
   const baseStageClass =
     variant === 'overlay'
       ? 'placement-canvas-stage placement-canvas-stage--overlay'
       : 'placement-canvas-stage'
-  const stageClass = `${baseStageClass}${stageRepeatOverflow ? ' placement-canvas-stage--repeat-overflow' : ''}`
+  const stageClass = baseStageClass
   const hintId = 'placement-canvas-desc'
 
   const handleSelectPointerDown = useCallback(
@@ -372,6 +367,31 @@ export default function PlacementCanvasPreview({
           </div>
         )}
 
+        {/* Stage-filling repeat backgrounds — rendered before layer divs, clipped by stage */}
+        {layers.map((layer) => {
+          if (!isImageLayer(layer) || !layer.repeat || !layer.signedUrl) return null
+          const ds = displayScale > 0 ? displayScale : 1
+          const { w: iw, h: ih } = getImageLayerDimensions(layer, areaWidth, areaHeight)
+          const leftPrint = (areaWidth - iw) / 2 + layer.dx
+          const topPrint = (areaHeight - ih) / 2 + layer.dy
+          return (
+            <div
+              key={`repeat-bg-${layer.id}`}
+              aria-hidden
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundImage: `url(${layer.signedUrl})`,
+                backgroundSize: `${iw * ds}px ${ih * ds}px`,
+                backgroundRepeat: 'repeat',
+                backgroundPosition: `${leftPrint * ds}px ${topPrint * ds}px`,
+                pointerEvents: 'none',
+                zIndex: 1,
+              }}
+            />
+          )
+        })}
+
         {orderedLayers.map((layer) => {
           const isSelected = layer.id === effectiveSelectedId
           const ds = displayScale > 0 ? displayScale : 1
@@ -449,7 +469,6 @@ export default function PlacementCanvasPreview({
           const leftPrint = (areaWidth - iw) / 2 + layer.dx
           const topPrint = (areaHeight - ih) / 2 + layer.dy
           const tileRepeat = layer.repeat === true
-          const repeatSpan = 2 * Math.max(areaWidth, areaHeight) * ds
 
           return (
             <div
@@ -468,35 +487,15 @@ export default function PlacementCanvasPreview({
                 height: ih * ds,
                 transform: `rotate(${rot}deg) scaleX(${fh}) scaleY(${fv})`,
                 transformOrigin: 'center center',
-                zIndex: isSelected ? 2 : 1,
+                zIndex: tileRepeat ? 2 : isSelected ? 2 : 1,
                 cursor: disabled ? 'default' : isSelected ? 'move' : 'pointer',
-                overflow: tileRepeat ? 'visible' : undefined,
-                opacity: op,
+                opacity: tileRepeat && !isSelected ? 0 : op,
               }}
               onPointerDown={(e) => handleSelectPointerDown(e, layer)}
               role="img"
               aria-label={`Image layer${tileRepeat ? ' (tiled)' : ''}${isSelected ? ' (selected)' : ''}`}
             >
-              {layer.signedUrl && tileRepeat ? (
-                <div
-                  className="placement-canvas-repeat-tiles"
-                  aria-hidden
-                  style={{
-                    position: 'absolute',
-                    left: '50%',
-                    top: '50%',
-                    width: `${repeatSpan}px`,
-                    height: `${repeatSpan}px`,
-                    marginLeft: `${-repeatSpan / 2}px`,
-                    marginTop: `${-repeatSpan / 2}px`,
-                    backgroundImage: `url(${layer.signedUrl})`,
-                    backgroundSize: `${iw * ds}px ${ih * ds}px`,
-                    backgroundRepeat: 'repeat',
-                    backgroundPosition: 'center center',
-                    pointerEvents: 'none',
-                  }}
-                />
-              ) : layer.signedUrl ? (
+              {!tileRepeat && layer.signedUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={layer.signedUrl}
@@ -505,11 +504,11 @@ export default function PlacementCanvasPreview({
                   draggable={false}
                   style={{ pointerEvents: pointerPassthrough }}
                 />
-              ) : (
+              ) : !tileRepeat ? (
                 <div className="placement-canvas-placeholder" aria-hidden>
                   <span>Loading…</span>
                 </div>
-              )}
+              ) : null}
               <span className="placement-canvas-art-outline" aria-hidden />
             </div>
           )
@@ -523,11 +522,14 @@ export default function PlacementCanvasPreview({
             draggable
             resizable
             rotatable
-            keepRatio={isTextLayer(selectedLayer)}
-            throttleDrag={1}
+            keepRatio={true}
+            throttleDrag={0}
             renderDirections={['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se']}
             rotationPosition="top"
-            onDrag={({ left, top }) => {
+            onDrag={({ target, left, top }) => {
+              // Synchronous DOM update for smooth Moveable handle tracking
+              target.style.left = `${left}px`
+              target.style.top = `${top}px`
               const ds = displayScale > 0 ? displayScale : 1
               const leftPrint = left / ds
               const topPrint = top / ds
@@ -570,7 +572,10 @@ export default function PlacementCanvasPreview({
                 }
               }
             }}
-            onResize={({ width, height }) => {
+            onResize={({ target, width, height }) => {
+              // Synchronous DOM update so handles track immediately
+              target.style.width = `${width}px`
+              target.style.height = `${height}px`
               const ds = displayScale > 0 ? displayScale : 1
               const wPrint = Math.max(24, Math.round(width / ds))
               const hPrint = Math.max(24, Math.round(height / ds))

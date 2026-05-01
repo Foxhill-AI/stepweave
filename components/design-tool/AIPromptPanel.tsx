@@ -96,15 +96,19 @@ function applySignedUrls(turns: GenerationTurn[], urls: Record<string, string>):
 interface AIPromptPanelProps {
   /** Required for generation (draft from /design-tool/[id]). */
   draftId?: number
-  /** Called when user confirms "Apply to shoe"; should persist `pattern_image_url` on the draft. */
+  /** Called when user confirms an AI variant; adds image layers and persists `pattern_image_url`. */
   onPatternApplied?: (storagePath: string, previewUrl?: string) => Promise<void>
+  /** Called when user wants to place their uploaded photo directly on the shoe. */
+  onUseDirectly?: (storagePath: string) => Promise<void>
+  /** Called to advance to the customize step. */
+  onNext?: () => void
 }
 
 const ACCEPT_IMAGES = 'image/jpeg,image/png,image/webp,image/gif'
 const MAX_SIZE_MB = 10
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 
-export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPanelProps) {
+export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly, onNext }: AIPromptPanelProps) {
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -113,6 +117,8 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
   const [applying, setApplying] = useState(false)
   /** Loading persisted rows from design_draft_ai_message */
   const [chatLoading, setChatLoading] = useState(false)
+  /** null = no photo attached; 'direct' = place on shoe; 'ai-reference' = use as prompt inspiration */
+  const [photoMode, setPhotoMode] = useState<null | 'direct' | 'ai-reference'>(null)
 
   // Reference image state
   const [referencePreviewUrl, setReferencePreviewUrl] = useState<string | null>(null)
@@ -192,11 +198,12 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
         blobUrlRef.current = null
       }
 
-      // Show preview immediately
+      // Show preview immediately, reset any previous mode choice
       const previewUrl = URL.createObjectURL(file)
       blobUrlRef.current = previewUrl
       setReferencePreviewUrl(previewUrl)
       setReferenceStoragePath(null)
+      setPhotoMode(null)
       setError(null)
 
       if (!draftId) return // can't upload without a draft
@@ -241,6 +248,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
     }
     setReferencePreviewUrl(null)
     setReferenceStoragePath(null)
+    setPhotoMode(null)
   }, [])
 
   const handleGenerate = useCallback(async () => {
@@ -346,6 +354,27 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
     }
   }, [selectedVariant, onPatternApplied])
 
+  const handleNext = useCallback(async () => {
+    setApplying(true)
+    setError(null)
+    try {
+      if (photoMode === 'direct' && referenceStoragePath && onUseDirectly) {
+        await onUseDirectly(referenceStoragePath)
+      } else if (selectedVariant && onPatternApplied) {
+        await onPatternApplied(selectedVariant.storagePath, selectedVariant.previewUrl)
+      }
+      onNext?.()
+    } catch {
+      setError('Something went wrong. Please try again.')
+    } finally {
+      setApplying(false)
+    }
+  }, [photoMode, referenceStoragePath, selectedVariant, onPatternApplied, onUseDirectly, onNext])
+
+  const canGoNext =
+    (photoMode === 'direct' && Boolean(referenceStoragePath) && !referenceUploading) ||
+    (selectedVariant !== null && photoMode !== 'direct')
+
   const noDraft = !draftId
 
   return (
@@ -424,27 +453,16 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
         <div ref={messagesEndRef} aria-hidden />
       </div>
 
-      {/* ── Selected pattern preview ── */}
-      {selectedVariant && (
+      {/* ── Selected pattern preview (no apply button — Next handles it) ── */}
+      {selectedVariant && photoMode !== 'direct' && (
         <div className="ai-prompt-selected-panel">
-          <p className="ai-prompt-selected-label">Your selected pattern</p>
+          <p className="ai-prompt-selected-label">Selected pattern</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={selectedVariant.previewUrl}
             alt="Selected pattern preview"
             className="ai-prompt-selected-img"
           />
-          <button
-            type="button"
-            className="ai-prompt-btn primary ai-prompt-apply-btn"
-            onClick={() => void handleApplyToShoe()}
-            disabled={applying || !onPatternApplied}
-          >
-            {applying ? 'Applying…' : 'Apply to shoe →'}
-          </button>
-          {!onPatternApplied && (
-            <p className="ai-prompt-selected-hint">Open a draft to apply this pattern.</p>
-          )}
         </div>
       )}
 
@@ -470,7 +488,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={referencePreviewUrl}
-                alt="Reference image"
+                alt="Attached photo"
                 className="ai-prompt-reference-thumb"
               />
               {referenceUploading && (
@@ -480,18 +498,51 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
               )}
             </div>
             <div className="ai-prompt-reference-meta">
-              <span className="ai-prompt-reference-label">
-                {referenceUploading ? 'Uploading reference…' : 'Reference image ready'}
-              </span>
-              <span className="ai-prompt-reference-hint">
-                AI will use this as style inspiration
-              </span>
+              {!photoMode ? (
+                /* Choice buttons — shown after upload finishes */
+                <div className="ai-prompt-photo-choice">
+                  <p className="ai-prompt-photo-choice-label">
+                    {referenceUploading ? 'Uploading…' : 'What would you like to do with this photo?'}
+                  </p>
+                  {!referenceUploading && (
+                    <div className="ai-prompt-photo-choice-btns">
+                      <button
+                        type="button"
+                        className="ai-prompt-photo-choice-btn"
+                        onClick={() => setPhotoMode('direct')}
+                      >
+                        Put it on my shoes
+                      </button>
+                      <button
+                        type="button"
+                        className="ai-prompt-photo-choice-btn"
+                        onClick={() => setPhotoMode('ai-reference')}
+                      >
+                        Use as AI inspiration
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <span className="ai-prompt-reference-label">
+                    {photoMode === 'direct' ? 'Will be placed on your shoes' : 'AI style reference ready'}
+                  </span>
+                  <button
+                    type="button"
+                    className="ai-prompt-reference-change"
+                    onClick={() => setPhotoMode(null)}
+                  >
+                    Change
+                  </button>
+                </>
+              )}
             </div>
             <button
               type="button"
               className="ai-prompt-reference-remove"
               onClick={handleRemoveReference}
-              aria-label="Remove reference image"
+              aria-label="Remove photo"
             >
               <X size={14} aria-hidden />
             </button>
@@ -501,46 +552,52 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
             <button
               type="button"
               className="ai-prompt-attach-btn"
-              aria-label="Attach reference image"
+              aria-label="Attach a photo"
               onClick={() => fileInputRef.current?.click()}
               disabled={!draftId}
-              title={!draftId ? 'Open a draft to use image references' : 'Attach a reference image'}
+              title={!draftId ? 'Open a draft to attach photos' : 'Attach a photo'}
             >
               <Paperclip size={18} aria-hidden />
-              Attach
+              Attach photo
             </button>
-            <span className="ai-prompt-attach-hint">Style reference image</span>
+            <span className="ai-prompt-attach-hint">Place on shoe or use as AI reference</span>
           </div>
         )}
 
-        <label htmlFor="ai-prompt-input" className="sr-only">
-          Design prompt
-        </label>
-        <textarea
-          id="ai-prompt-input"
-          className="ai-prompt-input"
-          placeholder={
-            history.length > 0
-              ? 'Refine, iterate, or try a new direction…'
-              : 'Describe what you want to create…'
-          }
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault()
-              void handleGenerate()
-            }
-          }}
-          rows={2}
-          aria-label="Design prompt"
-          disabled={loading}
-        />
+        {/* Prompt textarea — hidden when user chose direct photo mode */}
+        {photoMode !== 'direct' && (
+          <>
+            <label htmlFor="ai-prompt-input" className="sr-only">
+              Design prompt
+            </label>
+            <textarea
+              id="ai-prompt-input"
+              className="ai-prompt-input"
+              placeholder={
+                history.length > 0
+                  ? 'Refine, iterate, or try a new direction…'
+                  : 'Describe what you want to create…'
+              }
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault()
+                  void handleGenerate()
+                }
+              }}
+              rows={2}
+              aria-label="Design prompt"
+              disabled={loading}
+            />
+          </>
+        )}
         {error && (
           <p className="ai-prompt-error" role="alert">
             {error}
           </p>
         )}
+        {photoMode !== 'direct' && (
         <div className="ai-prompt-actions">
           <button
             type="button"
@@ -574,8 +631,21 @@ export default function AIPromptPanel({ draftId, onPatternApplied }: AIPromptPan
           </button>
           )}
         </div>
-        {history.length > 0 && (
+        )}
+        {history.length > 0 && photoMode !== 'direct' && (
           <p className="ai-prompt-shortcut-hint">Tip: ⌘ Enter to generate</p>
+        )}
+
+        {/* Continue button — appears when ready to advance to customize step */}
+        {canGoNext && onNext && (
+          <button
+            type="button"
+            className="ai-prompt-btn primary ai-prompt-next-btn"
+            onClick={() => void handleNext()}
+            disabled={applying}
+          >
+            {applying ? 'Saving…' : 'Continue to customize →'}
+          </button>
         )}
       </div>
     </div>
