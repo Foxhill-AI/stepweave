@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  async redirects() {
+    return [{ source: '/guidlines', destination: '/guidelines', permanent: true }]
+  },
   experimental: {
     // @napi-rs/canvas uses platform-specific native binaries (.node).
     // Without this, Next.js tries to bundle it and picks the darwin binary;
