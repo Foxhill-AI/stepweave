@@ -47,7 +47,7 @@ export default function ItemCard({
   useEffect(() => {
     setStaticImgFailed(false)
   }, [id, image])
-  const useProductImage = productId != null && designData?.source === 'design_draft'
+  const useProductImage = productId != null
   const renderStars = (rating: number) => {
     const fullStars = Math.floor(rating)
     const hasHalfStar = rating % 1 >= 0.5
@@ -78,8 +78,8 @@ export default function ItemCard({
           <div className="item-card-image-placeholder">
             {useProductImage ? (
               <ProductImage
-                productId={productId}
-                designData={designData!}
+                productId={productId!}
+                designData={designData ?? null}
                 alt={title}
                 className="item-card-image"
                 loading="lazy"

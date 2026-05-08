@@ -5,7 +5,6 @@ import {
   compareMockupPlacementsForGallery,
   pickPrimaryMockupUrl,
 } from '@/lib/printful/pickPrimaryMockupForCard'
-import { areProductMockupsFresh } from '@/lib/printful/productMockupsFresh'
 
 type MockupPlacement = {
   placement: string
@@ -79,13 +78,7 @@ export async function GET(
     .eq('final_product_id', productId)
     .maybeSingle()
 
-  const productUpdatedAt = product.updated_at as string | undefined
-  const mockupsGeneratedAt = draft?.mockups_generated_at as string | null | undefined
-  const rawPlacements = (
-    draft && areProductMockupsFresh(productUpdatedAt, mockupsGeneratedAt ?? null)
-      ? draft.mockup_urls ?? []
-      : []
-  ) as MockupPlacement[]
+  const rawPlacements = (draft?.mockup_urls ?? []) as MockupPlacement[]
   const productName = (product as { name: string }).name
 
   const cardPrimaryUrl = pickPrimaryMockupUrl(rawPlacements)
