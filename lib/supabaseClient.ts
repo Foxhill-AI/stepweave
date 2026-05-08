@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createBrowserClient } from '@supabase/ssr'
 
 // Get Supabase URL and Anon Key from environment variables
@@ -446,7 +446,7 @@ export const supabase =
 
   /** All `product_id` values for like/save rows, paginated (full history for ranking). */
   async function fetchAllLikeSaveProductIds(
-    admin: ReturnType<typeof createClient>
+    admin: SupabaseClient<any, 'public', 'public'>
   ): Promise<number[]> {
     const out: number[] = []
     let from = 0
