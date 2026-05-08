@@ -18,6 +18,7 @@ export type PrintfulPrintfilesResult = {
     placements: Record<string, number>
   }>
   available_placements?: Record<string, string>
+  option_groups?: string[]
 }
 
 export type FileEntry = {
@@ -59,6 +60,8 @@ export type MockupResult = {
   placement: string
   mockup_url?: string
   extra_mockups?: MockupExtra[]
+  /** Populated by Printful when multiple option_groups are requested. */
+  option_group?: string
 }
 
 export async function createTaskAndPoll(
@@ -163,6 +166,7 @@ export function mergeMockups(
 ) {
   for (const m of mockups) {
     const u = (m.mockup_url ?? '').trim()
-    if (u) urlByPlacement.set(m.placement, u)
+    // Only store the first (default) URL per placement; extras collected separately
+    if (u && !urlByPlacement.has(m.placement)) urlByPlacement.set(m.placement, u)
   }
 }

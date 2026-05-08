@@ -374,6 +374,12 @@ export default function PlacementCanvasPreview({
           const { w: iw, h: ih } = getImageLayerDimensions(layer, areaWidth, areaHeight)
           const leftPrint = (areaWidth - iw) / 2 + layer.dx
           const topPrint = (areaHeight - ih) / 2 + layer.dy
+          const baseOp =
+            typeof (layer as { opacity?: number }).opacity === 'number'
+              ? Math.min(1, Math.max(0, (layer as { opacity?: number }).opacity!))
+              : 1
+          const isSelected = layer.id === effectiveSelectedId
+          const op = isSelected ? baseOp : baseOp * 0.85
           return (
             <div
               key={`repeat-bg-${layer.id}`}
@@ -385,6 +391,7 @@ export default function PlacementCanvasPreview({
                 backgroundSize: `${iw * ds}px ${ih * ds}px`,
                 backgroundRepeat: 'repeat',
                 backgroundPosition: `${leftPrint * ds}px ${topPrint * ds}px`,
+                opacity: op,
                 pointerEvents: 'none',
                 zIndex: 1,
               }}

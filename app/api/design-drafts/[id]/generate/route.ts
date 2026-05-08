@@ -122,36 +122,33 @@ export async function POST(
     }
   }
 
-  let interpreted: {
-    prompt_for_image_model: string
-    negative_prompt: string
-    style_summary: string
-  }
+  let interpreted: Awaited<ReturnType<typeof interpretDesignPrompt>>
   try {
     interpreted = await interpretDesignPrompt(prompt)
   } catch (e) {
     console.error('[generate] interpretDesignPrompt', e)
     interpreted = {
-      prompt_for_image_model: prompt.slice(0, 2000),
-      negative_prompt: 'blurry, low quality, watermark, distorted, ugly',
+      prompts: [prompt.slice(0, 2000)],
+      negative_prompt: 'blurry, low quality, watermark, distorted, ugly, shoes, sneakers, 3D render, photorealistic scene',
       style_summary: 'User-defined design',
     }
   }
+
+  // Use up to variationCount prompts (interpreter always returns 3; user may request fewer)
+  const promptsToUse = interpreted.prompts.slice(0, variationCount)
 
   let batch: Awaited<ReturnType<typeof generateTextToImageBatch>>
   try {
     if (isImageToImage && referenceSignedUrl) {
       batch = await generateImageToImageBatch({
         imageUrl: referenceSignedUrl,
-        prompt: interpreted.prompt_for_image_model,
+        prompts: promptsToUse,
         negativePrompt: interpreted.negative_prompt,
-        count: variationCount,
       })
     } else {
       batch = await generateTextToImageBatch({
-        prompt: interpreted.prompt_for_image_model,
+        prompts: promptsToUse,
         negativePrompt: interpreted.negative_prompt,
-        count: variationCount,
       })
     }
   } catch (e) {

@@ -114,9 +114,7 @@ export default function PreviewWorkspace({
   hasGeneratedMockups = false,
 }: PreviewWorkspaceProps) {
   const tabs = placementMockups?.length ? placementMockups : null
-  // Internal tab active placement (for mockup tabs), separate from shoe canvas placement
-  const [activePlacement, setActivePlacement] = useState<string>('')
-  // Index into the current placement's [main, ...extra_mockups] gallery (0 = main)
+  // Index into the unified photo gallery (0 = first photo)
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [loadingPhase, setLoadingPhase] = useState(0)
@@ -159,16 +157,8 @@ export default function PreviewWorkspace({
   }
 
   useEffect(() => {
-    if (!tabs?.length) {
-      setActivePlacement('')
-      return
-    }
-    const keys = tabs.map((t) => t.placement)
-    if (!keys.includes(activePlacement)) {
-      setActivePlacement(keys[0])
-    }
     setActiveGalleryIndex(0)
-  }, [tabs, activePlacement])
+  }, [tabs])
 
   // Track layer changes to know if preview is stale
   useEffect(() => {
@@ -301,17 +291,16 @@ export default function PreviewWorkspace({
     setIsDragging(false)
   }
 
-  const activeTab = tabs?.find((t) => t.placement === activePlacement)
-  const activeLabel = activeTab?.label ?? 'Product'
-
-  const galleryItems: Array<{ title: string; mockup_url: string }> = activeTab?.mockup_url
-    ? [
-        { title: activeLabel, mockup_url: activeTab.mockup_url },
-        ...(activeTab.extra_mockups ?? []),
-      ]
+  // Flatten ALL placements + their extra angles into one unified gallery
+  const allPhotos: Array<{ title: string; mockup_url: string }> = tabs
+    ? tabs.flatMap((t) =>
+        t.mockup_url
+          ? [{ title: t.label, mockup_url: t.mockup_url }, ...(t.extra_mockups ?? [])]
+          : []
+      )
     : []
-  const clampedIndex = Math.min(activeGalleryIndex, Math.max(0, galleryItems.length - 1))
-  const selectedMockupUrl = galleryItems[clampedIndex]?.mockup_url ?? ''
+  const clampedIndex = Math.min(activeGalleryIndex, Math.max(0, allPhotos.length - 1))
+  const selectedMockupUrl = allPhotos[clampedIndex]?.mockup_url ?? ''
   const referenceUrl = selectedMockupUrl || catalogFallbackUrl || ''
 
   const hasImage =
@@ -373,7 +362,7 @@ export default function PreviewWorkspace({
       )}
 
       {/* Has image: compact action bar */}
-      {hasImage && (
+      {hasImage && viewMode === 'canvas' && (
         <div className="preview-image-bar">
           {(() => {
             const imgLayer = activeLayers.find((l): l is (typeof l & { signedUrl?: string | null }) => 'signedUrl' in l)
@@ -417,7 +406,7 @@ export default function PreviewWorkspace({
       )}
 
       {/* Text layer add panel */}
-      {showTextPanel && onAddTextLayer && (
+      {showTextPanel && onAddTextLayer && viewMode === 'canvas' && (
         <div className="preview-text-panel">
           <input
             type="text"
@@ -562,9 +551,9 @@ export default function PreviewWorkspace({
       {/* MOCKUPS VIEW: full-height mockup image */}
       {showMockupsView && (referenceUrl || (tabs && tabs.length > 0)) && (
         <div className="preview-mockups-section">
-          {/* Mockups header: back button + placement tabs */}
-          <div className="preview-canvas-header">
-            {useShoeCanvas && (
+          {/* Mockups header: back button only */}
+          {useShoeCanvas && (
+            <div className="preview-canvas-header">
               <button
                 type="button"
                 className="preview-canvas-header-back-btn"
@@ -572,34 +561,8 @@ export default function PreviewWorkspace({
               >
                 ← Edit template
               </button>
-            )}
-            {tabs && tabs.length > 0 && (
-              <div className="preview-canvas-header-tabs" role="tablist" aria-label="Print placements">
-                {tabs.map((t) => (
-                  <button
-                    key={t.placement}
-                    type="button"
-                    role="tab"
-                    aria-selected={activePlacement === t.placement}
-                    className={`shoe-design-tab${activePlacement === t.placement ? ' shoe-design-tab--active' : ''}`}
-                    onClick={() => setActivePlacement(t.placement)}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {onRefreshPrintfulPreview && (
-              <button
-                type="button"
-                className="preview-canvas-header-preview-btn"
-                onClick={() => void handleRefreshPreview()}
-                disabled={previewLoading || !hasPatternImage}
-              >
-                {previewLoading ? 'Generating…' : 'Refresh'}
-              </button>
-            )}
-          </div>
+            </div>
+          )}
           {catalogOnlyReference && (
             <p className="preview-reference-catalog-note" role="status" style={{ padding: '0 1rem' }}>
               Using catalog photos — Printful mockups are not available for this product.
@@ -610,14 +573,14 @@ export default function PreviewWorkspace({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={referenceUrl}
-                alt={selectedModelName ? `${selectedModelName} – ${activeLabel}` : activeLabel}
+                alt={allPhotos[clampedIndex]?.title || selectedModelName || 'Mockup'}
                 className="preview-mockup-fullview-img"
               />
             </div>
           )}
-          {galleryItems.length > 1 && (
+          {allPhotos.length > 1 && (
             <div className="preview-mockup-gallery" role="list" aria-label="All mockup views">
-              {galleryItems.map((item, i) => (
+              {allPhotos.map((item, i) => (
                 <button
                   key={i}
                   type="button"
