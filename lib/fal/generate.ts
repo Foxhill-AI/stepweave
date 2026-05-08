@@ -31,58 +31,65 @@ function extractImages(data: unknown): GeneratedImageRef[] {
 
 /**
  * Text-to-image via fal-ai/fast-sdxl (server-only).
+ * Each prompt in `prompts` is generated as a separate call so every image
+ * gets its own random seed, producing genuinely distinct results.
  */
 export async function generateTextToImageBatch(params: {
-  prompt: string
+  prompts: string[]
   negativePrompt?: string
-  count: number
 }): Promise<GeneratedImageRef[]> {
   configureFal()
-  const count = Math.min(Math.max(Math.floor(params.count), 1), 4)
-  const result = await fal.subscribe('fal-ai/fast-sdxl', {
-    input: {
-      prompt: params.prompt,
-      negative_prompt: params.negativePrompt ?? '',
-      num_images: count,
-      image_size: 'square_hd',
-      num_inference_steps: 25,
-      guidance_scale: 7.5,
-      enable_safety_checker: true,
-      format: 'png',
-    },
-    logs: false,
-  })
-  return extractImages(result.data)
+  const results = await Promise.all(
+    params.prompts.map(async (prompt, i) => {
+      const result = await fal.subscribe('fal-ai/fast-sdxl', {
+        input: {
+          prompt,
+          negative_prompt: params.negativePrompt ?? '',
+          num_images: 1,
+          image_size: 'square_hd',
+          num_inference_steps: 28,
+          guidance_scale: 7.5,
+          enable_safety_checker: true,
+          format: 'png',
+        },
+        logs: false,
+      })
+      return extractImages(result.data).map((img) => ({ ...img, index: i }))
+    })
+  )
+  return results.flat()
 }
 
 /**
  * Image-to-image via fal-ai/fast-sdxl/image-to-image (server-only).
- * @param imageUrl Publicly accessible URL of the reference image.
- * @param strength 0–1: how much to deviate from the reference (0.75 = balanced).
+ * Each prompt gets its own call for maximum variation.
  */
 export async function generateImageToImageBatch(params: {
   imageUrl: string
-  prompt: string
+  prompts: string[]
   negativePrompt?: string
   strength?: number
-  count: number
 }): Promise<GeneratedImageRef[]> {
   configureFal()
-  const count = Math.min(Math.max(Math.floor(params.count), 1), 4)
-  const result = await fal.subscribe('fal-ai/fast-sdxl/image-to-image', {
-    input: {
-      prompt: params.prompt,
-      image_url: params.imageUrl,
-      strength: params.strength ?? 0.75,
-      negative_prompt: params.negativePrompt ?? '',
-      num_images: count,
-      image_size: 'square_hd',
-      num_inference_steps: 25,
-      guidance_scale: 7.5,
-      enable_safety_checker: true,
-      format: 'png',
-    },
-    logs: false,
-  })
-  return extractImages(result.data)
+  const results = await Promise.all(
+    params.prompts.map(async (prompt, i) => {
+      const result = await fal.subscribe('fal-ai/fast-sdxl/image-to-image', {
+        input: {
+          prompt,
+          image_url: params.imageUrl,
+          strength: params.strength ?? 0.75,
+          negative_prompt: params.negativePrompt ?? '',
+          num_images: 1,
+          image_size: 'square_hd',
+          num_inference_steps: 28,
+          guidance_scale: 7.5,
+          enable_safety_checker: true,
+          format: 'png',
+        },
+        logs: false,
+      })
+      return extractImages(result.data).map((img) => ({ ...img, index: i }))
+    })
+  )
+  return results.flat()
 }

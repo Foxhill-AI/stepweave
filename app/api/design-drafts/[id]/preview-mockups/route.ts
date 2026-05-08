@@ -400,10 +400,18 @@ export async function POST(
   if (batch.ok) {
     mergeMockups(urlByPlacement, batch.mockups)
     for (const m of batch.mockups) {
-      const extras: PreviewMockupExtra[] = (m.extra_mockups ?? [])
-        .filter((e) => e.mockup_url?.trim())
-        .map((e) => ({ title: e.title ?? '', mockup_url: e.mockup_url! }))
-      if (extras.length) extrasByPlacement.set(m.placement, extras)
+      const url = (m.mockup_url ?? '').trim()
+      const existing = extrasByPlacement.get(m.placement) ?? []
+      // Option-group variant for the same placement → treat as extra
+      if (url && m.option_group && urlByPlacement.get(m.placement) !== url) {
+        existing.push({ title: m.option_group, mockup_url: url })
+      }
+      for (const e of m.extra_mockups ?? []) {
+        if (e.mockup_url?.trim()) {
+          existing.push({ title: e.title ?? '', mockup_url: e.mockup_url })
+        }
+      }
+      if (existing.length) extrasByPlacement.set(m.placement, existing)
     }
   } else {
     mockupErrorReason = batch.reason
