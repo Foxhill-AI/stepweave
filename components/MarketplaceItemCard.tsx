@@ -36,7 +36,7 @@ export default function MarketplaceItemCard({
   unitPrice,
   onAddToCart,
 }: MarketplaceItemCardProps) {
-  const useProductImage = productId != null && designData?.source === 'design_draft'
+  const useProductImage = productId != null
   return (
     <article className="marketplace-item-card" aria-label={`Product: ${title}`}>
       <Link href={`/item/${id}`} className="marketplace-item-card-link">
@@ -44,8 +44,8 @@ export default function MarketplaceItemCard({
           <div className="marketplace-item-image-placeholder">
             {useProductImage ? (
               <ProductImage
-                productId={productId}
-                designData={designData}
+                productId={productId!}
+                designData={designData ?? null}
                 alt={title}
                 className="marketplace-item-image"
                 loading="lazy"

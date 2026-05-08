@@ -252,6 +252,8 @@ export const supabase =
     design_data: Record<string, unknown> | null
     user_account_id: number
     created_at: string
+    /** Present when column exists; use with created_at for “newest listing” ordering. */
+    updated_at?: string | null
     product_category: Array<{
       category_id: number
       category: { id: number; name: string; slug: string } | null
@@ -313,6 +315,7 @@ export const supabase =
     design_data,
     user_account_id,
     created_at,
+    updated_at,
     product_category (
       category_id,
       category ( id, name, slug )
@@ -330,6 +333,7 @@ export const supabase =
     design_data,
     user_account_id,
     created_at,
+    updated_at,
     product_category (
       category_id,
       category ( id, name, slug )
@@ -438,10 +442,40 @@ export const supabase =
     engagementByProductId: Record<number, number>
   }
 
+  const PRODUCT_INTERACTION_PAGE_SIZE = 1000
+
+  /** All `product_id` values for like/save rows, paginated (full history for ranking). */
+  async function fetchAllLikeSaveProductIds(
+    admin: ReturnType<typeof createClient>
+  ): Promise<number[]> {
+    const out: number[] = []
+    let from = 0
+    for (;;) {
+      const { data, error } = await admin
+        .from('product_interaction')
+        .select('product_id')
+        .in('interaction_type', ['like', 'save'])
+        .order('id', { ascending: true })
+        .range(from, from + PRODUCT_INTERACTION_PAGE_SIZE - 1)
+      if (error) {
+        console.error('fetchAllLikeSaveProductIds:', error)
+        break
+      }
+      const rows = data ?? []
+      for (const row of rows) {
+        const pid = Number((row as { product_id: number }).product_id)
+        if (Number.isFinite(pid)) out.push(pid)
+      }
+      if (rows.length < PRODUCT_INTERACTION_PAGE_SIZE) break
+      from += PRODUCT_INTERACTION_PAGE_SIZE
+    }
+    return out
+  }
+
   /**
-   * Active products ranked by total engagement: likes + saves (product_interaction).
-   * Uses service role to aggregate counts across all users. Falls back to newest products
-   * when SERVICE_ROLE_KEY is missing or no interactions exist.
+   * Active products ranked by **all-time** engagement: count of `like` + `save` rows in
+   * `product_interaction` (each row counts once). Descending; ties by `created_at` on product.
+   * Uses service role to read every interaction page. Falls back when SERVICE_ROLE_KEY is missing.
    */
   export async function getPopularProductsWithEngagement(limit = 12): Promise<PopularProductsResult> {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -454,21 +488,10 @@ export const supabase =
     }
 
     const admin = createClient(url, serviceKey)
-    const { data: interactions, error } = await admin
-      .from('product_interaction')
-      .select('product_id')
-      .in('interaction_type', ['like', 'save'])
-
-    if (error) {
-      console.error('getPopularProductsWithEngagement interactions:', error)
-      const fallback = await getActiveProducts()
-      return { products: fallback.slice(0, limit), engagementByProductId: {} }
-    }
+    const pids = await fetchAllLikeSaveProductIds(admin)
 
     const counts = new Map<number, number>()
-    for (const row of interactions ?? []) {
-      const pid = Number((row as { product_id: number }).product_id)
-      if (!Number.isFinite(pid)) continue
+    for (const pid of pids) {
       counts.set(pid, (counts.get(pid) ?? 0) + 1)
     }
 
@@ -508,6 +531,134 @@ export const supabase =
 
     return { products: ordered, engagementByProductId }
   }
+
+  /**
+   * Active products ranked by **all-time** `like` + `save` row counts.
+   * Pass `categorySlug` to limit to one category; omit / `undefined` / `'all'` = all active products.
+   * Descending; ties by product `created_at` descending.
+   */
+  export async function getPopularProductsWithEngagementForCategory(
+    categorySlug?: string | null,
+    limit = 12
+  ): Promise<PopularProductsResult> {
+    const inCategory = await getActiveProducts(
+      categorySlug === null || categorySlug === undefined ? undefined : categorySlug
+    )
+    if (inCategory.length === 0) {
+      return { products: [], engagementByProductId: {} }
+    }
+
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    if (!url || !serviceKey) {
+      return { products: inCategory.slice(0, limit), engagementByProductId: {} }
+    }
+
+    const categoryIds = new Set(
+      inCategory.map((p) => Number(p.id)).filter((id) => Number.isFinite(id))
+    )
+
+    const admin = createClient(url, serviceKey)
+    const pids = await fetchAllLikeSaveProductIds(admin)
+
+    const counts = new Map<number, number>()
+    for (const pid of pids) {
+      if (!categoryIds.has(pid)) continue
+      counts.set(pid, (counts.get(pid) ?? 0) + 1)
+    }
+
+    const createdMs = (p: ProductListingRow) =>
+      p.created_at ? new Date(p.created_at).getTime() : 0
+
+    const sorted = [...inCategory].sort((a, b) => {
+      const ca = counts.get(Number(a.id)) ?? 0
+      const cb = counts.get(Number(b.id)) ?? 0
+      if (cb !== ca) return cb - ca
+      return createdMs(b) - createdMs(a)
+    })
+
+    const ordered = sorted.slice(0, limit)
+    const engagementByProductId: Record<number, number> = {}
+    for (const p of ordered) {
+      const id = p.id as number
+      engagementByProductId[id] = counts.get(id) ?? 0
+    }
+
+    return { products: ordered, engagementByProductId }
+  }
+
+  export type CategoryProductsByViewsResult = {
+    products: ProductListingRow[]
+    /** Total `product_interaction` rows with type `view` per product id. */
+    viewsByProductId: Record<number, number>
+  }
+
+  /**
+   * All **active** products ordered by view count (desc), then `created_at` (desc).
+   * Optional `categorySlug` narrows to one category; omit for **every** active product (Trending / marketplace).
+   * Uses service role to aggregate `product_interaction` view rows; without it, falls back to
+   * `getActiveProducts` order (newest first).
+   */
+  export async function getActiveProductsSortedByViews(
+    categorySlug?: string | null
+  ): Promise<CategoryProductsByViewsResult> {
+    const inCategory = await getActiveProducts(
+      categorySlug === null || categorySlug === undefined ? undefined : categorySlug
+    )
+    if (inCategory.length === 0) {
+      return { products: [], viewsByProductId: {} }
+    }
+
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    if (!url || !serviceKey) {
+      const viewsByProductId: Record<number, number> = {}
+      return { products: inCategory, viewsByProductId }
+    }
+
+    const categoryIds = new Set(
+      inCategory.map((p) => Number(p.id)).filter((id) => Number.isFinite(id))
+    )
+
+    const admin = createClient(url, serviceKey)
+    const { data: interactions, error } = await admin
+      .from('product_interaction')
+      .select('product_id')
+      .eq('interaction_type', 'view')
+
+    if (error) {
+      console.error('getActiveProductsSortedByViews:', error)
+      return { products: inCategory, viewsByProductId: {} }
+    }
+
+    const counts = new Map<number, number>()
+    for (const row of interactions ?? []) {
+      const pid = Number((row as { product_id: number }).product_id)
+      if (!Number.isFinite(pid) || !categoryIds.has(pid)) continue
+      counts.set(pid, (counts.get(pid) ?? 0) + 1)
+    }
+
+    const viewsByProductId: Record<number, number> = {}
+    for (const p of inCategory) {
+      const id = p.id as number
+      viewsByProductId[id] = counts.get(id) ?? 0
+    }
+
+    const createdMs = (p: ProductListingRow) =>
+      p.created_at ? new Date(p.created_at).getTime() : 0
+
+    const sorted = [...inCategory].sort((a, b) => {
+      const va = counts.get(Number(a.id)) ?? 0
+      const vb = counts.get(Number(b.id)) ?? 0
+      if (vb !== va) return vb - va
+      return createdMs(b) - createdMs(a)
+    })
+
+    return { products: sorted, viewsByProductId }
+  }
+
+  /** @deprecated Renamed to {@link getActiveProductsSortedByViews} */
+  export const getActiveProductsForCategorySortedByViews = getActiveProductsSortedByViews
 
   /** Search active products by name and optional filters. For homepage browse / search. */
   export type SearchProductsFilters = {
@@ -712,7 +863,7 @@ export const supabase =
       console.error('updateProduct:', error)
       return false
     }
-    // Mockup freshness vs product.updated_at is enforced in /api/products/*/mockup-image (see areProductMockupsFresh).
+    // Storefront mockup URLs: /api/products/*/mockup-image uses draft.mockup_urls for thumbnails (see routes).
     return true
   }
 

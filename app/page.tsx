@@ -7,13 +7,20 @@ import Footer from '@/components/Footer'
 import HeroSection, { type HeroSectionData } from '@/components/HeroSection'
 import ContentSection from '@/components/ContentSection'
 import AdBanner from '@/components/AdBanner'
-import { productToHomeItem, type HomeItem } from '@/lib/productsForHome'
+import {
+  homeItemFromProductRow,
+  homeItemsFromProductRows,
+  productToHomeItem,
+  type HomeItem,
+} from '@/lib/productsForHome'
 import './homepage.css'
 
 
 
 export default function HomePage() {
   const [products, setProducts] = useState<HomeItem[]>([])
+  /** From /api/home-products brandNewProducts — server-sorted newest `created_at` first. */
+  const [brandNewItems, setBrandNewItems] = useState<HomeItem[]>([])
   /** Ranked by likes + saves (all users); from /api/home-products popularProducts. */
   const [popularItems, setPopularItems] = useState<HomeItem[]>([])
   const [heroSections, setHeroSections] = useState<HeroSectionData[]>([])
@@ -31,8 +38,12 @@ export default function HomePage() {
         if (cancelled) return
         const productRows = data?.products ?? []
         const featuredCreators = data?.featuredCreators ?? []
-        const homeItems = productRows.map(productToHomeItem)
+        const viewsById = (data?.viewsByProductId ?? {}) as Record<string, number>
+        const homeItems = homeItemsFromProductRows(productRows, viewsById)
         setProducts(homeItems)
+        setBrandNewItems(
+          homeItemsFromProductRows(data?.brandNewProducts ?? [], viewsById)
+        )
 
         type ProductRow = Parameters<typeof productToHomeItem>[0]
         const popRows = (data?.popularProducts ?? []) as ProductRow[]
@@ -58,7 +69,10 @@ export default function HomePage() {
                 userAccountId: creator.profile.userAccountId,
               },
               items: creator.products.map((row: unknown, i: number) => {
-                const item = productToHomeItem(row as Parameters<typeof productToHomeItem>[0])
+                const item = homeItemFromProductRow(
+                  row as Parameters<typeof productToHomeItem>[0],
+                  viewsById
+                )
                 return {
                   ...item,
                   image: item.image ?? '',
@@ -87,7 +101,7 @@ export default function HomePage() {
                 userAccountId: typeof uid === 'number' ? uid : undefined,
               },
               items: rows.slice(0, 3).map((row, i) => {
-                const item = productToHomeItem(row)
+                const item = homeItemFromProductRow(row, viewsById)
                 return {
                   ...item,
                   image: item.image ?? '',
@@ -104,6 +118,7 @@ export default function HomePage() {
       .catch(() => {
         if (!cancelled) {
           setProducts([])
+          setBrandNewItems([])
           setPopularItems([])
         }
       })
@@ -118,9 +133,7 @@ export default function HomePage() {
     }
   }, [])
 
-  const trendingItems = products.slice(0, 12)
-  /** Only listings with the "New" badge (created within the last 7 days). */
-  const newItems = products.filter((p) => p.badge === 'New').slice(0, 12)
+  const trendingItems = products
 
   return (
     <div className="homepage">
@@ -152,6 +165,8 @@ export default function HomePage() {
               items={trendingItems}
               pagedGrid
               sectionSlug="trending-now"
+              initialVisibleCount={3}
+              loadMoreCount={6}
             />
           )}
           {!loading && popularItems.length > 0 && (
@@ -160,14 +175,18 @@ export default function HomePage() {
               items={popularItems}
               pagedGrid
               sectionSlug="most-popular"
+              initialVisibleCount={3}
+              loadMoreCount={6}
             />
           )}
-          {!loading && newItems.length > 0 && (
+          {!loading && brandNewItems.length > 0 && (
             <ContentSection
               title="Brand New"
-              items={newItems}
+              items={brandNewItems}
               pagedGrid
               sectionSlug="brand-new"
+              initialVisibleCount={3}
+              loadMoreCount={6}
             />
           )}
         </div>

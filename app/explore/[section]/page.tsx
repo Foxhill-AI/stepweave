@@ -9,12 +9,13 @@ import Footer from '@/components/Footer'
 import ContentSection from '@/components/ContentSection'
 import { getActiveProducts } from '@/lib/supabaseClient'
 import {
+  homeItemsFromProductRows,
   productToHomeItem,
   SECTION_SLUG_TO_TITLE,
+  sortProductRowsNewestFirst,
   VALID_SECTION_SLUGS,
   type HomeItem,
 } from '@/lib/productsForHome'
-import { MARKETPLACE_SHOES_CATEGORY_SLUG } from '@/lib/marketplaceConfig'
 import '../../homepage.css'
 
 export default function ExploreSectionPage() {
@@ -61,14 +62,38 @@ export default function ExploreSectionPage() {
       }
     }
 
-    getActiveProducts(MARKETPLACE_SHOES_CATEGORY_SLUG)
+    if (sectionSlug === 'trending-now') {
+      fetch('/api/trending-products', { cache: 'no-store' })
+        .then((res) => res.json())
+        .then(
+          (data: {
+            products?: unknown[]
+            viewsByProductId?: Record<string, number>
+          }) => {
+            if (cancelled) return
+            const rows = data?.products ?? []
+            const viewsById = data?.viewsByProductId ?? {}
+            type Row = Parameters<typeof productToHomeItem>[0]
+            setItems(homeItemsFromProductRows(rows as Row[], viewsById))
+          }
+        )
+        .catch(() => {
+          if (!cancelled) setItems([])
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+      return () => {
+        cancelled = true
+      }
+    }
+
+    getActiveProducts()
       .then((rows) => {
         if (cancelled) return
-        let list = rows.map(productToHomeItem)
         if (sectionSlug === 'brand-new') {
-          list = list.filter((item) => item.badge === 'New')
+          setItems(sortProductRowsNewestFirst(rows).map(productToHomeItem))
         }
-        setItems(list)
       })
       .catch(() => {
         if (!cancelled) setItems([])

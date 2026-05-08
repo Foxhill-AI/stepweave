@@ -115,7 +115,6 @@ interface ProductProps {
     resin?: PrintingSettings
   }
   relatedItems?: RelatedItem[]
-  isMember?: boolean
   /** Attributes (e.g. Color, Size) and options for variant selection */
   attributes?: ProductAttributeOption[]
   /** Variants with their attribute option ids (for resolving selection to variant) */
@@ -213,7 +212,6 @@ export default function Product({
   description,
   printingSettings,
   relatedItems = [],
-  isMember = false,
   attributes = [],
   variants = [],
   onAddToCart,
@@ -391,7 +389,6 @@ export default function Product({
         description: undefined,
         printingSettings: undefined,
         relatedItems: [],
-        isMember: false,
         _isMissing: true as const,
       }
     }
@@ -414,7 +411,6 @@ export default function Product({
       description,
       printingSettings,
       relatedItems: relatedItems || [],
-      isMember,
     }
   }, [
     id, 
@@ -435,8 +431,7 @@ export default function Product({
     timeAgo, 
     description, 
     JSON.stringify(printingSettings), 
-    JSON.stringify(relatedItems), 
-    isMember,
+    JSON.stringify(relatedItems),
     basePrice,
     JSON.stringify(attributes),
     JSON.stringify(variants),
@@ -862,24 +857,6 @@ export default function Product({
                 </button>
               </div>
             )}
-
-            {/* Download Section */}
-            <div className="product-download">
-              {productData.isMember ? (
-                <button className="product-download-button">
-                  Download
-                </button>
-              ) : (
-                <>
-                  <button className="product-download-button product-download-button-member">
-                    Become a member to download
-                  </button>
-                  <p className="product-download-note">
-                    This model is enabled by Operating Tools. View license.
-                  </p>
-                </>
-              )}
-            </div>
 
             {/* Instructions Section (Collapsible) */}
             {productData.printingSettings && (

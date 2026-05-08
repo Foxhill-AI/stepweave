@@ -150,6 +150,10 @@ a.content-section-load-more-as-link {
   .content-section-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  /** Strip explicitly uses `responsive-trending` (e.g. Marketplace) — keep 3 cards on one row. */
+  .content-section-grid.content-section-grid-responsive-trending {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 1024px) {

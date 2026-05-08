@@ -200,10 +200,10 @@ function CartItemCard({
   return (
     <div className="cart-item-card">
       <div className="cart-item-image-wrapper">
-        {item.productId != null && item.designData?.source === 'design_draft' ? (
+        {item.productId != null ? (
           <ProductImage
             productId={item.productId}
-            designData={item.designData}
+            designData={item.designData ?? null}
             alt={item.title}
             className="cart-item-image"
             fallback={

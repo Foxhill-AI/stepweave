@@ -2,15 +2,20 @@
 
 import { useState, useEffect } from 'react'
 import ContentSection from '@/components/ContentSection'
-import { productToHomeItem, type HomeItem } from '@/lib/productsForHome'
+import {
+  homeItemsFromProductRows,
+  productToHomeItem,
+  type HomeItem,
+} from '@/lib/productsForHome'
 
 /**
- * Marketplace browse: same sections as the home page (Trending / Most Popular / Brand New),
- * backed by GET /api/home-products (shoe-category products + engagement).
+ * Marketplace browse: Trending = **all** active products (view-sorted, first 3 visible),
+ * plus Most Popular and Brand New from GET /api/home-products.
  */
 export default function Marketplace() {
   const [products, setProducts] = useState<HomeItem[]>([])
   const [popularItems, setPopularItems] = useState<HomeItem[]>([])
+  const [brandNewItems, setBrandNewItems] = useState<HomeItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -24,10 +29,15 @@ export default function Marketplace() {
       .then((data) => {
         if (cancelled) return
         const productRows = data?.products ?? []
-        const homeItems = productRows.map(productToHomeItem)
+        const viewsById = (data?.viewsByProductId ?? {}) as Record<string, number>
+        const homeItems = homeItemsFromProductRows(productRows, viewsById)
         setProducts(homeItems)
 
         type ProductRow = Parameters<typeof productToHomeItem>[0]
+        setBrandNewItems(
+          homeItemsFromProductRows((data?.brandNewProducts ?? []) as ProductRow[], viewsById)
+        )
+
         const popRows = (data?.popularProducts ?? []) as ProductRow[]
         const engagement = (data?.popularEngagement ?? {}) as Record<string, number>
         setPopularItems(
@@ -43,6 +53,7 @@ export default function Marketplace() {
       .catch(() => {
         if (!cancelled) {
           setProducts([])
+          setBrandNewItems([])
           setPopularItems([])
         }
       })
@@ -57,8 +68,7 @@ export default function Marketplace() {
     }
   }, [])
 
-  const trendingItems = products.slice(0, 12)
-  const newItems = products.filter((p) => p.badge === 'New').slice(0, 12)
+  const trendingItems = products
 
   return (
     <>
@@ -78,6 +88,9 @@ export default function Marketplace() {
           items={trendingItems}
           pagedGrid
           sectionSlug="trending-now"
+          gridLayout="responsive-trending"
+          initialVisibleCount={3}
+          loadMoreCount={6}
         />
       )}
       {!loading && popularItems.length > 0 && (
@@ -86,14 +99,18 @@ export default function Marketplace() {
           items={popularItems}
           pagedGrid
           sectionSlug="most-popular"
+          initialVisibleCount={3}
+          loadMoreCount={6}
         />
       )}
-      {!loading && newItems.length > 0 && (
+      {!loading && brandNewItems.length > 0 && (
         <ContentSection
           title="Brand New"
-          items={newItems}
+          items={brandNewItems}
           pagedGrid
           sectionSlug="brand-new"
+          initialVisibleCount={3}
+          loadMoreCount={6}
         />
       )}
     </>
