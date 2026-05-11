@@ -2,7 +2,7 @@
 
 import '../styles/ProfileTabs.css'
 
-type TabType = 'products' | 'orders' | 'liked' | 'settings'
+type TabType = 'products' | 'following' | 'orders' | 'liked' | 'settings'
 
 interface ProfileTabsProps {
   activeTab: TabType
@@ -11,6 +11,7 @@ interface ProfileTabsProps {
 
 const tabs: { id: TabType; label: string }[] = [
   { id: 'products', label: 'My Products' },
+  { id: 'following', label: 'Following' },
   { id: 'orders', label: 'Orders' },
   { id: 'liked', label: 'Liked' },
   { id: 'settings', label: 'Settings' },

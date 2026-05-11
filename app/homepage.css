@@ -21,10 +21,6 @@
   padding: 0 0 var(--spacing-lg);
 }
 
-.homepage-main .hero-section {
-  animation: homepage-fade-in 0.55s ease-out both;
-}
-
 .homepage-main .ad-banner-section {
   animation: homepage-fade-in 0.5s ease-out 0.1s both;
 }

@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
-  console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
-  console.log('HAS_ANON_KEY:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   try {
     const body = await request.json().catch(() => ({}))
     const email = typeof body.email === 'string' ? body.email.trim() : ''

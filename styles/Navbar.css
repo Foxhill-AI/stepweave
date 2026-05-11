@@ -54,6 +54,7 @@
 .navbar-brand {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .navbar-logo {
@@ -63,6 +64,12 @@
   font-weight: 700;
   font-size: 1.25rem;
   color: var(--color-text-white);
+  text-decoration: none;
+}
+
+.navbar-logo:hover {
+  color: var(--color-text-white);
+  opacity: 0.92;
 }
 
 .logo-icon {
@@ -98,6 +105,13 @@
   display: none;
   align-items: center;
   gap: var(--spacing-lg);
+}
+
+@media (min-width: 768px) {
+  .navbar-left > .navbar-links {
+    padding-left: var(--spacing-xl);
+    border-left: 1px solid rgba(255, 255, 255, 0.14);
+  }
 }
 
 @media (min-width: 1024px) {
@@ -186,12 +200,15 @@
 .navbar-link {
   color: var(--color-text-white);
   font-weight: 500;
+  font-size: 0.875rem;
+  letter-spacing: 0.01em;
   padding: var(--spacing-sm);
   border-radius: var(--border-radius);
   transition: var(--transition);
   opacity: 0.9;
   position: relative;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .navbar-link::after {
@@ -225,6 +242,28 @@
 
 .navbar-link-active::after {
   transform: scaleX(1);
+}
+
+.navbar-link-my-saves {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.navbar-my-saves-icon {
+  flex-shrink: 0;
+  opacity: 0.88;
+}
+
+.navbar-mobile-link-my-saves {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.navbar-my-saves-icon-mobile {
+  flex-shrink: 0;
+  opacity: 0.9;
 }
 
 .navbar-actions {

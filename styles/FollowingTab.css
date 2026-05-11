@@ -1,0 +1,125 @@
+.following-tab {
+  padding: var(--spacing-md) 0;
+}
+
+.following-tab-intro {
+  margin: 0 0 var(--spacing-lg);
+  font-size: 0.9375rem;
+  color: var(--color-text-light);
+  line-height: 1.5;
+  max-width: 40rem;
+}
+
+.following-tab-intro strong {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.following-tab-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.following-tab-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  transition: var(--transition);
+}
+
+.following-tab-item:hover {
+  border-color: var(--color-primary);
+}
+
+.following-tab-avatar-link {
+  flex-shrink: 0;
+  text-decoration: none;
+  border-radius: 50%;
+  line-height: 0;
+}
+
+.following-tab-avatar-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.following-tab-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.following-tab-avatar-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-background-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-light);
+}
+
+.following-tab-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.following-tab-name {
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: 1rem;
+}
+
+.following-tab-name:hover {
+  color: var(--color-primary);
+}
+
+.following-tab-products-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.following-tab-products-cta:hover {
+  text-decoration: underline;
+}
+
+.following-tab-cta-icon {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.following-tab-empty {
+  margin: 0;
+  padding: var(--spacing-xl);
+  text-align: center;
+  color: var(--color-text-light);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.following-tab-loading {
+  margin: 0;
+  padding: var(--spacing-xl);
+  text-align: center;
+  color: var(--color-text-light);
+}

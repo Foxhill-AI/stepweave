@@ -71,6 +71,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let data = await tryFetch()
     if (dev) console.log('[AuthProvider] fetchUserAccount attempt 0:', { found: !!data })
 
+    // Create user_account server-side if missing (RLS blocks client insert without session;
+    // email confirmation flows create the row on first session via metadata.username).
+    if (!data) {
+      try {
+        const ens = await fetch('/api/me/ensure-account', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        })
+        if (ens.ok) {
+          data = await tryFetch()
+          if (dev) console.log('[AuthProvider] fetchUserAccount after ensure-account:', { found: !!data })
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
     // Retry if the row isn't there yet (DB trigger may still be committing).
     if (!data) {
       const delays = [300, 600, 1200, 2400, 4000]

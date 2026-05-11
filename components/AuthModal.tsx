@@ -168,10 +168,14 @@ export default function AuthModal({
         ? `${window.location.origin}/auth/callback`
         : `${process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/callback`
     try {
+      const proposedUsername = username.trim() || email.split('@')[0]
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { emailRedirectTo: redirectTo },
+        options: {
+          emailRedirectTo: redirectTo,
+          data: { username: proposedUsername },
+        },
       })
       if (signUpError) {
         const msg = signUpError.message
@@ -188,13 +192,22 @@ export default function AuthModal({
         return
       }
       if (authData?.user) {
-        const { error: insertError } = await supabase.from('user_account').insert({
-          auth_user_id: authData.user.id,
-          username: username.trim() || email.split('@')[0],
-        })
-        if (insertError) {
-          setError(insertError.message)
-          return
+        if (authData.session) {
+          const ens = await fetch('/api/me/ensure-account', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: proposedUsername }),
+          })
+          const payload = await ens.json().catch(() => ({}))
+          if (!ens.ok) {
+            setError(
+              typeof payload?.error === 'string'
+                ? payload.error
+                : 'Could not create your profile. Try again or contact support.'
+            )
+            return
+          }
         }
         if (!authData.session) {
           setVerifyEmailSent(true)
@@ -203,6 +216,7 @@ export default function AuthModal({
         }
       }
       handleClose()
+      if (typeof window !== 'undefined') window.location.reload()
     } finally {
       setIsLoading(false)
     }

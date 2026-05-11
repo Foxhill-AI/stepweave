@@ -55,7 +55,9 @@ export default function CollectionPage() {
   const fetchSaved = () => {
     if (!userAccount?.id) return
     getSavedProducts(userAccount.id)
-      .then((rows) => setItems(rows.map(productToCollectionItem)))
+      .then((rows) => {
+        setItems(rows.map(productToCollectionItem))
+      })
       .catch(() => setItems([]))
   }
 

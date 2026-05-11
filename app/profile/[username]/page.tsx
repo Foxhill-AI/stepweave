@@ -213,7 +213,7 @@ export default function PublicProfilePage() {
               </button>
             </div>
           )}
-          <section className="public-profile-products" aria-label="Creator products">
+          <section className="public-profile-products" id="creator-products" aria-label="Creator products">
             <h2 className="public-profile-products-title">
               Designs by {profile.username}
             </h2>
