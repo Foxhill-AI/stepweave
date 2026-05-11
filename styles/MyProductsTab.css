@@ -5,6 +5,14 @@
   animation: fadeIn 0.4s ease-out;
 }
 
+.my-products-intro {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-text-light);
+  line-height: 1.5;
+  max-width: 42rem;
+}
+
 .my-products-header {
   display: flex;
   gap: var(--spacing-lg);

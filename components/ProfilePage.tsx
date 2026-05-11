@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import ProfileHeader from './ProfileHeader'
 import ProfileTabs from './ProfileTabs'
 import MyProductsTab from './MyProductsTab'
+import FollowingTab from './FollowingTab'
 import OrdersTab, { type Order } from './OrdersTab'
 import LikesTab, { type LikedProduct } from './LikesTab'
 import SettingsTab from './SettingsTab'
@@ -18,7 +19,7 @@ import '../styles/ProfilePage.css'
 // just testing the commit
 
 
-type TabType = 'products' | 'orders' | 'liked' | 'settings'
+type TabType = 'products' | 'following' | 'orders' | 'liked' | 'settings'
 
 type SettingsSubTab = 'profile' | 'account' | 'payments' | 'subscription' | 'privacy'
 
@@ -103,7 +104,7 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
 
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab === 'products' || tab === 'orders' || tab === 'settings' || tab === 'liked') {
+    if (tab === 'products' || tab === 'following' || tab === 'orders' || tab === 'settings' || tab === 'liked') {
       setActiveTab(tab)
     }
   }, [searchParams])
@@ -222,6 +223,7 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
 
         <div className="profile-content" role="tabpanel">
           {activeTab === 'products' && <MyProductsTab />}
+          {activeTab === 'following' && <FollowingTab />}
           {activeTab === 'orders' && <OrdersTab orders={orders} />}
           {activeTab === 'liked' && <LikesTab likedProducts={likedProducts} />}
           {activeTab === 'settings' && (

@@ -146,6 +146,9 @@ export default function MyProductsTab() {
 
   return (
     <div className="my-products-tab">
+      <p className="my-products-intro">
+        Products you created — manage drafts, publish to the marketplace, or edit listings here.
+      </p>
       <div className="my-products-header">
         <div className="my-products-search">
           <Search size={20} className="search-icon" />

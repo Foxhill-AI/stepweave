@@ -1976,6 +1976,42 @@ export const supabase =
     return { error: null }
   }
 
+  export type FollowingAccountRow = {
+    id: number
+    username: string
+    avatar_url: string | null
+  }
+
+  /** Creators the signed-in user follows (for Following tab). */
+  export async function getFollowingAccounts(
+    followerId: number
+  ): Promise<FollowingAccountRow[]> {
+    const { data: follows, error } = await supabase
+      .from('user_follow')
+      .select('following_id')
+      .eq('follower_id', followerId)
+    if (error) {
+      console.error('getFollowingAccounts:', error)
+      return []
+    }
+    if (!follows?.length) return []
+    const ids = Array.from(
+      new Set(follows.map((f) => f.following_id).filter((id): id is number => typeof id === 'number'))
+    )
+    if (ids.length === 0) return []
+    const { data: accounts, error: accErr } = await supabase
+      .from('user_account')
+      .select('id, username, avatar_url')
+      .in('id', ids)
+    if (accErr) {
+      console.error('getFollowingAccounts accounts:', accErr)
+      return []
+    }
+    const list = (accounts ?? []) as FollowingAccountRow[]
+    const rank = new Map(ids.map((id, i) => [id, i]))
+    return [...list].sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+  }
+
   /** Profile stats for a user (followers, following, products count, likes received on their products). */
   export type ProfileStats = {
     followers: number

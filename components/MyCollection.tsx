@@ -24,15 +24,27 @@ interface MyCollectionProps {
   items?: Item[] | undefined
   /** Called when user unsaves an item (remove from My Saves). */
   onUnsave?: (productId: number) => void
+  /** Copy for the section subtitle count, e.g. singular "shoe" / plural "shoes". */
+  savedCountSingular?: string
+  savedCountPlural?: string
+  emptyTitle?: string
+  emptyDescription?: string
 }
 
-export default function MyCollection({ items, onUnsave }: MyCollectionProps) {
+export default function MyCollection({
+  items,
+  onUnsave,
+  savedCountSingular = 'item',
+  savedCountPlural = 'items',
+  emptyTitle = 'No saved items yet',
+  emptyDescription = 'Use Save on a product page to add it here',
+}: MyCollectionProps) {
   const savedItems = items ?? []
   const isLoading = items === undefined
 
   const subtitle =
     !isLoading && savedItems.length > 0
-      ? `${savedItems.length} ${savedItems.length === 1 ? 'item' : 'items'} saved`
+      ? `${savedItems.length} ${savedItems.length === 1 ? savedCountSingular : savedCountPlural} saved`
       : undefined
 
   return (
@@ -90,10 +102,8 @@ export default function MyCollection({ items, onUnsave }: MyCollectionProps) {
                   <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                 </svg>
               </div>
-              <h2 className="collection-empty-title">No saved items yet</h2>
-              <p className="collection-empty-description">
-                Use Save on a product page to add it here
-              </p>
+              <h2 className="collection-empty-title">{emptyTitle}</h2>
+              <p className="collection-empty-description">{emptyDescription}</p>
             </div>
           </div>
         )}
