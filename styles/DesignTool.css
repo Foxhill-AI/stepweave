@@ -3946,6 +3946,35 @@
   cursor: not-allowed;
 }
 
+/* Size picker in buy step */
+.pf-modal-size-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.pf-modal-size-btn {
+  padding: 0.4rem 0.75rem;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.pf-modal-size-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+.pf-modal-size-btn--active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
 @media (max-width: 480px) {
   .pf-modal {
     padding: 1.25rem;

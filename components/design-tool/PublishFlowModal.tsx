@@ -10,6 +10,7 @@ import { updateDesignDraft, updateProduct, setProductCategories, getProductById 
 type FlowStep = 'buy' | 'publish' | 'both-skipped'
 
 type CategoryRow = { id: number; name: string }
+type VariantOption = { id: number; color: string; size: string; image: string }
 
 interface PublishFlowModalProps {
   open: boolean
@@ -17,6 +18,7 @@ interface PublishFlowModalProps {
   draftId: number
   localDraft: DesignDraftRow | null
   printfulVariantId: number | null
+  variantOptions?: VariantOption[]
   categories: CategoryRow[]
   isEditingPublishedProduct: boolean
   designData: Record<string, unknown>
@@ -30,6 +32,7 @@ export default function PublishFlowModal({
   draftId,
   localDraft,
   printfulVariantId,
+  variantOptions = [],
   categories,
   isEditingPublishedProduct,
   designData,
@@ -38,7 +41,8 @@ export default function PublishFlowModal({
   const router = useRouter()
   const [step, setStep] = useState<FlowStep>(initialStep ?? 'buy')
 
-  // Buy step state
+  // Buy step state — selectedBuyVariantId defaults to the draft's current variant (color auto-selected)
+  const [selectedBuyVariantId, setSelectedBuyVariantId] = useState<number | null>(printfulVariantId)
   const [buyLoading, setBuyLoading] = useState(false)
   const [buyError, setBuyError] = useState<string | null>(null)
   const [buyEstimate, setBuyEstimate] = useState<PricingEstimateOk | null>(null)
@@ -73,13 +77,32 @@ export default function PublishFlowModal({
     localDraft?.base_model_id && typeof localDraft.base_model_id === 'string'
       ? localDraft.base_model_id.trim()
       : null
-  const hasVariant = productId !== null && printfulVariantId != null
+
+  // Derive size options: filter variantOptions to the same color as the draft's current variant.
+  const currentVariant = variantOptions.find((v) => v.id === printfulVariantId)
+  const draftColor = currentVariant?.color?.toLowerCase() ?? ''
+  const sameColorVariants = draftColor
+    ? variantOptions.filter((v) => v.color.toLowerCase() === draftColor)
+    : variantOptions
+  const hasSizeOptions = sameColorVariants.length > 1
+
+  // The variant actually used for the pricing estimate and buy button.
+  const effectiveBuyVariantId = selectedBuyVariantId ?? printfulVariantId
+  const hasVariant = productId !== null && effectiveBuyVariantId != null
 
   const handleBuy = async () => {
+    if (!effectiveBuyVariantId) {
+      setBuyError('Please select a size.')
+      return
+    }
     setBuyLoading(true)
     setBuyError(null)
     try {
-      const res = await fetch(`/api/design-drafts/${draftId}/self-purchase`, { method: 'POST' })
+      const res = await fetch(`/api/design-drafts/${draftId}/self-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ variantId: effectiveBuyVariantId }),
+      })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setBuyError((data.error as string) || 'Could not initiate checkout. Please try again.')
@@ -191,6 +214,27 @@ export default function PublishFlowModal({
               Order the exact shoes you just designed, shipped directly to you — no markup.
             </p>
 
+            {hasSizeOptions && (
+              <div>
+                <label className="design-tool-label">Your size</label>
+                <div className="pf-modal-size-grid">
+                  {sameColorVariants.map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      className={`pf-modal-size-btn${effectiveBuyVariantId === v.id ? ' pf-modal-size-btn--active' : ''}`}
+                      onClick={() => {
+                        setSelectedBuyVariantId(v.id)
+                        setBuyEstimate(null)
+                      }}
+                    >
+                      {v.size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {buyEstimate && (
               <div className="pf-modal-price-callout">
                 <span className="pf-modal-price-label">Your price</span>
@@ -204,7 +248,7 @@ export default function PublishFlowModal({
             {hasVariant && (
               <PricingEstimatePanel
                 productId={productId!}
-                variantId={printfulVariantId!}
+                variantId={effectiveBuyVariantId!}
                 quantity={1}
                 onEstimate={setBuyEstimate}
                 className="pf-modal-estimate"
@@ -220,7 +264,7 @@ export default function PublishFlowModal({
                 type="button"
                 className="pf-modal-btn-primary"
                 onClick={handleBuy}
-                disabled={buyLoading || !buyEstimate}
+                disabled={buyLoading || !buyEstimate || !effectiveBuyVariantId}
               >
                 {buyLoading
                   ? 'Starting checkout…'

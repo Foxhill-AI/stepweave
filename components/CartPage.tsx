@@ -86,7 +86,8 @@ export default function CartPage() {
     (sum, item) => sum + item.price * item.quantity,
     0
   )
-  const shipping = cartItems.length > 0 ? 5.99 : 0
+  // Shipping is included in the product price (fulfilled via Printful; no separate shipping charge).
+  const shipping = 0
   const taxRate = 0.08
   const taxes = subtotal * taxRate
 
@@ -304,12 +305,10 @@ function OrderSummary({
         <span>${subtotal.toFixed(2)}</span>
       </div>
 
-      {shipping > 0 && (
-        <div className="summary-line">
-          <span>Shipping (standard)</span>
-          <span>${shipping.toFixed(2)}</span>
-        </div>
-      )}
+      <div className="summary-line">
+        <span>Shipping</span>
+        <span style={{ color: '#16a34a', fontWeight: 600 }}>Free</span>
+      </div>
 
       <div className="summary-line">
         <span>Taxes & fees</span>

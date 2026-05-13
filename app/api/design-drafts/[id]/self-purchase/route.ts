@@ -52,14 +52,24 @@ export async function POST(
     return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
   }
 
+  // Accept optional variantId override (e.g. buyer selected a different size in the buy modal).
+  let bodyVariantId: number | null = null
+  try {
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>
+    const bv = body.variantId
+    if (typeof bv === 'number') bodyVariantId = bv
+    else if (typeof bv === 'string' && /^\d+$/.test(bv)) bodyVariantId = parseInt(bv, 10)
+  } catch { /* no body */ }
+
   const designState = (draft.design_state ?? {}) as Record<string, unknown>
   const variantRaw = designState.printful_variant_id
-  const variantId =
+  const draftVariantId =
     typeof variantRaw === 'number'
       ? variantRaw
       : typeof variantRaw === 'string' && /^\d+$/.test(variantRaw)
         ? parseInt(variantRaw, 10)
         : null
+  const variantId = bodyVariantId ?? draftVariantId
 
   if (!variantId) {
     return NextResponse.json(
