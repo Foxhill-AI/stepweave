@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import DesignToolPage from '@/components/design-tool/DesignToolPage'
@@ -9,9 +9,11 @@ import { useAuth } from '@/components/AuthProvider'
 import { getDesignDraftById } from '@/lib/supabaseClient'
 import type { DesignDraftRow } from '@/lib/supabaseClient'
 
-export default function DesignToolDraftRoute() {
+function DesignToolDraftRouteInner() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
+  const autoPublish = searchParams.get('publish') === '1'
   const { user, loading: authLoading } = useAuth()
   const draftIdParam = typeof params.id === 'string' ? params.id : undefined
   const [draft, setDraft] = useState<DesignDraftRow | null>(null)
@@ -89,8 +91,23 @@ export default function DesignToolDraftRoute() {
     <div className="design-tool-page-wrapper design-tool-page-wrapper--editor">
       <Navbar />
       <main className="design-tool-main" role="main">
-        <DesignToolPage draftId={draft.id} draft={draft} />
+        <DesignToolPage draftId={draft.id} draft={draft} autoPublish={autoPublish} />
       </main>
     </div>
+  )
+}
+
+export default function DesignToolDraftRoute() {
+  return (
+    <Suspense fallback={
+      <div className="design-tool-page-wrapper">
+        <Navbar />
+        <main className="design-tool-main" role="main">
+          <p className="design-tool-loading" aria-live="polite">Loading…</p>
+        </main>
+      </div>
+    }>
+      <DesignToolDraftRouteInner />
+    </Suspense>
   )
 }

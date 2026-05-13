@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { updateOrderPaid, type OrderWithItemsRow } from '@/lib/supabaseClient'
 
-const ORDER_COLUMNS = 'id, user_account_id, total_amount, currency, status, paid_at, created_at, updated_at, shipping_address'
+const ORDER_COLUMNS = 'id, user_account_id, total_amount, currency, status, order_type, paid_at, created_at, updated_at, shipping_address'
 
 /**
  * GET /api/order/confirmation?session_id=cs_...
@@ -93,10 +93,10 @@ export async function GET(request: NextRequest) {
 
   // Fetch order items in a separate query (avoids RLS on order_item blocking the parent row).
   const orderId = (order as { id: number }).id
-  const orderRow = order as OrderWithItemsRow & { status: string; paid_at: string | null; shipping_address: OrderWithItemsRow['shipping_address'] }
+  const orderRow = order as unknown as OrderWithItemsRow & { status: string; paid_at: string | null; shipping_address: OrderWithItemsRow['shipping_address'] }
   const { data: orderItems } = await db
     .from('order_item')
-    .select('id, order_id, product_id, product_variant_id, product_name, variant_label, quantity, unit_price, subtotal, stripe_price_id, created_at')
+    .select('id, order_id, product_id, product_variant_id, product_name, variant_label, quantity, unit_price, subtotal, stripe_price_id, design_draft_id, created_at')
     .eq('order_id', orderId)
 
   // User reached confirmation from Stripe success_url, so payment succeeded. Mark order as paid if still pending

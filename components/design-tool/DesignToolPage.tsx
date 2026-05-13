@@ -40,6 +40,8 @@ interface DesignToolPageProps {
   /** When set, we are editing this design draft (from /design-tool/[id]). */
   draftId?: number
   draft?: DesignDraftRow
+  /** When true, open the publish flow modal immediately on the publish step. */
+  autoPublish?: boolean
 }
 
 /** Distinct Printful placement keys from loaded template rows (preserves order). */
@@ -56,7 +58,7 @@ function uniqueTemplatePlacements(rows: PlacementTemplateRow[]): string[] {
   return out
 }
 
-export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) {
+export default function DesignToolPage({ draftId, draft, autoPublish }: DesignToolPageProps) {
   const router = useRouter()
   const { user, userAccount } = useAuth()
   const [designData, setDesignData] = useState<Record<string, unknown>>(
@@ -106,6 +108,15 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [isFlowModalOpen, setIsFlowModalOpen] = useState(false)
+
+  // Auto-open modal on publish step when coming from the post-purchase confirmation page.
+  useEffect(() => {
+    if (autoPublish && isDraftEditor) {
+      setEditorStep('customize')
+      setIsFlowModalOpen(true)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   /** Temporary object URLs for layers uploaded in this session (before server signed URL arrives). */
   const [localLayerUrls, setLocalLayerUrls] = useState<Record<string, string>>({})
   /** Clipboard for Cmd/Ctrl+C / V in template canvas (layer payload without signed URLs). */
@@ -836,6 +847,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
         categories={categories}
         isEditingPublishedProduct={isEditingPublishedProduct}
         designData={designData}
+        initialStep={autoPublish ? 'publish' : undefined}
       />
     </div>
   )

@@ -115,8 +115,12 @@ function OrderConfirmationContent() {
     )
   }
 
-  const items = (order.order_item ?? []) as OrderItemRow[]
+  const items = (order.order_item ?? []) as (OrderItemRow & { design_draft_id?: number | null })[]
   const total = Number(order.total_amount)
+  const isSelfPurchase = (order as unknown as { order_type?: string }).order_type === 'self_purchase'
+  const selfPurchaseDraftId = isSelfPurchase
+    ? (items[0]?.design_draft_id ?? null)
+    : null
 
   return (
     <main className="order-confirmation-main">
@@ -188,10 +192,26 @@ function OrderConfirmationContent() {
               <Truck size={18} aria-hidden />
               <span>
                 <strong>Estimated delivery:</strong>{' '}
-                {getEstimatedDeliveryDate(order)}
+                {isSelfPurchase ? '2–4 weeks (custom production + shipping)' : getEstimatedDeliveryDate(order)}
               </span>
             </div>
           </div>
+
+          {isSelfPurchase && selfPurchaseDraftId && (
+            <div className="order-confirmation-publish-cta">
+              <div className="order-confirmation-publish-cta-text">
+                <strong>Want to earn money from this design?</strong>
+                <span>List it on the storefront and get a cut every time someone buys a pair.</span>
+              </div>
+              <Link
+                href={`/design-tool/${selfPurchaseDraftId}?publish=1`}
+                className="order-confirmation-btn order-confirmation-btn-publish"
+              >
+                Publish to storefront
+                <ArrowRight size={18} aria-hidden />
+              </Link>
+            </div>
+          )}
 
           <div className="order-confirmation-actions">
             {userAccount ? (

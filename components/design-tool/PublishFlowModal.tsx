@@ -20,6 +20,8 @@ interface PublishFlowModalProps {
   categories: CategoryRow[]
   isEditingPublishedProduct: boolean
   designData: Record<string, unknown>
+  /** When true, skip straight to the publish step (e.g. coming from post-purchase confirmation). */
+  initialStep?: FlowStep
 }
 
 export default function PublishFlowModal({
@@ -31,9 +33,10 @@ export default function PublishFlowModal({
   categories,
   isEditingPublishedProduct,
   designData,
+  initialStep,
 }: PublishFlowModalProps) {
   const router = useRouter()
-  const [step, setStep] = useState<FlowStep>('buy')
+  const [step, setStep] = useState<FlowStep>(initialStep ?? 'buy')
 
   // Buy step state
   const [buyLoading, setBuyLoading] = useState(false)
