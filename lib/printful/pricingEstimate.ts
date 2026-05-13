@@ -15,22 +15,24 @@ export type PricingEstimateLine = {
   detail?: string
 }
 
+/** Stripe standard processing: 2.9% + $0.30 per transaction */
+export const STRIPE_RATE = 0.029
+export const STRIPE_FIXED = 0.30
+/** Platform buffer withheld to protect margin: 5% of sale price */
+export const PLATFORM_BUFFER_RATE = 0.05
+
 export type PricingEstimateOk = {
   ok: true
   currency: string
+  /** Line items shown in the breakdown (fulfillment + shipping — no tax). */
   lines: PricingEstimateLine[]
-  subtotalBeforeTax: number
-  taxRate: number
-  taxAmount: number
-  totalCost: number
-  marginRate: number
-  recommendedMinimum: number
+  /** Fulfillment + shipping: what Printful charges per sale. */
+  baseCosts: number
+  /** Lowest price where all costs (Printful + Stripe + buffer) are covered.
+   *  Derived algebraically: (baseCosts + STRIPE_FIXED) / (1 - STRIPE_RATE - PLATFORM_BUFFER_RATE) */
+  minimumViablePrice: number
   shippingServiceName: string | null
   note: string
-  /** Where shipping was estimated to (for UI copy). */
-  recipientSummary: string
-  /** Shown under base cost — standard print is in catalog price. */
-  printScopeNote: string
 }
 
 export type PricingEstimateResult = PricingEstimateOk | { ok: false; error: string }
@@ -45,8 +47,8 @@ export function parsePrintfulMoney(value: unknown): number {
 }
 
 /**
- * Estimated listing economics from Printful catalog variant price + shipping/rates.
- * Tax and margin are applied in USD terms on top of API amounts (same currency Printful returns for the store).
+ * Estimated listing economics from Printful catalog variant price + shipping.
+ * Tax is intentionally excluded — real sales tax is collected at checkout.
  */
 export async function estimatePrintfulListingCosts(params: {
   apiKey: string
@@ -55,11 +57,8 @@ export async function estimatePrintfulListingCosts(params: {
   variantId: number
   quantity?: number
   recipient: PrintfulPricingRecipient
-  taxRate: number
-  marginRate: number
 }): Promise<PricingEstimateResult> {
-  const { apiKey, storeId, productId, variantId, quantity = 1, recipient, taxRate, marginRate } =
-    params
+  const { apiKey, storeId, productId, variantId, quantity = 1, recipient } = params
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey.trim()}`,
@@ -141,56 +140,38 @@ export async function estimatePrintfulListingCosts(params: {
     console.warn('[pricingEstimate] shipping/rates', shipRes.status, shipText.slice(0, 300))
   }
 
-  const printScopeNote =
-    'Standard print area is included in the catalog line. Extra techniques or placements may add cost on the real order.'
+  const baseCosts = Math.round((fulfillment + shippingCost) * 100) / 100
+
+  // Minimum viable price: solve for P where margin = 0
+  //   P - baseCosts - (P * STRIPE_RATE + STRIPE_FIXED) - P * PLATFORM_BUFFER_RATE = 0
+  //   P * (1 - STRIPE_RATE - PLATFORM_BUFFER_RATE) = baseCosts + STRIPE_FIXED
+  //   P = (baseCosts + STRIPE_FIXED) / (1 - STRIPE_RATE - PLATFORM_BUFFER_RATE)
+  const denominator = 1 - STRIPE_RATE - PLATFORM_BUFFER_RATE
+  const minimumViablePrice = Math.ceil(((baseCosts + STRIPE_FIXED) / denominator) * 100) / 100
 
   const lines: PricingEstimateLine[] = [
     {
       key: 'fulfillment',
-      label: 'Base product & print (Printful catalog)',
+      label: 'Base product & print',
       amount: fulfillment,
-      detail: 'Standard fulfillment cost for this variant.',
     },
     {
       key: 'shipping',
-      label: 'Shipping (estimated)',
+      label: 'Shipping',
       amount: shippingCost,
-      detail:
-        shippingServiceName ??
-        (shippingCost > 0 ? undefined : 'Unavailable for this request; check Printful dashboard.'),
     },
   ]
 
-  const subtotalBeforeTax = fulfillment + shippingCost
-  const taxAmount = Math.round(subtotalBeforeTax * taxRate * 100) / 100
-  lines.push({
-    key: 'tax',
-    label: `Estimated taxes (${Math.round(taxRate * 100)}%)`,
-    amount: taxAmount,
-    detail: 'Applied to fulfillment + shipping as a planning estimate.',
-  })
-
-  const totalCost = Math.round((subtotalBeforeTax + taxAmount) * 100) / 100
-  const recommendedMinimum = Math.ceil(totalCost * (1 + marginRate) * 100) / 100
-
-  const recipientSummary = `${recipient.city}, ${recipient.state_code} ${recipient.zip} (${recipient.country_code})`
-
   const note =
-    'Estimates from Printful. Final costs may vary by destination, real taxes, and design complexity.'
+    'Estimates from Printful. Final fulfillment costs may vary by design complexity. Sales tax is collected from buyers at checkout.'
 
   return {
     ok: true,
     currency,
     lines,
-    subtotalBeforeTax,
-    taxRate,
-    taxAmount,
-    totalCost,
-    marginRate,
-    recommendedMinimum,
+    baseCosts,
+    minimumViablePrice,
     shippingServiceName,
     note,
-    recipientSummary,
-    printScopeNote,
   }
 }

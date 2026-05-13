@@ -8,7 +8,7 @@ import BaseModelSelection from '@/components/design-tool/BaseModelSelection'
  */
 export default function DesignToolNewRoute() {
   return (
-    <div className="design-tool-page-wrapper design-tool-page-wrapper--editor">
+    <div className="design-tool-page-wrapper design-tool-page-wrapper--slim-nav">
       <Navbar />
       <main className="design-tool-main" role="main">
         <BaseModelSelection />

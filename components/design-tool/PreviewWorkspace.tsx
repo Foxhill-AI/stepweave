@@ -160,6 +160,18 @@ export default function PreviewWorkspace({
     setActiveGalleryIndex(0)
   }, [tabs])
 
+  // When the active placement tab changes, reset the baseline without marking dirty.
+  // (switching tabs swaps activeLayers content but isn't an edit)
+  const prevPlacementRef = useRef(externalActivePlacement ?? '')
+  useEffect(() => {
+    const placement = externalActivePlacement ?? ''
+    if (placement !== prevPlacementRef.current) {
+      prevPlacementRef.current = placement
+      prevLayersJsonRef.current = JSON.stringify(activeLayers)
+      return
+    }
+  }, [externalActivePlacement, activeLayers])
+
   // Track layer changes to know if preview is stale
   useEffect(() => {
     const json = JSON.stringify(activeLayers)

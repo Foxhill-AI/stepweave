@@ -135,24 +135,6 @@ export default function ShoeDesignEditor({
 
   return (
     <div className="shoe-design-editor" aria-label="Shoe template design editor">
-      <div className="shoe-design-tabs" role="tablist" aria-label="Print placements">
-        {rows.map((row) => {
-          const selected = row.placement === activePlacement
-          return (
-            <button
-              key={row.placement}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              className={`shoe-design-tab ${selected ? 'shoe-design-tab--active' : ''}`}
-              onClick={() => onActivePlacementChange(row.placement)}
-            >
-              {row.label}
-            </button>
-          )
-        })}
-      </div>
-
       <div ref={compositeRef} className="shoe-design-composite">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
