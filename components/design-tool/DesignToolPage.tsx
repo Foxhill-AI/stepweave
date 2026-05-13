@@ -29,15 +29,10 @@ import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import { useAuth } from '@/components/AuthProvider'
 import {
   getCategories,
-  createProduct,
   updateDesignDraft,
-  getProductById,
-  updateProduct,
-  setProductCategories,
 } from '@/lib/supabaseClient'
 import type { CategoryRow, DesignDraftRow } from '@/lib/supabaseClient'
-import PricingEstimatePanel, { formatPricingMoney } from './PricingEstimatePanel'
-import type { PricingEstimateOk } from '@/lib/printful/pricingEstimate'
+import PublishFlowModal from './PublishFlowModal'
 import { fetchPreviewMockupsWithRetry } from '@/lib/design-tool/previewMockupsFetch'
 import '../../styles/DesignTool.css'
 
@@ -64,15 +59,10 @@ function uniqueTemplatePlacements(rows: PlacementTemplateRow[]): string[] {
 export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) {
   const router = useRouter()
   const { user, userAccount } = useAuth()
-  const [name, setName] = useState('')
-  const [price, setPrice] = useState<string>('')
-  const [categoryId, setCategoryId] = useState<number | ''>('')
   const [designData, setDesignData] = useState<Record<string, unknown>>(
     draft?.design_state && typeof draft.design_state === 'object' ? (draft.design_state as Record<string, unknown>) : {}
   )
   const [categories, setCategories] = useState<CategoryRow[]>([])
-  const [createError, setCreateError] = useState<string | null>(null)
-  const [createLoading, setCreateLoading] = useState(false)
   /** Local copy of draft so we can update pattern_image_url after upload without refetch. */
   const [localDraft, setLocalDraft] = useState<DesignDraftRow | null>(draft ?? null)
   /** Resolved signed URL for draft pattern image (when using Storage). */
@@ -94,7 +84,6 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       catalogPrice?: string | null
     }>
   >([])
-  const [pricingEstimate, setPricingEstimate] = useState<PricingEstimateOk | null>(null)
   const [printfulVariantId, setPrintfulVariantId] = useState<number | null>(null)
   /** Name of the currently selected shoe model (e.g. "Men's Athletic Shoes"). */
   const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
@@ -116,7 +105,7 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
   designDataRef.current = designData
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
-  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
+  const [isFlowModalOpen, setIsFlowModalOpen] = useState(false)
   /** Temporary object URLs for layers uploaded in this session (before server signed URL arrives). */
   const [localLayerUrls, setLocalLayerUrls] = useState<Record<string, string>>({})
   /** Clipboard for Cmd/Ctrl+C / V in template canvas (layer payload without signed URLs). */
@@ -147,26 +136,6 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     })
     return () => { cancelled = true }
   }, [])
-
-  // Pre-fill listing fields when editing a product that was created from this draft.
-  useEffect(() => {
-    const pid = localDraft?.final_product_id
-    if (pid == null || typeof pid !== 'number') return
-    let cancelled = false
-    getProductById(pid).then((p) => {
-      if (cancelled || !p) return
-      const row = p as {
-        name?: string
-        price?: number
-        product_category?: Array<{ category_id: number }>
-      }
-      if (typeof row.name === 'string' && row.name.trim()) setName(row.name)
-      if (row.price != null && Number.isFinite(Number(row.price))) setPrice(String(row.price))
-      const firstCat = row.product_category?.[0]?.category_id
-      setCategoryId(firstCat != null && firstCat > 0 ? firstCat : '')
-    })
-    return () => { cancelled = true }
-  }, [localDraft?.final_product_id])
 
   // Fetch signed URL when draft has a pattern stored in Storage (private bucket).
   useEffect(() => {
@@ -672,160 +641,6 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     })
   }, [draftId])
 
-  const handleSaveDraft = useCallback(async () => {
-    if (!draftId) return
-    setCreateError(null)
-    setCreateLoading(true)
-    try {
-      const ok = await updateDesignDraft(draftId, { design_state: designData })
-      if (ok) {
-        setCreateError(null)
-      } else {
-        setCreateError('Failed to save draft. Please try again.')
-      }
-    } catch {
-      setCreateError('Something went wrong. Please try again.')
-    } finally {
-      setCreateLoading(false)
-    }
-  }, [draftId, designData])
-
-  const handleCreateProductFromDraft = useCallback(async () => {
-    if (!draftId) return
-    const trimmedName = name.trim()
-    if (!trimmedName) {
-      setCreateError('Please enter a product name.')
-      return
-    }
-    const priceNum = parseFloat(price)
-    if (Number.isNaN(priceNum) || priceNum < 0) {
-      setCreateError('Please enter a valid price (0 or greater).')
-      return
-    }
-    if (
-      pricingEstimate &&
-      Number.isFinite(priceNum) &&
-      priceNum + 1e-9 < pricingEstimate.totalCost
-    ) {
-      setCreateError(
-        `Price must be at least ${formatPricingMoney(
-          pricingEstimate.totalCost,
-          pricingEstimate.currency
-        )} to cover estimated Printful costs (fulfillment + shipping + estimated tax).`
-      )
-      return
-    }
-    setCreateError(null)
-    setCreateLoading(true)
-    try {
-      const existingProductId = localDraft?.final_product_id
-      if (typeof existingProductId === 'number' && existingProductId > 0) {
-        const okDraft = await updateDesignDraft(draftId, { design_state: designData })
-        if (!okDraft) {
-          setCreateError('Failed to save design. Please try again.')
-          return
-        }
-        const okProduct = await updateProduct(existingProductId, {
-          name: trimmedName,
-          price: priceNum,
-          design_data: { source: 'design_draft' },
-        })
-        if (!okProduct) {
-          setCreateError('Failed to update product. Please try again.')
-          return
-        }
-        const catOk = await setProductCategories(
-          existingProductId,
-          categoryId !== '' ? [categoryId as number] : []
-        )
-        if (!catOk) {
-          setCreateError('Product updated but categories could not be saved.')
-          return
-        }
-        try {
-          await fetchPreviewMockupsWithRetry(draftId, { maxAttempts: 18 })
-        } catch {
-          /* listing may fall back until user regenerates mockups */
-        }
-        router.push('/profile')
-        return
-      }
-
-      const res = await fetch(`/api/design-drafts/${draftId}/create-product`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: trimmedName,
-          price: priceNum,
-          categoryId: categoryId !== '' ? (categoryId as number) : undefined,
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (res.ok && data.productId) {
-        try {
-          await fetchPreviewMockupsWithRetry(draftId, { maxAttempts: 18 })
-        } catch {
-          /* listing may fall back to pattern image until user opens design tool preview */
-        }
-        router.push('/profile')
-      } else {
-        setCreateError((data.error as string) || 'Failed to create product. Please try again.')
-      }
-    } catch {
-      setCreateError('Something went wrong. Please try again.')
-    } finally {
-      setCreateLoading(false)
-    }
-  }, [
-    draftId,
-    name,
-    price,
-    categoryId,
-    router,
-    pricingEstimate,
-    localDraft?.final_product_id,
-    designData,
-  ])
-
-  const handleCreate = useCallback(
-    async (status: 'draft' | 'active') => {
-      if (!userAccount?.id) {
-        setCreateError('You must be signed in to create a product.')
-        return
-      }
-      const trimmedName = name.trim()
-      if (!trimmedName) {
-        setCreateError('Please enter a product name.')
-        return
-      }
-      const priceNum = parseFloat(price)
-      if (Number.isNaN(priceNum) || priceNum < 0) {
-        setCreateError('Please enter a valid price (0 or greater).')
-        return
-      }
-      setCreateError(null)
-      setCreateLoading(true)
-      try {
-        const result = await createProduct(userAccount.id, {
-          name: trimmedName,
-          price: priceNum,
-          status,
-          design_data: Object.keys(designData).length ? designData : null,
-          categoryIds: categoryId !== '' ? [categoryId as number] : [],
-        })
-        if (result) {
-          router.push('/profile')
-        } else {
-          setCreateError('Failed to create product. Please try again.')
-        }
-      } catch {
-        setCreateError('Something went wrong. Please try again.')
-      } finally {
-        setCreateLoading(false)
-      }
-    },
-    [userAccount?.id, name, price, categoryId, designData, router]
-  )
 
   // ── Shared derived values ────────────────────────────────────────────────
   const hasPatternImage = Boolean(
@@ -846,11 +661,9 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
     <div className="design-tool-step-bar">
       <a href="/design-tool" className="design-tool-back-link">← Change shoe</a>
       <div className="design-tool-steps" aria-label="Progress">
-        <span className="design-tool-step design-tool-step--done">Model</span>
-        <span className="design-tool-step-sep" aria-hidden="true">›</span>
         <button
           type="button"
-          className={`design-tool-step${editorStep === 'design' ? ' design-tool-step--active' : ' design-tool-step--done design-tool-step--btn'}`}
+          className={`design-tool-step${editorStep === 'design' ? ' design-tool-step--active' : ' design-tool-step--btn'}`}
           aria-current={editorStep === 'design' ? 'step' : undefined}
           onClick={() => setEditorStep('design')}
         >
@@ -864,18 +677,18 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
           Customize
         </span>
         <span className="design-tool-step-sep" aria-hidden="true">›</span>
-        <span className={`design-tool-step${isEditingPublishedProduct ? ' design-tool-step--done' : ''}`}>
+        <span className="design-tool-step">
           {isEditingPublishedProduct ? 'Published' : 'Publish'}
         </span>
       </div>
       <div className="design-tool-step-bar-end">
-        {editorStep === 'customize' && (
+        {editorStep === 'customize' && isDraftEditor && (
           <button
             type="button"
             className="design-tool-btn design-tool-btn-publish design-tool-step-bar-action"
-            onClick={() => setIsCreateDrawerOpen(true)}
+            onClick={() => setIsFlowModalOpen(true)}
           >
-            {isEditingPublishedProduct ? 'Update product' : 'Create product'}
+            Finish →
           </button>
         )}
         {autoSaveState !== 'idle' && (
@@ -902,15 +715,6 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
             />
           </div>
         </div>
-        {/* Drawer still needed for non-draft flows */}
-        {isCreateDrawerOpen && isDraftEditor && (
-          <>
-            <div className="design-tool-drawer-backdrop" onClick={() => setIsCreateDrawerOpen(false)} aria-hidden="true" />
-            <div className="design-tool-drawer" role="dialog" aria-modal="true" aria-label={isEditingPublishedProduct ? 'Update product' : 'Create product'}>
-              {/* same drawer content below */}
-            </div>
-          </>
-        )}
       </div>
     )
   }
@@ -948,45 +752,6 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
       layerClipboardRef={layerClipboardRef}
     />
   ) : null
-
-  const drawerJsx = isCreateDrawerOpen && isDraftEditor && (
-    <>
-      <div className="design-tool-drawer-backdrop" onClick={() => setIsCreateDrawerOpen(false)} aria-hidden="true" />
-      <div className="design-tool-drawer" role="dialog" aria-modal="true" aria-label={isEditingPublishedProduct ? 'Update product' : 'Create product'}>
-        <div className="design-tool-drawer-header">
-          <h3 className="design-tool-drawer-title">{isEditingPublishedProduct ? 'Update product' : 'Create product'}</h3>
-          <button type="button" className="design-tool-drawer-close" onClick={() => setIsCreateDrawerOpen(false)} aria-label="Close">✕</button>
-        </div>
-        <div className="design-tool-drawer-body">
-          <label htmlFor="dt-drawer-name" className="design-tool-label">Product name</label>
-          <input id="dt-drawer-name" type="text" className="design-tool-input" placeholder="Product name" value={name} onChange={(e) => setName(e.target.value)} aria-required />
-          <label htmlFor="dt-drawer-price" className="design-tool-label">Price ($)</label>
-          <input id="dt-drawer-price" type="number" min={0} step={0.01} className="design-tool-input" placeholder="0.00" value={price} onChange={(e) => setPrice(e.target.value)} aria-required />
-          {localDraft?.base_model_id && typeof localDraft.base_model_id === 'string' && printfulVariantId != null && (
-            <PricingEstimatePanel
-              productId={localDraft.base_model_id.trim()}
-              variantId={printfulVariantId}
-              quantity={1}
-              listPriceInput={price}
-              onEstimate={setPricingEstimate}
-            />
-          )}
-          <label htmlFor="dt-drawer-category" className="design-tool-label">Category</label>
-          <select id="dt-drawer-category" className="design-tool-select" value={categoryId === '' ? '' : String(categoryId)} onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}>
-            <option value="">No category</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          {createError && <p className="design-tool-form-error" role="alert">{createError}</p>}
-          <div className="design-tool-drawer-actions">
-            <button type="button" className="design-tool-btn design-tool-btn-draft" onClick={() => setIsCreateDrawerOpen(false)}>Cancel</button>
-            <button type="button" className="design-tool-btn design-tool-btn-publish" disabled={createLoading} onClick={handleCreateProductFromDraft}>
-              {createLoading ? (isEditingPublishedProduct ? 'Saving…' : 'Creating…') : (isEditingPublishedProduct ? 'Save changes' : 'Create product')}
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  )
 
   return (
     <div className="design-tool-page">
@@ -1062,10 +827,16 @@ export default function DesignToolPage({ draftId, draft }: DesignToolPageProps) 
           />
         </div>
       </div>
-      {drawerJsx}
+      <PublishFlowModal
+        open={isFlowModalOpen}
+        onClose={() => setIsFlowModalOpen(false)}
+        draftId={draftId ?? 0}
+        localDraft={localDraft}
+        printfulVariantId={printfulVariantId}
+        categories={categories}
+        isEditingPublishedProduct={isEditingPublishedProduct}
+        designData={designData}
+      />
     </div>
   )
 }
-
-// Dummy to satisfy linter — handleCreate is kept for non-draft flows
-function _unusedHandleCreate(_: unknown) { void _ }

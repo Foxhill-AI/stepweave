@@ -4,7 +4,6 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  overflow-y: auto;
   background: var(--color-background);
 }
 
@@ -13,39 +12,50 @@
   display: flex;
   flex-direction: column;
   padding: 0;
+  /* min-height:0 is set only on --editor to enable the canvas full-height chain */
+}
+
+.design-tool-page-wrapper--editor .design-tool-main {
   min-height: 0;
 }
 
 /* Slimmer main nav on design-tool routes (subnavbar Explore/search removed there) */
-.design-tool-page-wrapper--editor .navbar-left {
+.design-tool-page-wrapper--editor .navbar-left,
+.design-tool-page-wrapper--slim-nav .navbar-left {
   height: 3.5rem;
   gap: var(--spacing-md);
 }
 
-.design-tool-page-wrapper--editor .navbar-logo {
+.design-tool-page-wrapper--editor .navbar-logo,
+.design-tool-page-wrapper--slim-nav .navbar-logo {
   font-size: 1.05rem;
 }
 
-.design-tool-page-wrapper--editor .logo-icon {
+.design-tool-page-wrapper--editor .logo-icon,
+.design-tool-page-wrapper--slim-nav .logo-icon {
   width: 88px;
 }
 
-.design-tool-page-wrapper--editor .navbar-link {
+.design-tool-page-wrapper--editor .navbar-link,
+.design-tool-page-wrapper--slim-nav .navbar-link {
   padding: var(--spacing-xs) var(--spacing-sm);
   font-size: 0.875rem;
 }
 
-.design-tool-page-wrapper--editor .navbar-button-design-tool {
+.design-tool-page-wrapper--editor .navbar-button-design-tool,
+.design-tool-page-wrapper--slim-nav .navbar-button-design-tool {
   padding: var(--spacing-xs) var(--spacing-md);
   font-size: 0.8125rem;
 }
 
-.design-tool-page-wrapper--editor .navbar-icon-button {
+.design-tool-page-wrapper--editor .navbar-icon-button,
+.design-tool-page-wrapper--slim-nav .navbar-icon-button {
   width: 32px;
   height: 32px;
 }
 
-.design-tool-page-wrapper--editor .navbar-actions {
+.design-tool-page-wrapper--editor .navbar-actions,
+.design-tool-page-wrapper--slim-nav .navbar-actions {
   gap: var(--spacing-xs);
 }
 
@@ -273,6 +283,10 @@
   background: var(--color-background);
   color: var(--color-text);
   transition: var(--transition);
+}
+
+.design-tool-input--error {
+  border-color: #ef4444 !important;
 }
 
 .design-tool-input:focus,
@@ -2545,7 +2559,6 @@
 
 .design-tool-step--done {
   color: var(--color-text-light);
-  text-decoration: line-through;
   opacity: 0.6;
 }
 
@@ -3047,10 +3060,16 @@
   font-weight: 600;
 }
 
-.design-tool-pricing-estimate-row--recommend {
+.design-tool-pricing-estimate-row--profit-label {
   border-bottom: none;
-  padding-top: 0.15rem;
-  font-weight: 500;
+  padding-top: 0.5rem;
+  margin-top: 0.25rem;
+  border-top: 1px dashed var(--color-border, #e5e7eb);
+}
+
+.design-tool-pricing-estimate-row--profit {
+  border-bottom: none;
+  padding-top: 0.1rem;
 }
 
 .design-tool-pricing-estimate-label {
@@ -3076,6 +3095,11 @@
 .design-tool-pricing-estimate-amount--highlight {
   color: var(--color-primary, #2563eb);
   font-weight: 700;
+}
+
+.design-tool-pricing-estimate-amount--free {
+  color: #16a34a;
+  font-weight: 600;
 }
 
 .design-tool-pricing-estimate-note {
@@ -3732,4 +3756,198 @@
   flex: none;
   padding: var(--spacing-xs) var(--spacing-lg);
   font-size: 0.875rem;
+}
+
+/* ── Publish Flow Modal (pf-modal-*) ─────────────────────────────────── */
+
+.pf-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 900;
+}
+
+.pf-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 901;
+  width: min(520px, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+  padding: 2rem;
+}
+
+.pf-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: #888;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.pf-modal-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+/* Step indicator */
+.pf-modal-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.pf-modal-step {
+  font-weight: 500;
+}
+
+.pf-modal-step--active {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.pf-modal-step-sep {
+  color: #ccc;
+}
+
+/* Body */
+.pf-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pf-modal-body--centered {
+  align-items: center;
+  text-align: center;
+}
+
+.pf-modal-saved-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.pf-modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111;
+  margin: 0;
+}
+
+.pf-modal-desc {
+  font-size: 0.9rem;
+  color: #555;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Price callout */
+.pf-modal-price-callout {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  background: #f0f9f4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 0.875rem 1rem;
+}
+
+.pf-modal-price-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #16a34a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pf-modal-price-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #15803d;
+  line-height: 1.1;
+}
+
+.pf-modal-price-note {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* Estimate wrapper spacing */
+.pf-modal-estimate {
+  margin-top: 0.25rem;
+}
+
+/* Actions */
+.pf-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.pf-modal-actions--centered {
+  align-items: center;
+}
+
+.pf-modal-btn-primary {
+  width: 100%;
+  padding: 0.8rem 1.25rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.pf-modal-btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+.pf-modal-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pf-modal-btn-ghost {
+  width: 100%;
+  padding: 0.65rem 1.25rem;
+  background: none;
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.pf-modal-btn-ghost:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #374151;
+}
+.pf-modal-btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .pf-modal {
+    padding: 1.25rem;
+  }
 }

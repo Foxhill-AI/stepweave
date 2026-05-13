@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { estimatePrintfulListingCosts } from '@/lib/printful/pricingEstimate'
 
-function envNumber(key: string, fallback: number): number {
-  const v = process.env[key]?.trim()
-  if (!v) return fallback
-  const n = parseFloat(v)
-  return Number.isFinite(n) ? n : fallback
-}
-
 /**
  * POST /api/printful/pricing-estimate
  * Body: { productId: string, variantId: number, quantity?: number }
- * Returns catalog fulfillment + shipping/rates + estimated tax + suggested minimum (see lib/printful/pricingEstimate).
+ * Returns catalog fulfillment + shipping costs + minimum viable price.
+ * Tax is intentionally excluded — collected from buyers at checkout.
  */
 export async function POST(request: NextRequest) {
   const apiKey = process.env.PRINTFUL_API_KEY?.trim()
@@ -52,22 +46,11 @@ export async function POST(request: NextRequest) {
         : 1
   const quantity = Math.max(1, Math.min(99, Math.floor(Number.isFinite(q) ? q : 1)))
 
-  const taxRate = Math.min(0.5, Math.max(0, envNumber('PRINTFUL_PRICING_TAX_RATE', 0.08)))
-  const marginRate = Math.min(0.99, Math.max(0, envNumber('PRINTFUL_PRICING_MARGIN', 0.15)))
-
   const zip = process.env.PRINTFUL_PRICING_SHIP_ZIP?.trim() || '90001'
   const city = process.env.PRINTFUL_PRICING_SHIP_CITY?.trim() || 'Los Angeles'
   const state = process.env.PRINTFUL_PRICING_SHIP_STATE?.trim() || 'CA'
   const country = process.env.PRINTFUL_PRICING_SHIP_COUNTRY?.trim() || 'US'
   const address1 = process.env.PRINTFUL_PRICING_SHIP_ADDRESS1?.trim() || '100 Main St'
-
-  const recipient = {
-    address1,
-    city,
-    state_code: state,
-    country_code: country,
-    zip,
-  }
 
   const result = await estimatePrintfulListingCosts({
     apiKey,
@@ -75,9 +58,7 @@ export async function POST(request: NextRequest) {
     productId,
     variantId,
     quantity,
-    recipient,
-    taxRate,
-    marginRate,
+    recipient: { address1, city, state_code: state, country_code: country, zip },
   })
 
   if (!result.ok) {
