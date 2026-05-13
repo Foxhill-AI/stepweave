@@ -200,7 +200,12 @@ function mapProductToProps(
     source?: string
     images?: Array<{ url: string; alt?: string }>
     description?: string
+    model_name?: string
   } | null
+
+  // Infer gender from Printful model name (e.g. "Men's Athletic Shoes" → "Men's").
+  const modelName = designData?.model_name ?? ''
+  const sizeGender = /\bwomen/i.test(modelName) ? "Women" : /\bmen/i.test(modelName) ? "Men" : undefined
   const basePrice = Number(p.price)
   const firstVariantPrice = p.product_variant?.[0]?.price_override != null
     ? Number(p.product_variant[0].price_override)
@@ -239,6 +244,7 @@ function mapProductToProps(
     basePrice,
     attributes: buildAttributesFromProduct(p),
     variants: buildVariantsFromProduct(p),
+    sizeGender,
   }
 }
 

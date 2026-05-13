@@ -135,6 +135,8 @@ interface ProductProps {
   creatorUserAccountId?: number
   /** Numeric product id — needed for discussions. */
   productNumericId?: number
+  /** Gender context for sizing (e.g. "Men's" or "Women's"), shown next to the Size label. */
+  sizeGender?: string
 }
 
 function findVariantIdFromSelection(
@@ -223,6 +225,7 @@ export default function Product({
   onSaveToggle,
   creatorUserAccountId,
   productNumericId,
+  sizeGender,
 }: ProductProps) {
   const { userAccount } = useAuth()
   const pathname = usePathname()
@@ -318,6 +321,8 @@ export default function Product({
 
   /** One option per attribute (attributeId -> optionId) for variant selection */
   const [selectedOptionByAttribute, setSelectedOptionByAttribute] = useState<Record<number, number>>({})
+  /** Flashes an inline error when user tries to add to cart without selecting a size. */
+  const [sizeError, setSizeError] = useState(false)
   /** String state so manual typing (e.g. clearing the field, entering "12") works; clamp on blur / submit. */
   const [quantityInput, setQuantityInput] = useState('1')
   const [shareFallbackOpen, setShareFallbackOpen] = useState(false)
@@ -762,9 +767,15 @@ export default function Product({
               <div className="product-attributes">
                 {attributes.map((attr) => {
                   const isColor = attr.name.toLowerCase() === 'color'
+                  const isSize = attr.name.toLowerCase() === 'size'
                   return (
                     <div key={attr.id} className="product-attribute-group">
-                      <span className="product-attribute-label">{attr.name}</span>
+                      <div className="product-attribute-label-row">
+                        <span className="product-attribute-label">{attr.name}</span>
+                        {isSize && sizeGender && (
+                          <span className="product-attribute-gender-note">{sizeGender}&apos;s sizing</span>
+                        )}
+                      </div>
                       <div className="product-attribute-options">
                         {attr.options.map((opt) => {
                           const swatchHex = isColor ? labelToColorHex(opt.label) : null
@@ -775,6 +786,7 @@ export default function Product({
                               className={`product-attribute-option ${selectedOptionByAttribute[attr.id] === opt.id ? 'selected' : ''} ${isColor ? 'product-attribute-option-color' : ''}`}
                               onClick={() => {
                                 setSelectedOptionByAttribute((prev) => ({ ...prev, [attr.id]: opt.id }))
+                                setSizeError(false)
                                 onVariantSelectionChange?.()
                               }}
                               title={opt.label}
@@ -791,12 +803,12 @@ export default function Product({
                           )
                         })}
                       </div>
+                      {isSize && sizeError && (
+                        <p className="product-attribute-size-error" role="alert">Please select a size.</p>
+                      )}
                     </div>
                   )
                 })}
-                {attributes.length > 0 && !selectedVariantId && (
-                  <p className="product-attribute-hint">Select options to add to cart.</p>
-                )}
               </div>
             )}
 
@@ -844,6 +856,7 @@ export default function Product({
                       const missingAttributeNames = attributes
                         .filter((attr) => selectedOptionByAttribute[attr.id] == null)
                         .map((attr) => attr.name)
+                      setSizeError(true)
                       onVariantRequired?.(missingAttributeNames)
                       return
                     }

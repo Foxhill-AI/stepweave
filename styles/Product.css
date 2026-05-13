@@ -595,10 +595,29 @@
   flex-direction: column;
   gap: var(--spacing-xs);
 }
+.product-attribute-label-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
 .product-attribute-label {
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--color-text);
+}
+
+.product-attribute-gender-note {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--color-text-light, #888);
+}
+
+.product-attribute-size-error {
+  font-size: 0.85rem;
+  color: #ef4444;
+  margin: 0.25rem 0 0;
+  font-weight: 500;
 }
 .product-attribute-options {
   display: flex;

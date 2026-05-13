@@ -844,6 +844,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
         draftId={draftId ?? 0}
         localDraft={localDraft}
         printfulVariantId={printfulVariantId}
+        variantOptions={variantOptions}
         categories={categories}
         isEditingPublishedProduct={isEditingPublishedProduct}
         designData={designData}
