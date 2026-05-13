@@ -106,8 +106,9 @@ export async function POST(
     )
   }
 
-  // Store amounts in cents (matching the rest of the order system)
-  const unitAmountCents = Math.round(estimate.minimumViablePrice * 100)
+  // DB stores prices in dollars (consistent with storefront orders); Stripe needs cents.
+  const unitAmountDollars = estimate.minimumViablePrice
+  const unitAmountCents = Math.round(unitAmountDollars * 100)
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
 
@@ -116,7 +117,7 @@ export async function POST(
     .from('user_order')
     .insert({
       user_account_id: userAccount.id,
-      total_amount: unitAmountCents,
+      total_amount: unitAmountDollars,
       currency: 'usd',
       status: 'pending',
       order_type: 'self_purchase',
@@ -146,8 +147,8 @@ export async function POST(
     product_name: 'Custom Shoe Design',
     variant_label: null,
     quantity: 1,
-    unit_price: unitAmountCents,
-    subtotal: unitAmountCents,
+    unit_price: unitAmountDollars,
+    subtotal: unitAmountDollars,
     design_draft_id: draftId,
     design_snapshot: designSnapshot,
   })
