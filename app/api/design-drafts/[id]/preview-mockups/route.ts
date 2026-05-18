@@ -30,6 +30,12 @@ import {
   tryAcquirePrintfulMockupSlot,
   releasePrintfulMockupSlot,
 } from '@/lib/printful/mockupSlot'
+import {
+  mockupPlacementsForDatabase,
+  persistPrintfulMockupsToStorage,
+  resolveMockupPlacementsForDisplay,
+  type StoredMockupPlacement,
+} from '@/lib/productMockups/storage'
 
 const BUCKET = 'design-patterns'
 /** Long enough for Printful to fetch the pattern image during mockup generation */
@@ -439,24 +445,53 @@ export async function POST(
 
   const anyUrl = placements.some((p) => p.mockup_url)
 
-  // Persist mockup URLs to design_draft so product cards and gallery can use them later.
-  // Fire-and-forget: failure does not affect the response.
+  let responsePlacements: PreviewMockupPlacement[] = placements
+  let mockupsPersisted = false
+
   if (anyUrl) {
-    const generatedAt = new Date().toISOString()
-    supabase
-      .from('design_draft')
-      .update({ mockup_urls: placements, mockups_generated_at: generatedAt })
-      .eq('id', draftId)
-      .then(({ error }) => {
-        if (error) console.error('[preview-mockups] persist mockup_urls:', error.message)
-      })
+    const stored = await persistPrintfulMockupsToStorage(
+      admin,
+      authUser.id,
+      draftId,
+      placements as StoredMockupPlacement[]
+    )
+    const hasStoredPath = stored.some(
+      (p) =>
+        p.mockup_path?.trim() ||
+        (p.extra_mockups ?? []).some((e) => e.mockup_path?.trim())
+    )
+
+    if (hasStoredPath) {
+      const generatedAt = new Date().toISOString()
+      const dbPayload = mockupPlacementsForDatabase(stored)
+      const { error: persistError } = await supabase
+        .from('design_draft')
+        .update({ mockup_urls: dbPayload, mockups_generated_at: generatedAt })
+        .eq('id', draftId)
+      if (persistError) {
+        console.error('[preview-mockups] persist mockup_urls:', persistError.message)
+      } else {
+        mockupsPersisted = true
+      }
+
+      const resolved = await resolveMockupPlacementsForDisplay(admin, stored)
+      responsePlacements = resolved.map((p) => ({
+        placement: p.placement,
+        label: p.label,
+        mockup_url: p.mockup_url,
+        ...(p.extra_mockups?.length ? { extra_mockups: p.extra_mockups } : {}),
+      }))
+    } else {
+      console.warn('[preview-mockups] Printful mockups generated but storage upload failed')
+    }
   }
 
   return NextResponse.json({
     product_id: productId,
     variant_id: variantId,
-    placements,
+    placements: responsePlacements,
     mockup_generation_unavailable: !anyUrl,
+    mockups_persisted: mockupsPersisted,
     ...(mockupErrorReason ? { mockup_error: mockupErrorReason } : {}),
   })
 }

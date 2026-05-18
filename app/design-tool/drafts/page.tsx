@@ -22,10 +22,22 @@ function formatDate(iso: string) {
 
 function DraftCard({ draft }: { draft: DesignDraftRow }) {
   const router = useRouter()
-  const mockups = Array.isArray(draft.mockup_urls)
-    ? (draft.mockup_urls as Array<{ mockup_url?: string }>)
-    : []
-  const thumbUrl = mockups.find((m) => m.mockup_url?.trim())?.mockup_url ?? null
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/design-drafts/${draft.id}/mockup-thumb`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((body: { url?: string | null }) => {
+        if (!cancelled && body.url?.trim()) setThumbUrl(body.url.trim())
+      })
+      .catch(() => {
+        if (!cancelled) setThumbUrl(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [draft.id])
 
   return (
     <button

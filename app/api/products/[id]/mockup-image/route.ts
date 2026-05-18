@@ -2,13 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { pickPrimaryMockupUrl } from '@/lib/printful/pickPrimaryMockupForCard'
-
-type MockupPlacement = {
-  placement: string
-  label: string
-  mockup_url: string
-  extra_mockups?: Array<{ title: string; mockup_url: string }>
-}
+import {
+  resolveMockupPlacementsForDisplay,
+  type StoredMockupPlacement,
+} from '@/lib/productMockups/storage'
 
 /**
  * GET /api/products/[id]/mockup-image
@@ -66,9 +63,9 @@ export async function GET(
     .eq('final_product_id', productId)
     .maybeSingle()
 
-  /** Always use stored mockups for storefront thumbnails (shoe photos), not only when “fresh” vs product.updated_at — stale mockups beat showing the flat pattern art. */
-  const placements = (draft?.mockup_urls ?? []) as MockupPlacement[]
+  const rawPlacements = (draft?.mockup_urls ?? []) as StoredMockupPlacement[]
+  const placements = await resolveMockupPlacementsForDisplay(admin, rawPlacements)
   const url = pickPrimaryMockupUrl(placements)
 
-  return NextResponse.json({ url: url ?? null })
+  return NextResponse.json({ url: url?.trim() || null })
 }

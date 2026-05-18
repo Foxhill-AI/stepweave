@@ -5,13 +5,10 @@ import {
   compareMockupPlacementsForGallery,
   pickPrimaryMockupUrl,
 } from '@/lib/printful/pickPrimaryMockupForCard'
-
-type MockupPlacement = {
-  placement: string
-  label: string
-  mockup_url: string
-  extra_mockups?: Array<{ title: string; mockup_url: string }>
-}
+import {
+  resolveMockupPlacementsForDisplay,
+  type StoredMockupPlacement,
+} from '@/lib/productMockups/storage'
 
 export type MockupImageEntry = {
   url: string
@@ -78,12 +75,13 @@ export async function GET(
     .eq('final_product_id', productId)
     .maybeSingle()
 
-  const rawPlacements = (draft?.mockup_urls ?? []) as MockupPlacement[]
+  const rawPlacements = (draft?.mockup_urls ?? []) as StoredMockupPlacement[]
   const productName = (product as { name: string }).name
 
-  const cardPrimaryUrl = pickPrimaryMockupUrl(rawPlacements)
+  const resolvedPlacements = await resolveMockupPlacementsForDisplay(admin, rawPlacements)
+  const cardPrimaryUrl = pickPrimaryMockupUrl(resolvedPlacements)
 
-  const sorted = [...rawPlacements].sort(compareMockupPlacementsForGallery)
+  const sorted = [...resolvedPlacements].sort(compareMockupPlacementsForGallery)
 
   const images: MockupImageEntry[] = []
   for (const p of sorted) {

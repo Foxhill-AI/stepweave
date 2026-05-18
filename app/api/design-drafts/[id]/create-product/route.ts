@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import {
+  mockupPlacementsForDatabase,
+  persistPrintfulMockupsToStorage,
+  type StoredMockupPlacement,
+} from '@/lib/productMockups/storage'
 
 /**
  * POST /api/design-drafts/[id]/create-product
@@ -193,8 +198,26 @@ export async function POST(
     }
   }
 
-  const mockupList = draft?.mockup_urls
+  let mockupList = draft?.mockup_urls
   const hasMockups = Array.isArray(mockupList) && mockupList.length > 0
+
+  // Migrate any remaining Printful /tmp URLs to Supabase storage before publish.
+  if (hasMockups && authUser.id && supabaseUrl && serviceRoleKey) {
+    const stored = await persistPrintfulMockupsToStorage(
+      admin,
+      authUser.id,
+      draftId,
+      mockupList as StoredMockupPlacement[]
+    )
+    const hasStoredPath = stored.some(
+      (p) =>
+        p.mockup_path?.trim() ||
+        (p.extra_mockups ?? []).some((e) => e.mockup_path?.trim())
+    )
+    if (hasStoredPath) {
+      mockupList = mockupPlacementsForDatabase(stored)
+    }
+  }
 
   const { error: updateError } = await supabase
     .from('design_draft')
@@ -204,6 +227,7 @@ export async function POST(
       finalized_at: new Date().toISOString(),
       // Bless existing previews for this new product row (same instant as product.updated_at).
       mockups_generated_at: hasMockups ? new Date().toISOString() : null,
+      ...(Array.isArray(mockupList) ? { mockup_urls: mockupList } : {}),
     })
     .eq('id', draftId)
   if (updateError) {
