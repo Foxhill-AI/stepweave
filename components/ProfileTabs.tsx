@@ -2,18 +2,26 @@
 
 import '../styles/ProfileTabs.css'
 
-type TabType = 'products' | 'following' | 'orders' | 'liked' | 'settings'
+export type ProfileTabType =
+  | 'products'
+  | 'likes-received'
+  | 'followers'
+  | 'following'
+  | 'liked'
+  | 'settings'
+  | 'orders'
 
 interface ProfileTabsProps {
-  activeTab: TabType
-  onTabChange: (tab: TabType) => void
+  activeTab: ProfileTabType
+  onTabChange: (tab: ProfileTabType) => void
 }
 
-const tabs: { id: TabType; label: string }[] = [
+const tabs: { id: ProfileTabType; label: string }[] = [
   { id: 'products', label: 'My Products' },
-  { id: 'following', label: 'Following' },
-  { id: 'orders', label: 'Orders' },
+  { id: 'likes-received', label: 'Likes Received' },
   { id: 'liked', label: 'Liked' },
+  { id: 'followers', label: 'Followers' },
+  { id: 'following', label: 'Following' },
   { id: 'settings', label: 'Settings' },
 ]
 

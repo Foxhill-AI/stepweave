@@ -105,7 +105,8 @@
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 }
 
-.search-icon {
+.search-wrapper .search-icon {
+  position: static;
   color: var(--color-text-light);
   flex-shrink: 0;
   order: -1;

@@ -244,23 +244,27 @@
   transform: scaleX(1);
 }
 
+.navbar-link-my-hearts,
 .navbar-link-my-saves {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
 }
 
+.navbar-my-hearts-icon,
 .navbar-my-saves-icon {
   flex-shrink: 0;
   opacity: 0.88;
 }
 
+.navbar-mobile-link-my-hearts,
 .navbar-mobile-link-my-saves {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
+.navbar-my-hearts-icon-mobile,
 .navbar-my-saves-icon-mobile {
   flex-shrink: 0;
   opacity: 0.9;

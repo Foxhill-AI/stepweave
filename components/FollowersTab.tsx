@@ -3,20 +3,20 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { User, ChevronRight } from 'lucide-react'
-import { getFollowingAccounts, type FollowingAccountRow } from '@/lib/supabaseClient'
+import { getFollowerAccounts, type FollowingAccountRow } from '@/lib/supabaseClient'
 import { useAuth } from '@/components/AuthProvider'
 import '../styles/FollowingTab.css'
 
-export default function FollowingTab() {
+export default function FollowersTab() {
   const { userAccount } = useAuth()
   const [rows, setRows] = useState<FollowingAccountRow[] | null>(null)
 
-  const loadFollowing = useCallback(() => {
+  const loadFollowers = useCallback(() => {
     if (!userAccount?.id) {
       setRows([])
       return
     }
-    getFollowingAccounts(userAccount.id).then((list) => {
+    getFollowerAccounts(userAccount.id).then((list) => {
       setRows(list)
     })
   }, [userAccount?.id])
@@ -28,7 +28,7 @@ export default function FollowingTab() {
     }
     let cancelled = false
     setRows(null)
-    getFollowingAccounts(userAccount.id).then((list) => {
+    getFollowerAccounts(userAccount.id).then((list) => {
       if (!cancelled) setRows(list)
     })
     return () => {
@@ -37,10 +37,10 @@ export default function FollowingTab() {
   }, [userAccount?.id])
 
   useEffect(() => {
-    const onFollowingUpdated = () => loadFollowing()
+    const onFollowingUpdated = () => loadFollowers()
     window.addEventListener('following-updated', onFollowingUpdated)
     return () => window.removeEventListener('following-updated', onFollowingUpdated)
-  }, [loadFollowing])
+  }, [loadFollowers])
 
   if (rows === null) {
     return <p className="following-tab-loading" aria-live="polite">Loading…</p>
@@ -49,29 +49,30 @@ export default function FollowingTab() {
   if (rows.length === 0) {
     return (
       <p className="following-tab-empty" role="status">
-        You are not following anyone yet. Follow creators from their profile or a product page, then open their
-        storefront here to browse their designs.
+        No followers yet. When someone follows you from your profile or a product page, they will
+        appear here.
       </p>
     )
   }
 
   return (
     <div className="following-tab">
-      <p className="following-tab-intro">
-        People you follow. Use <strong>View products</strong> to open their public shop and browse active
-        designs.
-      </p>
+      <div className="likes-tab-header">
+        <h3 className="likes-tab-title">Followers</h3>
+        <span className="likes-tab-count">
+          {rows.length} {rows.length === 1 ? 'follower' : 'followers'}
+        </span>
+      </div>
       <ul className="following-tab-list">
         {rows.map((acc) => {
           const profilePath = `/profile/${encodeURIComponent(acc.username)}`
-          const productsHref = `${profilePath}#creator-products`
           return (
             <li key={acc.id}>
               <div className="following-tab-item">
                 <Link
-                  href={productsHref}
+                  href={profilePath}
                   className="following-tab-avatar-link"
-                  aria-label={`View products by ${acc.username}`}
+                  aria-label={`View profile for ${acc.username}`}
                 >
                   {acc.avatar_url ? (
                     <img src={acc.avatar_url} alt="" className="following-tab-avatar" />
@@ -85,8 +86,8 @@ export default function FollowingTab() {
                   <Link href={profilePath} className="following-tab-name">
                     {acc.username}
                   </Link>
-                  <Link href={productsHref} className="following-tab-products-cta">
-                    View products
+                  <Link href={profilePath} className="following-tab-products-cta">
+                    View profile
                     <ChevronRight size={16} aria-hidden className="following-tab-cta-icon" />
                   </Link>
                 </div>

@@ -1,7 +1,7 @@
 .likes-tab {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
+  gap: var(--spacing-md);
   animation: fadeIn 0.4s ease-out;
 }
 
@@ -41,7 +41,7 @@
 
 .likes-tab-loading,
 .likes-tab-empty {
-  padding: var(--spacing-2xl);
+  padding: var(--spacing-lg) 0;
   text-align: center;
   color: var(--color-text-light);
 }
@@ -49,4 +49,25 @@
 .likes-tab-loading p,
 .likes-tab-empty p {
   margin: 0;
+}
+
+.likes-received-item {
+  position: relative;
+}
+
+.likes-received-badge {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: var(--border-radius);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
 }
