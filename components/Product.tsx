@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Heart, Share2, Bookmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Clock, Download, Eye, Star } from 'lucide-react'
+import { Heart, Share2, Bookmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Clock, Eye, Star } from 'lucide-react'
 import ItemCard from './ItemCard'
 import Carousel from './Carousel'
 import { useAuth } from '@/components/AuthProvider'
@@ -269,7 +269,10 @@ export default function Product({
     const wasFollowing = isFollowing
     if (wasFollowing) {
       const { error } = await unfollowUser(userAccount.id, creatorUserAccountId)
-      if (!error) setIsFollowing(false)
+      if (!error) {
+        setIsFollowing(false)
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('following-updated'))
+      }
     } else {
       const { error } = await followUser(userAccount.id, creatorUserAccountId)
       if (!error) {
@@ -277,7 +280,10 @@ export default function Product({
         const msg = `${userAccount.username || 'Someone'} started following you`
         const link = productData.creator?.profileUrl ?? (productData.creator?.name ? `/profile/${encodeURIComponent(productData.creator.name)}` : null)
         createNotification(creatorUserAccountId, 'follow', msg, link).catch(() => {})
-        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('notifications-updated'))
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('notifications-updated'))
+          window.dispatchEvent(new CustomEvent('following-updated'))
+        }
       }
     }
     setFollowLoading(false)
@@ -639,12 +645,6 @@ export default function Product({
                 {(productData.views ?? 0) >= 1000
                   ? `${((productData.views ?? 0) / 1000).toFixed(1)}k`
                   : productData.views ?? 0} views
-              </span>
-              <span className="product-stat">
-                <Download size={16} />
-                {(productData.downloads || 0) >= 1000 
-                  ? `${((productData.downloads || 0) / 1000).toFixed(1)}k` 
-                  : productData.downloads || 0} downloads
               </span>
               {productData.timeAgo && (
                 <span className="product-stat">

@@ -117,6 +117,7 @@ export default function PublicProfilePage() {
       if (!error) {
         setIsFollowingCreator(false)
         fetch(`/api/profile-stats/${profile.id}`).then((r) => r.ok ? r.json() : null).then((s) => { if (s) setStats(s) })
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('following-updated'))
       }
     } else {
       const { error } = await followUser(userAccount.id, profile.id)
@@ -131,6 +132,7 @@ export default function PublicProfilePage() {
         ).catch(() => {})
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('notifications-updated'))
+          window.dispatchEvent(new CustomEvent('following-updated'))
         }
       }
     }

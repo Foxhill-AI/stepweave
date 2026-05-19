@@ -1999,17 +1999,176 @@ export const supabase =
       new Set(follows.map((f) => f.following_id).filter((id): id is number => typeof id === 'number'))
     )
     if (ids.length === 0) return []
-    const { data: accounts, error: accErr } = await supabase
-      .from('user_account')
-      .select('id, username, avatar_url')
-      .in('id', ids)
-    if (accErr) {
-      console.error('getFollowingAccounts accounts:', accErr)
+    const rank = new Map(ids.map((id, i) => [id, i]))
+
+    const { data: publicProfiles, error: pubErr } = await supabase
+      .from('user_public_profile')
+      .select('user_account_id, username, avatar_url')
+      .in('user_account_id', ids)
+    if (pubErr) {
+      console.error('getFollowingAccounts user_public_profile:', pubErr)
+    }
+
+    const byId = new Map<number, FollowingAccountRow>()
+    for (const row of publicProfiles ?? []) {
+      const username = row.username?.trim()
+      if (username && row.user_account_id != null) {
+        byId.set(row.user_account_id, {
+          id: row.user_account_id,
+          username,
+          avatar_url: row.avatar_url ?? null,
+        })
+      }
+    }
+
+    const missingIds = ids.filter((id) => !byId.has(id))
+    if (missingIds.length > 0) {
+      const { data: accounts, error: accErr } = await supabase
+        .from('user_account')
+        .select('id, username, avatar_url')
+        .in('id', missingIds)
+      if (accErr) {
+        console.error('getFollowingAccounts user_account fallback:', accErr)
+      } else {
+        for (const acc of accounts ?? []) {
+          const username = acc.username?.trim()
+          if (username) {
+            byId.set(acc.id, {
+              id: acc.id,
+              username,
+              avatar_url: acc.avatar_url ?? null,
+            })
+          }
+        }
+      }
+    }
+
+    return ids
+      .map((id) => byId.get(id))
+      .filter((row): row is FollowingAccountRow => row != null)
+  }
+
+  /** Users who follow the signed-in creator (for Followers tab). */
+  export async function getFollowerAccounts(
+    followingId: number
+  ): Promise<FollowingAccountRow[]> {
+    const { data: follows, error } = await supabase
+      .from('user_follow')
+      .select('follower_id')
+      .eq('following_id', followingId)
+    if (error) {
+      console.error('getFollowerAccounts:', error)
       return []
     }
-    const list = (accounts ?? []) as FollowingAccountRow[]
+    if (!follows?.length) return []
+    const ids = Array.from(
+      new Set(follows.map((f) => f.follower_id).filter((id): id is number => typeof id === 'number'))
+    )
+    if (ids.length === 0) return []
     const rank = new Map(ids.map((id, i) => [id, i]))
-    return [...list].sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+
+    const { data: publicProfiles, error: pubErr } = await supabase
+      .from('user_public_profile')
+      .select('user_account_id, username, avatar_url')
+      .in('user_account_id', ids)
+    if (pubErr) {
+      console.error('getFollowerAccounts user_public_profile:', pubErr)
+    }
+
+    const byId = new Map<number, FollowingAccountRow>()
+    for (const row of publicProfiles ?? []) {
+      const username = row.username?.trim()
+      if (username && row.user_account_id != null) {
+        byId.set(row.user_account_id, {
+          id: row.user_account_id,
+          username,
+          avatar_url: row.avatar_url ?? null,
+        })
+      }
+    }
+
+    const missingIds = ids.filter((id) => !byId.has(id))
+    if (missingIds.length > 0) {
+      const { data: accounts, error: accErr } = await supabase
+        .from('user_account')
+        .select('id, username, avatar_url')
+        .in('id', missingIds)
+      if (accErr) {
+        console.error('getFollowerAccounts user_account fallback:', accErr)
+      } else {
+        for (const acc of accounts ?? []) {
+          const username = acc.username?.trim()
+          if (username) {
+            byId.set(acc.id, {
+              id: acc.id,
+              username,
+              avatar_url: acc.avatar_url ?? null,
+            })
+          }
+        }
+      }
+    }
+
+    return ids
+      .map((id) => byId.get(id))
+      .filter((row): row is FollowingAccountRow => row != null)
+  }
+
+  export type CreatorProductLikesRow = {
+    productId: number
+    name: string
+    price: string
+    status: string
+    category?: string
+    image?: string
+    designData?: { imageUrl?: string; source?: string } | null
+    likes: number
+  }
+
+  /** Creator's products that have received at least one like (for Likes Received tab). */
+  export async function getCreatorProductsWithLikes(
+    userAccountId: number
+  ): Promise<CreatorProductLikesRow[]> {
+    const products = await getProductsByUserAccountId(userAccountId)
+    if (!products.length) return []
+
+    const productIds = products.map((p) => p.id as number)
+    const { data: interactions, error } = await supabase
+      .from('product_interaction')
+      .select('product_id')
+      .eq('interaction_type', 'like')
+      .in('product_id', productIds)
+    if (error) {
+      console.error('getCreatorProductsWithLikes:', error)
+      return []
+    }
+
+    const likeCounts = new Map<number, number>()
+    for (const row of interactions ?? []) {
+      const pid = row.product_id as number
+      likeCounts.set(pid, (likeCounts.get(pid) ?? 0) + 1)
+    }
+
+    const rows: CreatorProductLikesRow[] = []
+    for (const p of products) {
+      const pid = p.id as number
+      const likes = likeCounts.get(pid) ?? 0
+      if (likes <= 0) continue
+      const firstCategory = p.product_category?.[0]?.category?.name
+      const designData = p.design_data as { imageUrl?: string; source?: string } | null
+      rows.push({
+        productId: pid,
+        name: p.name,
+        price: `$${Number(p.price).toFixed(2)}`,
+        status: p.status,
+        category: firstCategory ?? undefined,
+        image: designData?.imageUrl,
+        designData,
+        likes,
+      })
+    }
+
+    return rows.sort((a, b) => b.likes - a.likes)
   }
 
   /** Profile stats for a user (followers, following, products count, likes received on their products). */

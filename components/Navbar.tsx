@@ -8,7 +8,7 @@ import {
   ShoppingCart,
   User,
   Palette,
-  Bookmark,
+  Heart,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
@@ -49,9 +49,7 @@ function NavbarInner(_props?: NavbarProps) {
   const isActive = (path: string) => pathname === path || (path !== '/' && pathname.startsWith(path + '/'))
 
   const profileTab = searchParams.get('tab')
-  const isMyProductsNav =
-    pathname === '/profile' &&
-    (profileTab === 'products' || profileTab === null || profileTab === '')
+  const isMyHeartsNav = pathname === '/profile' && profileTab === 'liked'
   const isFollowingNav = pathname === '/profile' && profileTab === 'following'
 
   const refreshCartCount = () => {
@@ -164,40 +162,38 @@ function NavbarInner(_props?: NavbarProps) {
             >
               Marketplace
             </Link>
-            {isLoggedIn && (
+            {isLoggedIn ? (
               <>
                 <Link
-                  href="/collection"
-                  className={`navbar-link navbar-link-my-saves ${isActive('/collection') ? 'navbar-link-active' : ''}`}
+                  href="/profile?tab=liked&focus=nav"
+                  className={`navbar-link navbar-link-my-hearts ${isMyHeartsNav ? 'navbar-link-active' : ''}`}
+                  aria-label="My Hearts"
                 >
-                  <Bookmark size={15} strokeWidth={2} aria-hidden className="navbar-my-saves-icon" />
-                  My Saves
+                  My{' '}
+                  <Heart size={15} strokeWidth={2} aria-hidden className="navbar-my-hearts-icon" />
                 </Link>
                 <Link
-                  href="/profile?tab=products"
-                  className={`navbar-link ${isMyProductsNav ? 'navbar-link-active' : ''}`}
-                >
-                  My Products
-                </Link>
-                <Link
-                  href="/profile?tab=following"
+                  href="/profile?tab=following&focus=nav"
                   className={`navbar-link ${isFollowingNav ? 'navbar-link-active' : ''}`}
                 >
                   Following
                 </Link>
               </>
+            ) : (
+              <>
+                {isBlogEnabled() && (
+                  <Link href="/blog" className={`navbar-link ${isActive('/blog') ? 'navbar-link-active' : ''}`}>
+                    Blog
+                  </Link>
+                )}
+                <Link
+                  href="/pricing"
+                  className={`navbar-link ${isActive('/pricing') ? 'navbar-link-active' : ''}`}
+                >
+                  Pricing
+                </Link>
+              </>
             )}
-            {isBlogEnabled() && (
-              <Link href="/blog" className={`navbar-link ${isActive('/blog') ? 'navbar-link-active' : ''}`}>
-                Blog
-              </Link>
-            )}
-            <Link
-              href="/pricing"
-              className={`navbar-link ${isActive('/pricing') ? 'navbar-link-active' : ''}`}
-            >
-              Pricing
-            </Link>
           </div>
         </div>
         
@@ -333,48 +329,45 @@ function NavbarInner(_props?: NavbarProps) {
           >
             Marketplace
           </Link>
-          {isLoggedIn && (
+          {isLoggedIn ? (
             <>
               <Link
-                href="/collection"
-                className={`navbar-mobile-link navbar-mobile-link-my-saves ${isActive('/collection') ? 'navbar-mobile-link-active' : ''}`}
+                href="/profile?tab=liked&focus=nav"
+                className={`navbar-mobile-link navbar-mobile-link-my-hearts ${isMyHeartsNav ? 'navbar-mobile-link-active' : ''}`}
                 onClick={toggleMobileMenu}
+                aria-label="My Hearts"
               >
-                <Bookmark size={18} strokeWidth={2} aria-hidden className="navbar-my-saves-icon-mobile" />
-                My Saves
+                My{' '}
+                <Heart size={18} strokeWidth={2} aria-hidden className="navbar-my-hearts-icon-mobile" />
               </Link>
               <Link
-                href="/profile?tab=products"
-                className={`navbar-mobile-link ${isMyProductsNav ? 'navbar-mobile-link-active' : ''}`}
-                onClick={toggleMobileMenu}
-              >
-                My Products
-              </Link>
-              <Link
-                href="/profile?tab=following"
+                href="/profile?tab=following&focus=nav"
                 className={`navbar-mobile-link ${isFollowingNav ? 'navbar-mobile-link-active' : ''}`}
                 onClick={toggleMobileMenu}
               >
                 Following
               </Link>
             </>
+          ) : (
+            <>
+              {isBlogEnabled() && (
+                <Link
+                  href="/blog"
+                  className={`navbar-mobile-link ${isActive('/blog') ? 'navbar-mobile-link-active' : ''}`}
+                  onClick={toggleMobileMenu}
+                >
+                  Blog
+                </Link>
+              )}
+              <Link
+                href="/pricing"
+                className={`navbar-mobile-link ${isActive('/pricing') ? 'navbar-mobile-link-active' : ''}`}
+                onClick={toggleMobileMenu}
+              >
+                Pricing
+              </Link>
+            </>
           )}
-          {isBlogEnabled() && (
-            <Link
-              href="/blog"
-              className={`navbar-mobile-link ${isActive('/blog') ? 'navbar-mobile-link-active' : ''}`}
-              onClick={toggleMobileMenu}
-            >
-              Blog
-            </Link>
-          )}
-          <Link
-            href="/pricing"
-            className={`navbar-mobile-link ${isActive('/pricing') ? 'navbar-mobile-link-active' : ''}`}
-            onClick={toggleMobileMenu}
-          >
-            Pricing
-          </Link>
           <Link
             href="/design-tool"
             className={`navbar-mobile-link navbar-mobile-button ${isActive('/design-tool') ? 'navbar-mobile-link-active' : ''}`}

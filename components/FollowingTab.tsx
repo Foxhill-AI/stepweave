@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { User, ChevronRight } from 'lucide-react'
 import { getFollowingAccounts, type FollowingAccountRow } from '@/lib/supabaseClient'
@@ -11,12 +11,23 @@ export default function FollowingTab() {
   const { userAccount } = useAuth()
   const [rows, setRows] = useState<FollowingAccountRow[] | null>(null)
 
+  const loadFollowing = useCallback(() => {
+    if (!userAccount?.id) {
+      setRows([])
+      return
+    }
+    getFollowingAccounts(userAccount.id).then((list) => {
+      setRows(list)
+    })
+  }, [userAccount?.id])
+
   useEffect(() => {
     if (!userAccount?.id) {
       setRows([])
       return
     }
     let cancelled = false
+    setRows(null)
     getFollowingAccounts(userAccount.id).then((list) => {
       if (!cancelled) setRows(list)
     })
@@ -24,6 +35,12 @@ export default function FollowingTab() {
       cancelled = true
     }
   }, [userAccount?.id])
+
+  useEffect(() => {
+    const onFollowingUpdated = () => loadFollowing()
+    window.addEventListener('following-updated', onFollowingUpdated)
+    return () => window.removeEventListener('following-updated', onFollowingUpdated)
+  }, [loadFollowing])
 
   if (rows === null) {
     return <p className="following-tab-loading" aria-live="polite">Loading…</p>

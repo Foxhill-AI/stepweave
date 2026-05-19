@@ -1,12 +1,14 @@
 'use client'
 
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import ProfileHeader from './ProfileHeader'
-import ProfileTabs from './ProfileTabs'
+import ProfileTabs, { type ProfileTabType } from './ProfileTabs'
 import MyProductsTab from './MyProductsTab'
 import FollowingTab from './FollowingTab'
+import FollowersTab from './FollowersTab'
+import LikesReceivedTab from './LikesReceivedTab'
 import OrdersTab, { type Order } from './OrdersTab'
 import LikesTab, { type LikedProduct } from './LikesTab'
 import SettingsTab from './SettingsTab'
@@ -16,10 +18,20 @@ import type { OrderWithItemsRow } from '@/lib/supabaseClient'
 import type { ProductListingRow } from '@/lib/supabaseClient'
 import '../styles/ProfilePage.css'
 
-// just testing the commit
-
-
-type TabType = 'products' | 'following' | 'orders' | 'liked' | 'settings'
+function parseTabParam(raw: string | null): ProfileTabType {
+  if (
+    raw === 'products' ||
+    raw === 'likes-received' ||
+    raw === 'followers' ||
+    raw === 'following' ||
+    raw === 'orders' ||
+    raw === 'settings' ||
+    raw === 'liked'
+  ) {
+    return raw
+  }
+  return 'products'
+}
 
 type SettingsSubTab = 'profile' | 'account' | 'payments' | 'subscription' | 'privacy'
 
@@ -96,18 +108,26 @@ interface ProfilePageProps {
 }
 
 function ProfilePageInner({ userData }: ProfilePageProps) {
+  const router = useRouter()
   const searchParams = useSearchParams()
-  const [activeTab, setActiveTab] = useState<TabType>('products')
+  const [activeTab, setActiveTab] = useState<ProfileTabType>(() => parseTabParam(searchParams.get('tab')))
   const { userAccount } = useAuth()
   const [orders, setOrders] = useState<Order[] | undefined>(undefined)
   const [likedProducts, setLikedProducts] = useState<LikedProduct[] | undefined>(undefined)
 
   useEffect(() => {
-    const tab = searchParams.get('tab')
-    if (tab === 'products' || tab === 'following' || tab === 'orders' || tab === 'settings' || tab === 'liked') {
-      setActiveTab(tab)
-    }
+    setActiveTab(parseTabParam(searchParams.get('tab')))
   }, [searchParams])
+
+  const handleTabChange = useCallback(
+    (tab: ProfileTabType) => {
+      setActiveTab(tab)
+      const params = new URLSearchParams()
+      params.set('tab', tab)
+      router.replace(`/profile?${params.toString()}`, { scroll: false })
+    },
+    [router]
+  )
 
   useEffect(() => {
     if (!userAccount?.id) {
@@ -152,16 +172,11 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
     return () => window.removeEventListener('collection-updated', onCollectionUpdated)
   }, [userAccount?.id])
 
-  // Merge with defaults only for optional display fields; stats come from Supabase via userData
   const defaultUserData = {
     username: userData?.username ?? 'User',
     bio: userData?.bio,
     avatar: userData?.avatar,
     joinedDate: userData?.joinedDate,
-    followers: userData?.followers ?? 0,
-    following: userData?.following ?? 0,
-    products: userData?.products ?? 0,
-    likes: userData?.likes ?? 0,
   }
 
   const isCreatorRedirect = searchParams.get('creator') === '1'
@@ -172,11 +187,13 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
   const settingsTabKey = settingsSubTab ?? 'profile'
   const publicUsername = userAccount?.username?.trim()
   const publicProfileUrl = publicUsername ? `/profile/${encodeURIComponent(publicUsername)}` : null
+  const isNavFocusTab = activeTab === 'liked' || activeTab === 'following'
+  const isFocusedNavView = isNavFocusTab && searchParams.get('focus') === 'nav'
 
   return (
-    <div className="profile-page">
+    <div className={`profile-page${isFocusedNavView ? ' profile-page--nav-focus' : ''}`}>
       <div className="profile-page-container">
-        {userAccount?.id && (
+        {!isFocusedNavView && userAccount?.id && (
           <nav className="profile-private-quick-actions" aria-label="Account quick actions">
             {publicProfileUrl && (
               <Link href={publicProfileUrl} className="profile-quick-action">
@@ -194,7 +211,7 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
             </Link>
           </nav>
         )}
-        {showCreatorSetupPrompt && (
+        {!isFocusedNavView && showCreatorSetupPrompt && (
           <div className="profile-creator-setup-prompt" role="status">
             <p className="profile-creator-setup-text">
               Set up your creator profile so others can find you: add a username and bio in Settings.
@@ -202,34 +219,40 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
             <button
               type="button"
               className="profile-creator-setup-btn"
-              onClick={() => setActiveTab('settings')}
+              onClick={() => handleTabChange('settings')}
             >
               Set up creator profile
             </button>
           </div>
         )}
-        <ProfileHeader
-          avatar={defaultUserData.avatar}
-          username={defaultUserData.username}
-          bio={defaultUserData.bio}
-          joinedDate={defaultUserData.joinedDate}
-          followers={defaultUserData.followers}
-          following={defaultUserData.following}
-          products={defaultUserData.products}
-          likes={defaultUserData.likes}
-        />
+        {!isFocusedNavView && (
+          <ProfileHeader
+            avatar={defaultUserData.avatar}
+            username={defaultUserData.username}
+            bio={defaultUserData.bio}
+            joinedDate={defaultUserData.joinedDate}
+          />
+        )}
 
-        <ProfileTabs activeTab={activeTab} onTabChange={setActiveTab} />
+        {!isFocusedNavView && (
+          <ProfileTabs activeTab={activeTab} onTabChange={handleTabChange} />
+        )}
 
         <div className="profile-content" role="tabpanel">
           {activeTab === 'products' && <MyProductsTab />}
+          {activeTab === 'likes-received' && <LikesReceivedTab />}
+          {activeTab === 'followers' && <FollowersTab />}
           {activeTab === 'following' && <FollowingTab />}
           {activeTab === 'orders' && <OrdersTab orders={orders} />}
           {activeTab === 'liked' && <LikesTab likedProducts={likedProducts} />}
           {activeTab === 'settings' && (
             <SettingsTab
               key={settingsTabKey}
-              userData={defaultUserData}
+              userData={{
+                username: defaultUserData.username,
+                bio: defaultUserData.bio,
+                avatar: defaultUserData.avatar,
+              }}
               initialSubTab={settingsSubTab}
             />
           )}
