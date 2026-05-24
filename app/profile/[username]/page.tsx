@@ -21,8 +21,6 @@ import {
 } from '@/lib/supabaseClient'
 import '@/styles/PublicProfile.css'
 
-type ProfileStats = { followers: number; following: number; products: number; likesReceived: number }
-
 function mapProductToItem(row: ProductListingRow) {
   const category = row.product_category?.[0]?.category
   const categoryLabel = category?.name ?? category?.slug ?? ''
@@ -51,7 +49,6 @@ export default function PublicProfilePage() {
   const username = (params?.username as string) ?? ''
   const { userAccount } = useAuth()
   const [profile, setProfile] = useState<PublicProfileRow | null>(null)
-  const [stats, setStats] = useState<ProfileStats | null>(null)
   const [products, setProducts] = useState<ReturnType<typeof mapProductToItem>[]>([])
   const [loading, setLoading] = useState(true)
   const [isFollowingCreator, setIsFollowingCreator] = useState(false)
@@ -61,7 +58,6 @@ export default function PublicProfilePage() {
     if (!username) {
       setLoading(false)
       setProfile(null)
-      setStats(null)
       setProducts([])
       return
     }
@@ -72,16 +68,11 @@ export default function PublicProfilePage() {
         if (cancelled) return
         setProfile(data)
         if (!data) {
-          setStats(null)
           setProducts([])
           return
         }
-        Promise.all([
-          fetch(`/api/profile-stats/${data.id}`).then((r) => r.ok ? r.json() : null).catch(() => null),
-          getProductsByUserAccountId(data.id),
-        ]).then(([statsData, productsData]) => {
+        getProductsByUserAccountId(data.id).then((productsData) => {
           if (cancelled) return
-          setStats(statsData)
           const active = (productsData as ProductListingRow[]).filter((p) => p.status === 'active')
           setProducts(active.map(mapProductToItem))
         })
@@ -116,14 +107,12 @@ export default function PublicProfilePage() {
       const { error } = await unfollowUser(userAccount.id, profile.id)
       if (!error) {
         setIsFollowingCreator(false)
-        fetch(`/api/profile-stats/${profile.id}`).then((r) => r.ok ? r.json() : null).then((s) => { if (s) setStats(s) })
         if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('following-updated'))
       }
     } else {
       const { error } = await followUser(userAccount.id, profile.id)
       if (!error) {
         setIsFollowingCreator(true)
-        fetch(`/api/profile-stats/${profile.id}`).then((r) => r.ok ? r.json() : null).then((s) => { if (s) setStats(s) })
         createNotification(
           profile.id,
           'follow',
@@ -197,10 +186,6 @@ export default function PublicProfilePage() {
             avatar={profile.avatar_url ?? undefined}
             username={profile.username}
             bio={profile.bio ?? undefined}
-            followers={stats?.followers ?? 0}
-            following={stats?.following ?? 0}
-            products={stats?.products ?? 0}
-            likes={stats?.likesReceived ?? 0}
           />
           {showFollowButton && (
             <div className="public-profile-actions">
