@@ -1,7 +1,6 @@
 'use client'
 
 import { Suspense, useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ProfileHeader from './ProfileHeader'
 import ProfileTabs, { type ProfileTabType } from './ProfileTabs'
@@ -193,24 +192,6 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
   return (
     <div className={`profile-page${isFocusedNavView ? ' profile-page--nav-focus' : ''}`}>
       <div className="profile-page-container">
-        {!isFocusedNavView && userAccount?.id && (
-          <nav className="profile-private-quick-actions" aria-label="Account quick actions">
-            {publicProfileUrl && (
-              <Link href={publicProfileUrl} className="profile-quick-action">
-                View public profile
-              </Link>
-            )}
-            <Link href="/profile?tab=settings&sub=profile" className="profile-quick-action">
-              Edit profile
-            </Link>
-            <Link href="/profile?tab=products" className="profile-quick-action">
-              My products
-            </Link>
-            <Link href="/profile?tab=orders" className="profile-quick-action">
-              Orders
-            </Link>
-          </nav>
-        )}
         {!isFocusedNavView && showCreatorSetupPrompt && (
           <div className="profile-creator-setup-prompt" role="status">
             <p className="profile-creator-setup-text">
@@ -254,6 +235,7 @@ function ProfilePageInner({ userData }: ProfilePageProps) {
                 avatar: defaultUserData.avatar,
               }}
               initialSubTab={settingsSubTab}
+              publicProfileUrl={publicProfileUrl}
             />
           )}
         </div>

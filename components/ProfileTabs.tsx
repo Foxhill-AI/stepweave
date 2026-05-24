@@ -18,6 +18,7 @@ interface ProfileTabsProps {
 
 const tabs: { id: ProfileTabType; label: string }[] = [
   { id: 'products', label: 'My Products' },
+  { id: 'orders', label: 'Orders' },
   { id: 'likes-received', label: 'Likes Received' },
   { id: 'liked', label: 'Liked' },
   { id: 'followers', label: 'Followers' },

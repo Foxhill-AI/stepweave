@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { User, Mail, Lock, CreditCard, Bell, Pencil, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { updateUserProfile } from '@/lib/supabaseClient'
@@ -23,6 +24,7 @@ interface SettingsTabProps {
   }
   /** Open this sub-tab on mount (e.g. from /profile?tab=settings&sub=subscription) */
   initialSubTab?: 'profile' | 'account' | 'payments' | 'subscription' | 'privacy'
+  publicProfileUrl?: string | null
 }
 
 const PRO_FEATURES_LOST_DOWNGRADE = [
@@ -42,7 +44,7 @@ const CREATOR_FEATURES_LOST_CANCEL = [
   'Creator dashboard',
 ]
 
-export default function SettingsTab({ userData, initialSubTab }: SettingsTabProps) {
+export default function SettingsTab({ userData, initialSubTab, publicProfileUrl }: SettingsTabProps) {
   const { userAccount, refreshUserAccount } = useAuth()
   const [activeSubTab, setActiveSubTab] = useState<'profile' | 'account' | 'payments' | 'subscription' | 'privacy'>(initialSubTab ?? 'profile')
   const [isEditing, setIsEditing] = useState(false)
@@ -313,10 +315,17 @@ export default function SettingsTab({ userData, initialSubTab }: SettingsTabProp
             <div className="settings-section-header">
               <h3 className="settings-section-title">Profile Settings</h3>
               {!isEditing && (
-                <button type="button" className="settings-edit-btn" onClick={startEditing} aria-label="Edit profile">
-                  <Pencil size={18} aria-hidden />
-                  Edit profile
-                </button>
+                <div className="settings-section-actions">
+                  {publicProfileUrl && (
+                    <Link href={publicProfileUrl} className="settings-action-link">
+                      View public profile
+                    </Link>
+                  )}
+                  <button type="button" className="settings-edit-btn" onClick={startEditing} aria-label="Edit profile">
+                    <Pencil size={18} aria-hidden />
+                    Edit profile
+                  </button>
+                </div>
               )}
             </div>
 

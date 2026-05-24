@@ -1,7 +1,7 @@
 .profile-page {
   min-height: 100vh;
   background: linear-gradient(to bottom, var(--color-background-light) 0%, var(--color-background) 20%);
-  padding: var(--spacing-2xl) 0;
+  padding: var(--spacing-md) 0 var(--spacing-xl);
 }
 
 .profile-page-container {
@@ -9,34 +9,6 @@
   margin: 0 auto;
   padding: 0 var(--spacing-md);
   animation: fadeIn 0.4s ease-out;
-}
-
-.profile-private-quick-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-sm) 0;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.profile-quick-action {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--spacing-xs) var(--spacing-md);
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--color-primary);
-  text-decoration: none;
-  border-radius: var(--border-radius);
-  border: 1px solid transparent;
-  transition: var(--transition);
-}
-
-.profile-quick-action:hover {
-  background: var(--color-background-light);
-  border-color: var(--color-border);
-  color: var(--color-primary);
 }
 
 .profile-creator-setup-prompt {
@@ -98,7 +70,7 @@
 }
 
 .profile-content {
-  padding: var(--spacing-md) 0 var(--spacing-lg);
+  padding: 0 0 var(--spacing-lg);
   animation: fadeInUp 0.5s ease-out 0.1s both;
 }
 

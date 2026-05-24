@@ -1,14 +1,14 @@
 .profile-header {
   background: transparent;
   padding: 0;
-  margin-bottom: var(--spacing-2xl);
+  margin-bottom: var(--spacing-sm);
   position: relative;
 }
 
 .profile-header::after {
   content: '';
   position: absolute;
-  bottom: -var(--spacing-xl);
+  bottom: calc(-1 * var(--spacing-sm));
   left: 0;
   right: 0;
   height: 1px;
@@ -24,17 +24,17 @@
 .profile-header-main {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
-  margin-bottom: var(--spacing-2xl);
-  padding: var(--spacing-xl) 0;
+  gap: var(--spacing-md);
+  margin-bottom: 0;
+  padding: 0;
 }
 
 @media (min-width: 768px) {
   .profile-header-main {
     flex-direction: row;
     align-items: flex-start;
-    gap: var(--spacing-2xl);
-    padding: var(--spacing-2xl) 0;
+    gap: var(--spacing-lg);
+    padding: 0;
   }
 }
 
