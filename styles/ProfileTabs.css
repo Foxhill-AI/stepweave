@@ -1,14 +1,14 @@
 .profile-tabs {
   border-bottom: 1px solid var(--color-border);
-  margin-bottom: var(--spacing-2xl);
+  margin-bottom: 0;
   background: transparent;
   position: sticky;
   top: 0;
   z-index: 100;
   backdrop-filter: blur(20px) saturate(180%);
   background: rgba(255, 255, 255, 0.8);
-  padding: var(--spacing-sm) 0;
-  margin-top: calc(-1 * var(--spacing-sm));
+  padding: var(--spacing-xs) 0;
+  margin-top: 0;
 }
 
 .profile-tabs-container {
