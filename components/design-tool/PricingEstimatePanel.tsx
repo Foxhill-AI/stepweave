@@ -12,8 +12,12 @@ export function formatPricingMoney(amount: number, currency: string): string {
   }
 }
 
-/** Seller's profit split. Will come from user tier in future; default 15%. */
-const SELLER_MARGIN_RATE = 0.15
+const NEXT_TIER: Record<string, { name: string; shareRate: number; price: string }> = {
+  free:    { name: 'Starter', shareRate: 0.50, price: '$9/mo' },
+  starter: { name: 'Pro',     shareRate: 0.90, price: '$29/mo' },
+}
+
+type TierInfo = { tier: string; shareRate: number }
 
 type Props = {
   productId: string | null
@@ -22,6 +26,8 @@ type Props = {
   onEstimate?: (estimate: PricingEstimateOk | null) => void
   /** Current list price for profit calculation and minimum enforcement. */
   listPriceInput?: string
+  /** Path to return to after an upgrade (e.g. "/design-tool/123"). Enables the upgrade nudge. */
+  returnPath?: string
   className?: string
 }
 
@@ -31,6 +37,7 @@ export default function PricingEstimatePanel({
   quantity = 1,
   onEstimate,
   listPriceInput = '',
+  returnPath,
   className = '',
 }: Props) {
   const onEstimateRef = useRef(onEstimate)
@@ -39,10 +46,12 @@ export default function PricingEstimatePanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<PricingEstimateOk | null>(null)
+  const [tierInfo, setTierInfo] = useState<TierInfo | null>(null)
 
   useEffect(() => {
     if (!productId || variantId == null) {
       setData(null)
+      setTierInfo(null)
       setError(null)
       setLoading(false)
       onEstimateRef.current?.(null)
@@ -64,21 +73,27 @@ export default function PricingEstimatePanel({
           if (!res.ok) {
             throw new Error(typeof json.error === 'string' ? json.error : 'Could not estimate pricing.')
           }
-          return json as PricingEstimateOk
+          return json as PricingEstimateOk & { creatorTier?: string; creatorShareRate?: number }
         })
         .then((est) => {
           if (cancelled) return
           if (!est || est.ok !== true) {
             setData(null)
+            setTierInfo(null)
             onEstimateRef.current?.(null)
             return
           }
           setData(est)
+          setTierInfo({
+            tier: typeof est.creatorTier === 'string' ? est.creatorTier : 'free',
+            shareRate: typeof est.creatorShareRate === 'number' ? est.creatorShareRate : 0.15,
+          })
           onEstimateRef.current?.(est)
         })
         .catch((e: unknown) => {
           if (cancelled) return
           setData(null)
+          setTierInfo(null)
           setError(e instanceof Error ? e.message : 'Could not estimate pricing.')
           onEstimateRef.current?.(null)
         })
@@ -102,17 +117,27 @@ export default function PricingEstimatePanel({
   const priceNum = parseFloat(listPriceInput)
   const hasPrice = Number.isFinite(priceNum) && priceNum > 0
 
-  // Stripe fee at current price (dynamic)
   const stripeFee = hasPrice ? Math.round((priceNum * STRIPE_RATE + STRIPE_FIXED) * 100) / 100 : null
 
-  // Profit calculation:
-  //   margin = price - baseCosts - stripe_fee - price * PLATFORM_BUFFER_RATE
-  //   seller profit = margin * SELLER_MARGIN_RATE
-  let profitPerSale: number | null = null
-  if (data && hasPrice && stripeFee !== null && priceNum >= data.minimumViablePrice) {
-    const margin = priceNum - data.baseCosts - stripeFee - priceNum * PLATFORM_BUFFER_RATE
-    profitPerSale = Math.max(0, Math.round(margin * SELLER_MARGIN_RATE * 100) / 100)
-  }
+  // Net margin after Stripe rate + platform buffer, minus Printful cost.
+  const margin =
+    data && hasPrice && stripeFee !== null && priceNum >= data.minimumViablePrice
+      ? Math.max(0, priceNum * (1 - STRIPE_RATE - PLATFORM_BUFFER_RATE) - data.baseCosts)
+      : null
+
+  const shareRate = tierInfo?.shareRate ?? 0.15
+  const profitPerSale = margin !== null ? Math.round(margin * shareRate * 100) / 100 : null
+
+  const currentTier = tierInfo?.tier ?? 'free'
+  const nextTier = NEXT_TIER[currentTier] ?? null
+  const nextTierProfit =
+    margin !== null && nextTier
+      ? Math.round(margin * nextTier.shareRate * 100) / 100
+      : null
+
+  const upgradeHref = returnPath
+    ? `/become-creator?return=${encodeURIComponent(returnPath)}`
+    : '/become-creator'
 
   return (
     <div className={`design-tool-pricing-estimate ${className}`.trim()} role="region" aria-label="Cost estimate">
@@ -147,16 +172,13 @@ export default function PricingEstimatePanel({
               )
             })}
 
-            {/* Stripe fee — dynamic based on current price */}
             <li className="design-tool-pricing-estimate-row">
               <span className="design-tool-pricing-estimate-label">
                 Payment processing
                 <span className="design-tool-pricing-estimate-detail">2.9% + $0.30 per transaction</span>
               </span>
               <span className="design-tool-pricing-estimate-amount">
-                {stripeFee !== null
-                  ? formatPricingMoney(stripeFee, data.currency)
-                  : '—'}
+                {stripeFee !== null ? formatPricingMoney(stripeFee, data.currency) : '—'}
               </span>
             </li>
 
@@ -172,20 +194,42 @@ export default function PricingEstimatePanel({
             {profitPerSale !== null && (
               <>
                 <li className="design-tool-pricing-estimate-row design-tool-pricing-estimate-row--profit-label">
-                  <span className="design-tool-pricing-estimate-label">Your profit margin</span>
+                  <span className="design-tool-pricing-estimate-label">
+                    Your profit margin
+                    <span className="design-tool-pricing-estimate-detail">
+                      {Math.round(shareRate * 100)}% of net margin · {currentTier} plan
+                    </span>
+                  </span>
                   <span className="design-tool-pricing-estimate-amount design-tool-pricing-estimate-amount--highlight">
-                    {Math.round(SELLER_MARGIN_RATE * 100)}%
+                    {formatPricingMoney(profitPerSale, data.currency)}/sale
                   </span>
                 </li>
-                <li className="design-tool-pricing-estimate-row design-tool-pricing-estimate-row--profit">
-                  <span className="design-tool-pricing-estimate-label">Your profit per sale</span>
-                  <span className="design-tool-pricing-estimate-amount design-tool-pricing-estimate-amount--highlight">
-                    {formatPricingMoney(profitPerSale, data.currency)}
-                  </span>
-                </li>
+
+                {nextTier && nextTierProfit !== null && (
+                  <li className="design-tool-pricing-estimate-row design-tool-pricing-estimate-row--upgrade-hint">
+                    <span className="design-tool-pricing-estimate-label">
+                      On {nextTier.name} ({nextTier.price})
+                      <span className="design-tool-pricing-estimate-detail">
+                        {Math.round(nextTier.shareRate * 100)}% of net margin
+                      </span>
+                    </span>
+                    <span className="design-tool-pricing-estimate-amount design-tool-pricing-estimate-amount--upgrade">
+                      {formatPricingMoney(nextTierProfit, data.currency)}/sale
+                    </span>
+                  </li>
+                )}
               </>
             )}
           </ul>
+
+          {nextTier && nextTierProfit !== null && profitPerSale !== null && (
+            <a
+              href={upgradeHref}
+              className="design-tool-pricing-estimate-upgrade-btn"
+            >
+              Upgrade to {nextTier.name} and earn {formatPricingMoney(nextTierProfit, data.currency)} per sale →
+            </a>
+          )}
 
           <p className="design-tool-pricing-estimate-note design-tool-pricing-estimate-note--muted">
             {data.note}

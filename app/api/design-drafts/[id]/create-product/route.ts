@@ -56,7 +56,7 @@ export async function POST(
     return NextResponse.json({ error: 'Not allowed to use this draft' }, { status: 403 })
   }
 
-  let body: { name?: string; price?: number; categoryId?: number }
+  let body: { name?: string; price?: number; baseCost?: number; categoryId?: number }
   try {
     body = await request.json()
   } catch {
@@ -64,6 +64,7 @@ export async function POST(
   }
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   const price = Number(body.price)
+  const baseCost = typeof body.baseCost === 'number' && body.baseCost >= 0 ? body.baseCost : null
   const categoryId = typeof body.categoryId === 'number' && body.categoryId > 0 ? body.categoryId : null
   if (!name) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
@@ -111,6 +112,7 @@ export async function POST(
       user_account_id: userAccountId,
       name,
       price,
+      ...(baseCost !== null ? { base_cost: baseCost } : {}),
       status: 'active',
       design_data: {
         source: 'design_draft',
