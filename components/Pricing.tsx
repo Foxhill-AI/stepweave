@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useState, useEffect, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Check } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
@@ -9,6 +9,7 @@ import '../styles/pricing.css'
 
 function PricingInner() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const { user, userAccount, refreshUserAccount } = useAuth()
   const currentTier = userAccount?.subscription_tier ?? 'free'
   const [submitting, setSubmitting] = useState<string | null>(null)
@@ -31,7 +32,13 @@ function PricingInner() {
     })
       .then((res) => res.json().catch(() => ({})))
       .then((data) => {
-        if (data?.ok) refreshUserAccount()
+        if (data?.ok) {
+          refreshUserAccount()
+          const returnPath = searchParams.get('return')
+          if (returnPath?.startsWith('/') && !returnPath.includes('://')) {
+            router.push(returnPath + '?upgraded=1')
+          }
+        }
       })
       .catch(() => {})
   }, [searchParams, user?.id, refreshUserAccount])
@@ -75,13 +82,13 @@ function PricingInner() {
       price: '$0',
       period: 'forever',
       subtitle: 'Free forever',
-      description: 'Perfect for exploring and learning. Get started with essential features at no cost.',
+      description: 'Start designing and selling custom shoes with no upfront cost.',
       features: [
-        '5 GB storage',
-        'Basic templates',
-        'Community support',
-        'Standard quality exports',
-        'Up to 10 projects',
+        '20 AI design credits / month',
+        '15% creator share on sales',
+        'Full access to AI design tool',
+        'Sell on the StepWeave marketplace',
+        'Upload your own reference photos',
       ],
       cta: 'Get Started',
       ctaVariant: 'primary',
@@ -92,18 +99,17 @@ function PricingInner() {
       name: 'Starter',
       price: '$9',
       period: 'month',
-      subtitle: 'Starts at $9/month',
-      description: 'Ideal for individual creators and small projects. Unlock more features and resources.',
+      subtitle: '$9 / month',
+      description: 'More credits and a bigger share — ideal for active creators.',
       features: [
-        '50 GB storage',
-        'Premium templates',
+        '50 AI design credits / month',
+        '50% creator share on sales',
+        'Full access to AI design tool',
+        'Sell on the StepWeave marketplace',
+        'Upload your own reference photos',
         'Priority support',
-        'High quality exports',
-        'Unlimited projects',
-        'Advanced customization',
-        'Early access to new features',
       ],
-      cta: 'Start Free Trial',
+      cta: 'Upgrade to Starter',
       ctaVariant: 'primary',
       recommended: false,
     },
@@ -112,21 +118,18 @@ function PricingInner() {
       name: 'Pro',
       price: '$29',
       period: 'month',
-      subtitle: 'Starts at $29/month',
-      description: 'For professional creators and teams. Everything you need to scale your creative work.',
+      subtitle: '$29 / month',
+      description: 'Maximum credits and the highest creator share for serious designers.',
       features: [
-        '500 GB storage',
-        'All premium templates',
-        '24/7 priority support',
-        'Ultra high quality exports',
-        'Unlimited projects',
-        'Team collaboration',
-        'Advanced analytics',
-        'Custom branding',
-        'API access',
-        'White-label options',
+        '300 AI design credits / month',
+        '90% creator share on sales',
+        'Full access to AI design tool',
+        'Sell on the StepWeave marketplace',
+        'Upload your own reference photos',
+        'Priority support',
+        'Early access to new features',
       ],
-      cta: 'Start Free Trial',
+      cta: 'Upgrade to Pro',
       ctaVariant: 'recommended',
       recommended: true,
     },

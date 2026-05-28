@@ -119,6 +119,12 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
   const [chatLoading, setChatLoading] = useState(false)
   /** null = no photo attached; 'direct' = place on shoe; 'ai-reference' = use as prompt inspiration */
   const [photoMode, setPhotoMode] = useState<null | 'direct' | 'ai-reference'>(null)
+  /** Credits remaining after last generation; null = not yet known */
+  const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null)
+  /** Credit limit for the user's tier; null = not yet known */
+  const [creditLimit, setCreditLimit] = useState<number | null>(null)
+  /** Tier from last response */
+  const [creditTier, setCreditTier] = useState<string | null>(null)
 
   // Reference image state
   const [referencePreviewUrl, setReferencePreviewUrl] = useState<string | null>(null)
@@ -289,15 +295,26 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
         error?: string
         variants?: AiGeneratedVariant[]
         style_summary?: string
+        creditsRemaining?: number
+        creditLimit?: number
+        tier?: string
       }
       if (!res.ok) {
         setError(body.error || 'Generation failed.')
+        // Capture credit state even from error responses (e.g. 402 depleted)
+        if (body.creditsRemaining !== undefined) setCreditsRemaining(body.creditsRemaining)
+        if (body.creditLimit !== undefined) setCreditLimit(body.creditLimit)
+        if (body.tier !== undefined) setCreditTier(body.tier)
         return
       }
       if (!body.variants?.length) {
         setError('No images were returned. Try again.')
         return
       }
+      // Update credit state
+      if (body.creditsRemaining !== undefined) setCreditsRemaining(body.creditsRemaining)
+      if (body.creditLimit !== undefined) setCreditLimit(body.creditLimit)
+      if (body.tier !== undefined) setCreditTier(body.tier)
       const newTurn: GenerationTurn = {
         id: crypto.randomUUID(),
         prompt: trimmed,
@@ -466,6 +483,23 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
         </div>
       )}
 
+      {/* ── Credit banners ── */}
+      {creditsRemaining !== null && creditLimit !== null && creditsRemaining === 0 && (
+        <div className="ai-prompt-credits-banner ai-prompt-credits-banner--depleted" role="alert">
+          <span>You&apos;ve used all {creditLimit} design credits for this month.</span>
+          <span>Upload your own photo to keep going, or{' '}
+            <a href="/become-creator" className="ai-prompt-credits-link">upgrade your plan</a>
+            {' '}for more.
+          </span>
+        </div>
+      )}
+      {creditsRemaining !== null && (creditTier === 'free' || creditTier === 'starter') && creditsRemaining > 0 && creditsRemaining <= 5 && (
+        <div className="ai-prompt-credits-banner" role="status">
+          <span>{creditsRemaining} design credit{creditsRemaining === 1 ? '' : 's'} left this month.</span>
+          <a href="/become-creator" className="ai-prompt-credits-link">Upgrade for more →</a>
+        </div>
+      )}
+
       {/* ── Input area ── */}
       <div className="ai-prompt-input-wrap">
         {/* Hidden file input */}
@@ -574,9 +608,11 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
               id="ai-prompt-input"
               className="ai-prompt-input"
               placeholder={
-                history.length > 0
-                  ? 'Refine, iterate, or try a new direction…'
-                  : 'Describe what you want to create…'
+                creditsRemaining === 0
+                  ? 'No credits left — upload a photo instead'
+                  : history.length > 0
+                    ? 'Refine, iterate, or try a new direction…'
+                    : 'Describe what you want to create…'
               }
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -588,7 +624,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
               }}
               rows={2}
               aria-label="Design prompt"
-              disabled={loading}
+              disabled={loading || creditsRemaining === 0}
             />
           </>
         )}
@@ -603,7 +639,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
             type="button"
             className="ai-prompt-btn primary"
             onClick={() => void handleGenerate()}
-            disabled={loading || chatLoading || noDraft || !prompt.trim() || referenceUploading}
+            disabled={loading || chatLoading || noDraft || !prompt.trim() || referenceUploading || creditsRemaining === 0}
           >
             {loading ? 'Generating…' : 'Generate'}
           </button>

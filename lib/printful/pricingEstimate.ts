@@ -46,10 +46,6 @@ export function parsePrintfulMoney(value: unknown): number {
   return 0
 }
 
-/**
- * Estimated listing economics from Printful catalog variant price + shipping.
- * Tax is intentionally excluded — real sales tax is collected at checkout.
- */
 export async function estimatePrintfulListingCosts(params: {
   apiKey: string
   storeId: string
@@ -142,9 +138,9 @@ export async function estimatePrintfulListingCosts(params: {
 
   const baseCosts = Math.round((fulfillment + shippingCost) * 100) / 100
 
-  // Minimum viable price: solve for P where margin = 0
+  // Minimum viable price: solve for P where platform breaks even (same for all creator tiers —
+  // creator share only applies to the margin above this floor, not to the floor itself).
   //   P - baseCosts - (P * STRIPE_RATE + STRIPE_FIXED) - P * PLATFORM_BUFFER_RATE = 0
-  //   P * (1 - STRIPE_RATE - PLATFORM_BUFFER_RATE) = baseCosts + STRIPE_FIXED
   //   P = (baseCosts + STRIPE_FIXED) / (1 - STRIPE_RATE - PLATFORM_BUFFER_RATE)
   const denominator = 1 - STRIPE_RATE - PLATFORM_BUFFER_RATE
   const minimumViablePrice = Math.ceil(((baseCosts + STRIPE_FIXED) / denominator) * 100) / 100

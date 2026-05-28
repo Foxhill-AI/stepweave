@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import {
   getCartItems,
@@ -11,7 +12,7 @@ import {
   type CreateOrderItemInput,
 } from '@/lib/supabaseClient'
 import { resolveDesignSnapshotForProductCheckout } from '@/lib/checkout/resolveDesignSnapshotForProduct'
-import { getPlatformFeeBps, splitLineSubtotal } from '@/lib/platformFee'
+import { getPlatformFeeBpsByTier, getCreatorShareRate, splitLineByMargin } from '@/lib/platformFee'
 
 /** Body `designDraftByCartItemId`: maps cart_item.id → design_draft.id (must belong to cart owner). */
 function parseDesignDraftByCartItemId(
@@ -151,7 +152,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const feeBps = getPlatformFeeBps()
+    // Look up each seller's subscription tier so the correct creator share is applied.
+    const sellerIds = Array.from(
+      new Set(
+        cartItems
+          .map((row) => {
+            const uid = row.product_variant?.product?.user_account_id
+            return typeof uid === 'number' ? uid : null
+          })
+          .filter((id): id is number => id !== null)
+      )
+    )
+
+    const sellerTierMap = new Map<number, string>()
+    if (sellerIds.length > 0) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+      if (supabaseUrl && serviceRoleKey) {
+        const admin = createClient(supabaseUrl, serviceRoleKey)
+        const { data: sellerRows } = await admin
+          .from('user_account')
+          .select('id, subscription_tier')
+          .in('id', sellerIds)
+        if (sellerRows) {
+          for (const row of sellerRows) {
+            if (typeof row.id === 'number' && row.subscription_tier) {
+              sellerTierMap.set(row.id, String(row.subscription_tier))
+            }
+          }
+        }
+      }
+    }
+
     const orderItems: CreateOrderItemInput[] = cartItems.map((row) => {
       const product = row.product_variant?.product
       const productId = product?.id ?? 0
@@ -163,7 +195,15 @@ export async function POST(request: NextRequest) {
         product != null && typeof product.user_account_id === 'number'
           ? product.user_account_id
           : null
-      const { platformFeeAmount, sellerNetAmount } = splitLineSubtotal(lineSubtotal, feeBps)
+      const sellerTier = sellerId != null ? (sellerTierMap.get(sellerId) ?? 'free') : 'free'
+      const creatorShareRate = getCreatorShareRate(sellerTier)
+      const baseCostPerUnit = typeof product?.base_cost === 'number' ? product.base_cost : 0
+      const baseCostTotal = baseCostPerUnit * quantity
+      const { platformFeeAmount, sellerNetAmount, effectiveFeeBps } = splitLineByMargin(
+        lineSubtotal,
+        baseCostTotal,
+        creatorShareRate
+      )
       const base: CreateOrderItemInput = {
         product_id: productId,
         product_variant_id: row.product_variant_id,
@@ -173,7 +213,7 @@ export async function POST(request: NextRequest) {
         unit_price: unitPrice,
         stripe_price_id: row.product_variant?.stripe_price_id ?? undefined,
         seller_user_account_id: sellerId,
-        platform_fee_rate_bps: feeBps,
+        platform_fee_rate_bps: effectiveFeeBps,
         platform_fee_amount: platformFeeAmount,
         seller_net_amount: sellerNetAmount,
       }

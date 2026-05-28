@@ -159,6 +159,7 @@ export default function PublishFlowModal({
         body: JSON.stringify({
           name: trimmedName,
           price: priceNum,
+          baseCost: publishEstimate?.baseCosts ?? undefined,
           categoryId: categoryId !== '' ? (categoryId as number) : undefined,
         }),
       })
@@ -332,6 +333,7 @@ export default function PublishFlowModal({
                 quantity={1}
                 listPriceInput={price}
                 onEstimate={setPublishEstimate}
+                returnPath={`/design-tool/${draftId}`}
                 className="pf-modal-estimate"
               />
             )}

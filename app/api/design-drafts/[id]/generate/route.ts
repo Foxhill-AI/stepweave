@@ -9,6 +9,17 @@ const BUCKET = 'design-patterns'
 const SIGNED_URL_EXPIRES_IN = 3600
 const MAX_PROMPT_LENGTH = 4000
 
+const CREDIT_LIMITS: Record<string, number> = {
+  free: 20,
+  starter: 50,
+  pro: 300,
+}
+
+function currentMonth(): string {
+  const d = new Date()
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
 type GenerateBody = {
   mode?: 'text-to-image' | 'image-to-image'
   prompt?: string
@@ -89,11 +100,6 @@ export async function POST(
     return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
   }
 
-  const textMod = await moderateText(prompt)
-  if (!textMod.allowed) {
-    return NextResponse.json({ error: textMod.message }, { status: 400 })
-  }
-
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !serviceRoleKey) {
@@ -102,6 +108,41 @@ export async function POST(
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
+
+  // ── Credit check ─────────────────────────────────────────────────────────
+  const { data: accountRow } = await admin
+    .from('user_account')
+    .select('subscription_tier')
+    .eq('id', userAccount.id)
+    .maybeSingle()
+  const tier = (accountRow?.subscription_tier as string | null) ?? 'free'
+  const creditLimit = CREDIT_LIMITS[tier] ?? CREDIT_LIMITS.free
+  const month = currentMonth()
+
+  const { data: usageRow } = await admin
+    .from('user_credit_usage')
+    .select('credits_used')
+    .eq('user_account_id', userAccount.id)
+    .eq('month', month)
+    .maybeSingle()
+  const creditsUsed = (usageRow?.credits_used as number | null) ?? 0
+
+  if (creditsUsed >= creditLimit) {
+    return NextResponse.json(
+      {
+        error: 'You have used all your design credits for this month. Upload your own photo to keep designing, or upgrade your plan for more credits.',
+        creditsRemaining: 0,
+        creditLimit,
+      },
+      { status: 402 }
+    )
+  }
+  // ── End credit check ─────────────────────────────────────────────────────
+
+  const textMod = await moderateText(prompt)
+  if (!textMod.allowed) {
+    return NextResponse.json({ error: textMod.message }, { status: 400 })
+  }
 
   // For image-to-image: get a signed URL for the reference image and moderate it
   let referenceSignedUrl: string | null = null
@@ -233,9 +274,21 @@ export async function POST(
     )
   }
 
+  // ── Increment credit usage (upsert: insert or increment) ─────────────────
+  const newCreditsUsed = creditsUsed + 1
+  await admin.from('user_credit_usage').upsert(
+    { user_account_id: userAccount.id, month, credits_used: newCreditsUsed },
+    { onConflict: 'user_account_id,month' }
+  )
+  const creditsRemaining = Math.max(0, creditLimit - newCreditsUsed)
+  // ─────────────────────────────────────────────────────────────────────────
+
   return NextResponse.json({
     generationId,
     style_summary: interpreted.style_summary,
     variants,
+    creditsRemaining,
+    creditLimit,
+    tier,
   })
 }

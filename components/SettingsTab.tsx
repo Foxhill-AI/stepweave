@@ -28,12 +28,10 @@ interface SettingsTabProps {
 }
 
 const PRO_FEATURES_LOST_DOWNGRADE = [
-  'Unlimited design credits',
-  '85% profit share',
-  'Unlimited active products',
-  'Advanced analytics',
+  '300 AI design credits / month (drops to 50)',
+  '90% creator share on sales (drops to 50%)',
   'Priority support',
-  'Early access to new tools',
+  'Early access to new features',
 ]
 
 const CREATOR_FEATURES_LOST_CANCEL = [
@@ -460,8 +458,7 @@ export default function SettingsTab({ userData, initialSubTab, publicProfileUrl 
             </h3>
             <div className="settings-form">
               <p className="settings-help-text">
-                Connect a Stripe Express account to receive your share of sales. Platform checkout still runs on the
-                main account until payouts are fully enabled in a later release.
+                Connect a Stripe Express account to receive your creator share automatically after each sale. Once your account is verified, payouts are sent to your bank on Stripe's standard schedule.
               </p>
               {userAccount &&
                 (() => {

@@ -2386,6 +2386,7 @@ export const supabase =
         name: string
         user_account_id: number
         design_data: Record<string, unknown> | null
+        base_cost: number | null
         user_account: { username: string } | null
       } | null
       product_variant_attribute_option: Array<{
@@ -2485,6 +2486,7 @@ export const supabase =
             name,
             user_account_id,
             design_data,
+            base_cost,
             user_account ( username )
           ),
           product_variant_attribute_option (

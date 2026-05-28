@@ -37,6 +37,9 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}))
     const tier = typeof body.tier === 'string' ? body.tier.toLowerCase() : ''
+    // Optional relative return path (e.g. "/design-tool/123") — must start with "/"
+    const rawReturn = typeof body.returnPath === 'string' ? body.returnPath.trim() : ''
+    const returnPath = rawReturn.startsWith('/') && !rawReturn.includes('://') ? rawReturn : ''
     if (tier !== 'starter' && tier !== 'pro') {
       return NextResponse.json(
         { error: 'Invalid or missing tier. Use "starter" or "pro".' },
@@ -76,8 +79,8 @@ export async function POST(request: NextRequest) {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${origin}/pricing?subscription=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/become-creator`,
+      success_url: `${origin}/pricing?subscription=success&session_id={CHECKOUT_SESSION_ID}${returnPath ? `&return=${encodeURIComponent(returnPath)}` : ''}`,
+      cancel_url: `${origin}/become-creator${returnPath ? `?return=${encodeURIComponent(returnPath)}` : ''}`,
       metadata: {
         user_account_id: String(userAccountId),
         tier,
