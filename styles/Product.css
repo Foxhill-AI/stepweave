@@ -613,6 +613,12 @@
   color: var(--color-text-light, #888);
 }
 
+.product-attribute-size-tip {
+  font-size: 0.8rem;
+  color: var(--color-text-light, #888);
+  margin: 0.35rem 0 0;
+}
+
 .product-attribute-size-error {
   font-size: 0.85rem;
   color: #ef4444;

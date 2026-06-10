@@ -37,7 +37,7 @@ function mapCartItemRowToItem(row: CartItemRow): CartItem {
     image: designData?.imageUrl ?? '',
     price: Number(row.unit_price_at_added),
     quantity: row.quantity,
-    delivery: 'Ships in 3-5 business days',
+    delivery: 'Made to order · allow 3–4 weeks for delivery',
     variantLabel,
   }
 }

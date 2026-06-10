@@ -36,7 +36,7 @@ function mapCartItemRowToItem(row: CartItemRow): CartItem {
     image: designData?.imageUrl ?? '',
     price: Number(row.unit_price_at_added),
     quantity: row.quantity,
-    delivery: 'Ships in 3-5 business days',
+    delivery: 'Made to order · allow 3–4 weeks for delivery',
     variantLabel,
   }
 }
@@ -204,8 +204,8 @@ function CartItemCard({
 }) {
   const itemTotal = item.price * item.quantity
 
-  return (
-    <div className="cart-item-card">
+  const cardContent = (
+    <>
       <div className="cart-item-image-wrapper">
         {item.productId != null ? (
           <ProductImage
@@ -240,12 +240,12 @@ function CartItemCard({
           <span>{item.delivery}</span>
         </div>
 
-        <div className="cart-item-controls">
+        <div className="cart-item-controls" onClick={(e) => e.preventDefault()}>
           <div className="quantity-selector">
             <span className="quantity-label">Quantity:</span>
             <button
               className="quantity-button"
-              onClick={() => onUpdateQuantity(item.id, -1)}
+              onClick={(e) => { e.preventDefault(); onUpdateQuantity(item.id, -1) }}
               aria-label="Decrease quantity"
             >
               <Minus size={14} aria-hidden="true" />
@@ -253,7 +253,7 @@ function CartItemCard({
             <span className="quantity-value">{item.quantity}</span>
             <button
               className="quantity-button"
-              onClick={() => onUpdateQuantity(item.id, 1)}
+              onClick={(e) => { e.preventDefault(); onUpdateQuantity(item.id, 1) }}
               aria-label="Increase quantity"
             >
               <Plus size={14} aria-hidden="true" />
@@ -262,7 +262,7 @@ function CartItemCard({
 
           <button
             className="remove-button"
-            onClick={() => onRemove(item.id)}
+            onClick={(e) => { e.preventDefault(); onRemove(item.id) }}
             aria-label="Remove item"
           >
             <Trash2 size={18} aria-hidden="true" />
@@ -274,6 +274,16 @@ function CartItemCard({
           <span className="item-total-price">${itemTotal.toFixed(2)}</span>
         </div>
       </div>
+    </>
+  )
+
+  return item.productId != null ? (
+    <Link href={`/item/${item.productId}`} className="cart-item-card">
+      {cardContent}
+    </Link>
+  ) : (
+    <div className="cart-item-card">
+      {cardContent}
     </div>
   )
 }
