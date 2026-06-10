@@ -777,7 +777,15 @@ export default function Product({
                         )}
                       </div>
                       <div className="product-attribute-options">
-                        {attr.options.map((opt) => {
+                        {(isSize
+                          ? [...attr.options].sort((a, b) => {
+                              const n = (s: string) => parseFloat(s.replace(/[^\d.]/g, ''))
+                              const na = n(a.label), nb = n(b.label)
+                              if (!isNaN(na) && !isNaN(nb)) return na - nb
+                              return a.label.localeCompare(b.label)
+                            })
+                          : attr.options
+                        ).map((opt) => {
                           const swatchHex = isColor ? labelToColorHex(opt.label) : null
                           return (
                             <button
@@ -803,6 +811,9 @@ export default function Product({
                           )
                         })}
                       </div>
+                      {isSize && (
+                        <p className="product-attribute-size-tip">These shoes run small — we recommend ordering one size up.</p>
+                      )}
                       {isSize && sizeError && (
                         <p className="product-attribute-size-error" role="alert">Please select a size.</p>
                       )}

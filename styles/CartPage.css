@@ -137,6 +137,11 @@
   gap: var(--spacing-xs);
 }
 
+a.cart-item-card {
+  text-decoration: none;
+  color: inherit;
+}
+
 .cart-item-title {
   font-size: 1.125rem;
   font-weight: 600;
