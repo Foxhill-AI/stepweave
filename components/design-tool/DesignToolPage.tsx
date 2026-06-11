@@ -121,8 +121,10 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   const [localLayerUrls, setLocalLayerUrls] = useState<Record<string, string>>({})
   /** Clipboard for Cmd/Ctrl+C / V in template canvas (layer payload without signed URLs). */
   const layerClipboardRef = useRef<PlacementLayer | null>(null)
-  /** Current step within the editor: chat → customize */
-  const [editorStep, setEditorStep] = useState<'design' | 'customize'>('design')
+  /** Current step within the editor: chat → customize. Skip to customize only if the draft already has a pattern (i.e. prior AI work). */
+  const [editorStep, setEditorStep] = useState<'design' | 'customize'>(
+    draft?.pattern_image_url ? 'customize' : 'design'
+  )
   /** Mobile-only: collapsible adjustment panel open */
   const [showMobileTools, setShowMobileTools] = useState(false)
 
