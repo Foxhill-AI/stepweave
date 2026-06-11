@@ -4034,6 +4034,12 @@
   color: #fff;
 }
 
+.pf-modal-size-tip {
+  font-size: 0.8rem;
+  color: var(--color-text-light, #888);
+  margin: 0.4rem 0 0;
+}
+
 @media (max-width: 480px) {
   .pf-modal {
     padding: 1.25rem;

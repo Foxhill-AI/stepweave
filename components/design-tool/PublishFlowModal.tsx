@@ -219,7 +219,11 @@ export default function PublishFlowModal({
               <div>
                 <label className="design-tool-label">Your size</label>
                 <div className="pf-modal-size-grid">
-                  {sameColorVariants.map((v) => (
+                  {[...sameColorVariants].sort((a, b) => {
+                    const na = parseFloat(a.size), nb = parseFloat(b.size)
+                    if (!isNaN(na) && !isNaN(nb)) return na - nb
+                    return a.size.localeCompare(b.size)
+                  }).map((v) => (
                     <button
                       key={v.id}
                       type="button"
@@ -233,6 +237,7 @@ export default function PublishFlowModal({
                     </button>
                   ))}
                 </div>
+                <p className="pf-modal-size-tip">These shoes run small — we recommend ordering one size up from your usual.</p>
               </div>
             )}
 
@@ -246,14 +251,16 @@ export default function PublishFlowModal({
               </div>
             )}
 
+            {/* Hidden — only used to fetch the estimate for the price callout above. */}
             {hasVariant && (
-              <PricingEstimatePanel
-                productId={productId!}
-                variantId={effectiveBuyVariantId!}
-                quantity={1}
-                onEstimate={setBuyEstimate}
-                className="pf-modal-estimate"
-              />
+              <div hidden>
+                <PricingEstimatePanel
+                  productId={productId!}
+                  variantId={effectiveBuyVariantId!}
+                  quantity={1}
+                  onEstimate={setBuyEstimate}
+                />
+              </div>
             )}
 
             {buyError && (

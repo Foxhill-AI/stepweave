@@ -32,7 +32,7 @@ function mapCartItemRowToItem(row: CartItemRow): CartItem {
     productId: product?.id != null ? (product.id as number) : undefined,
     designData: designData ?? undefined,
     title: product?.name ?? 'Product',
-    author: product?.user_account?.username ?? 'Unknown',
+    author: product?.user_account?.username ?? null,
     image: designData?.imageUrl ?? '',
     price: Number(row.unit_price_at_added),
     quantity: row.quantity,
@@ -46,7 +46,7 @@ interface CartItem {
   productId?: number
   designData?: { imageUrl?: string; source?: string } | null
   title: string
-  author: string
+  author: string | null
   image: string
   price: number
   quantity: number
@@ -226,15 +226,14 @@ function CartItemCard({
             <span>{item.title.charAt(0).toUpperCase()}</span>
           </div>
         )}
-        <span className="cart-item-badge badge-print">Physical</span>
       </div>
 
       <div className="cart-item-details">
         <h3 className="cart-item-title">{item.title}</h3>
         {item.variantLabel && (
-          <p className="cart-item-variant" aria-label="Variant">Variant: {item.variantLabel}</p>
+          <p className="cart-item-variant" aria-label="Size">Size: {item.variantLabel}</p>
         )}
-        <p className="cart-item-author">by {item.author}</p>
+        {item.author && <p className="cart-item-author">by {item.author}</p>}
         <div className="cart-item-delivery">
           <Package size={14} aria-hidden="true" />
           <span>{item.delivery}</span>

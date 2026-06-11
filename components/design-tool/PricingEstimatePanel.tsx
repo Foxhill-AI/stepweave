@@ -28,6 +28,8 @@ type Props = {
   listPriceInput?: string
   /** Path to return to after an upgrade (e.g. "/design-tool/123"). Enables the upgrade nudge. */
   returnPath?: string
+  /** Hide the payment processing line — folds Stripe fee into the total silently. */
+  hidePaymentProcessing?: boolean
   className?: string
 }
 
@@ -38,6 +40,7 @@ export default function PricingEstimatePanel({
   onEstimate,
   listPriceInput = '',
   returnPath,
+  hidePaymentProcessing = false,
   className = '',
 }: Props) {
   const onEstimateRef = useRef(onEstimate)
@@ -172,15 +175,17 @@ export default function PricingEstimatePanel({
               )
             })}
 
-            <li className="design-tool-pricing-estimate-row">
-              <span className="design-tool-pricing-estimate-label">
-                Payment processing
-                <span className="design-tool-pricing-estimate-detail">2.9% + $0.30 per transaction</span>
-              </span>
-              <span className="design-tool-pricing-estimate-amount">
-                {stripeFee !== null ? formatPricingMoney(stripeFee, data.currency) : '—'}
-              </span>
-            </li>
+            {!hidePaymentProcessing && (
+              <li className="design-tool-pricing-estimate-row">
+                <span className="design-tool-pricing-estimate-label">
+                  Payment processing
+                  <span className="design-tool-pricing-estimate-detail">2.9% + $0.30 per transaction</span>
+                </span>
+                <span className="design-tool-pricing-estimate-amount">
+                  {stripeFee !== null ? formatPricingMoney(stripeFee, data.currency) : '—'}
+                </span>
+              </li>
+            )}
 
             <li className="design-tool-pricing-estimate-row design-tool-pricing-estimate-row--total">
               <span className="design-tool-pricing-estimate-label">Estimated total cost</span>
