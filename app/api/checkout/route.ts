@@ -197,7 +197,20 @@ export async function POST(request: NextRequest) {
           : null
       const sellerTier = sellerId != null ? (sellerTierMap.get(sellerId) ?? 'free') : 'free'
       const creatorShareRate = getCreatorShareRate(sellerTier)
-      const baseCostPerUnit = typeof product?.base_cost === 'number' ? product.base_cost : 0
+      // If base_cost is null/missing for a design_draft product, we can't compute a valid
+      // margin — use a sentinel value that results in $0 creator payout rather than
+      // treating the product as zero-cost (which would wildly overpay the creator).
+      const isDesignDraftProduct =
+        product?.design_data != null &&
+        typeof product.design_data === 'object' &&
+        !Array.isArray(product.design_data) &&
+        (product.design_data as Record<string, unknown>).source === 'design_draft'
+      const baseCostPerUnit =
+        typeof product?.base_cost === 'number' && product.base_cost > 0
+          ? product.base_cost
+          : isDesignDraftProduct
+            ? lineSubtotal // force margin to zero → creator gets $0
+            : 0
       const baseCostTotal = baseCostPerUnit * quantity
       const { platformFeeAmount, sellerNetAmount, effectiveFeeBps } = splitLineByMargin(
         lineSubtotal,

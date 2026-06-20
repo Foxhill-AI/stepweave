@@ -367,11 +367,13 @@ export default function PublishFlowModal({
                 type="button"
                 className="pf-modal-btn-primary"
                 onClick={handlePublish}
-                disabled={createLoading || priceBelowMin}
+                disabled={createLoading || priceBelowMin || (hasVariant && !publishEstimate)}
               >
                 {createLoading
                   ? (isEditingPublishedProduct ? 'Saving…' : 'Publishing…')
-                  : (isEditingPublishedProduct ? 'Save changes' : 'Publish')}
+                  : (hasVariant && !publishEstimate)
+                    ? 'Loading costs…'
+                    : (isEditingPublishedProduct ? 'Save changes' : 'Publish')}
               </button>
               <button
                 type="button"
