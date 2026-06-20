@@ -270,27 +270,19 @@ export async function POST(request: NextRequest) {
     const origin = request.nextUrl.origin
 
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = orderItems.map(
-      (item) => {
-        if (item.stripe_price_id) {
-          return {
-            price: item.stripe_price_id,
-            quantity: item.quantity,
-          }
-        }
-        return {
-          price_data: {
-            currency: 'usd',
-            unit_amount: Math.round(item.unit_price * 100),
-            product_data: {
-              name: item.product_name,
-              ...(item.variant_label
-                ? { description: `Variant: ${item.variant_label}` }
-                : {}),
-            },
+      (item) => ({
+        price_data: {
+          currency: 'usd',
+          unit_amount: Math.round(item.unit_price * 100),
+          product_data: {
+            name: item.product_name,
+            ...(item.variant_label
+              ? { description: `Size: ${item.variant_label}` }
+              : {}),
           },
-          quantity: item.quantity,
-        }
-      }
+        },
+        quantity: item.quantity,
+      })
     )
     if (shippingAmount > 0) {
       lineItems.push({
