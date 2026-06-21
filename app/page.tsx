@@ -5,7 +5,6 @@ import Navbar from '@/components/Navbar'
 import Subnavbar from '@/components/Subnavbar'
 import Footer from '@/components/Footer'
 import ContentSection from '@/components/ContentSection'
-import AdBanner from '@/components/AdBanner'
 import {
   homeItemsFromProductRows,
   productToHomeItem,
@@ -79,8 +78,6 @@ export default function HomePage() {
       <Subnavbar />
 
       <main className="homepage-main" role="main">
-        <AdBanner />
-
         <div className="container">
           {loading && (
             <p className="homepage-loading" aria-live="polite">

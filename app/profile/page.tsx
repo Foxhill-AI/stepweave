@@ -20,7 +20,7 @@ export default function Profile() {
 
   useEffect(() => {
     if (loading) return
-    if (!user) router.replace('/')
+    if (!user) router.replace('/?openAuth=1')
   }, [user, loading, router])
 
   useEffect(() => {
