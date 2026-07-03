@@ -17,5 +17,8 @@ yarn-error.log*
 # OS files
 .DS_Store
 
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
+
 # Cursor (local notes)
 .cursor/working-style.md
