@@ -187,6 +187,7 @@
 
 .newsletter-input {
   flex: 1;
+  min-width: 0;
   padding: var(--spacing-md) var(--spacing-lg);
   border: none;
   background: transparent;
@@ -212,6 +213,8 @@
 }
 
 .newsletter-button {
+  flex-shrink: 0;
+  width: 56px;
   padding: var(--spacing-md);
   background: var(--color-primary);
   color: white;

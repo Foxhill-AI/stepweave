@@ -108,12 +108,12 @@ You should see version numbers (for example `v20.x.x` and `10.x.x`).
 3. Clone the repository:
 
    ```bash
-   git clone https://github.com/MitziVite/Template-1.git
+   git clone https://github.com/Foxhill-AI/stepweave.git
    ```
 4. Enter the project folder:
 
    ```bash
-   cd Template-1
+   cd stepweave
    ```
 
 ---
@@ -247,8 +247,8 @@ All commands should be run from the project root:
 2. Clone the repository:
 
    ```bash
-   git clone https://github.com/MitziVite/Template-1.git
-   cd Template-1
+   git clone https://github.com/Foxhill-AI/stepweave.git
+   cd stepweave
    ```
 3. Install dependencies:
 

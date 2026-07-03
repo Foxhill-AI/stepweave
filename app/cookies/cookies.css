@@ -1,0 +1,152 @@
+.cookies-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--spacing-2xl) var(--spacing-md);
+}
+
+.cookies-page-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 var(--spacing-sm);
+  line-height: 1.2;
+}
+
+.cookies-page-meta {
+  color: var(--color-text-light);
+  font-size: 0.9375rem;
+  margin: 0 0 var(--spacing-xl);
+}
+
+.cookies-page-intro {
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  margin: 0 0 var(--spacing-lg);
+}
+
+.cookies-page hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: var(--spacing-xl) 0;
+}
+
+.cookies-toc-heading {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 var(--spacing-md);
+}
+
+.cookies-toc {
+  margin: 0 0 var(--spacing-xl);
+  padding-left: 1.25rem;
+  line-height: 1.75;
+}
+
+.cookies-toc a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cookies-toc a:hover {
+  color: var(--color-primary-dark);
+}
+
+.cookies-section {
+  margin-bottom: var(--spacing-xl);
+}
+
+.cookies-section h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  margin: 0 0 var(--spacing-md);
+  scroll-margin-top: var(--spacing-xl);
+}
+
+.cookies-section h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: var(--spacing-lg) 0 var(--spacing-sm);
+  scroll-margin-top: var(--spacing-md);
+}
+
+.cookies-section p {
+  margin: 0 0 var(--spacing-md);
+  line-height: 1.7;
+  font-size: 1.0625rem;
+}
+
+.cookies-section p:last-child {
+  margin-bottom: 0;
+}
+
+.cookies-section ul {
+  margin: 0 0 var(--spacing-md);
+  padding-left: 1.25rem;
+  line-height: 1.7;
+  font-size: 1.0625rem;
+}
+
+.cookies-section ul li {
+  margin-bottom: var(--spacing-sm);
+}
+
+.cookies-section ul li:last-child {
+  margin-bottom: 0;
+}
+
+.cookies-contact-block {
+  margin-top: var(--spacing-md);
+  font-size: 1.0625rem;
+  line-height: 1.75;
+}
+
+.cookies-contact-block p {
+  margin: 0 0 var(--spacing-xs);
+}
+
+.cookies-contact-block a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cookies-contact-block a:hover {
+  color: var(--color-primary-dark);
+}
+
+.cookies-section a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cookies-section a:hover {
+  color: var(--color-primary-dark);
+}
+
+.cookies-table-wrap {
+  overflow-x: auto;
+  margin: var(--spacing-md) 0 var(--spacing-lg);
+  -webkit-overflow-scrolling: touch;
+}
+
+.cookies-table {
+  width: 100%;
+  min-width: 28rem;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.cookies-table th,
+.cookies-table td {
+  border: 1px solid var(--color-border);
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  vertical-align: top;
+}
+
+.cookies-table th {
+  background: var(--color-background-light);
+  font-weight: 600;
+}
