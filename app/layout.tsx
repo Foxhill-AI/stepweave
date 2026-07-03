@@ -4,6 +4,7 @@ import '../styles/globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
 import DebugAuth from '@/components/DebugAuth'
 import Toast from '@/components/ui/Toast'
+import CookieConsentBanner from '@/components/CookieConsentBanner'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -35,6 +36,7 @@ export default function RootLayout({
           <DebugAuth />
           {children}
           <Toast />
+          <CookieConsentBanner />
         </AuthProvider>
       </body>
     </html>
