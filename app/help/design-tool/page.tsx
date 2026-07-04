@@ -160,7 +160,7 @@ export default function DesignToolHelpPage() {
               The moderation isn&apos;t perfect. If a prompt was blocked that you believe is
               fine, try rephrasing it more concretely (describing what you do want, in plain
               language) or contact us at{' '}
-              <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> with the prompt and
+              <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> with the prompt and
               the error.
             </p>
             <div className="help-callout">

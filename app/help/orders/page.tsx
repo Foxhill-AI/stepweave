@@ -227,7 +227,7 @@ export default function OrdersHelpPage() {
             <p>
               If tracking has stalled with no movement and it&apos;s been more than 14 days past
               the expected delivery date — or if the carrier has declared the shipment lost —
-              email <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> with your order
+              email <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> with your order
               ID and we&apos;ll work with the fulfillment partner on a replacement, rework, or
               refund.
             </p>
@@ -240,7 +240,7 @@ export default function OrdersHelpPage() {
             <p>
               If your item has a real manufacturing defect (not normal print-on-demand variation)
               or you received the wrong item or SKU, email{' '}
-              <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> as soon as possible
+              <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> as soon as possible
               with:
             </p>
             <ul>
@@ -274,7 +274,7 @@ export default function OrdersHelpPage() {
             </p>
             <p>
               If you need to change the shipping address before production begins, contact{' '}
-              <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> with your order ID and
+              <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> with your order ID and
               the corrected address as quickly as you can.
             </p>
           </section>

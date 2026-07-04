@@ -136,9 +136,9 @@ export default function AboutPage() {
             </p>
             <p>
               For general questions, head to our <Link href="/contact">contact page</Link> or
-              email <a href="mailto:hello@stepweave.com">hello@stepweave.com</a>. For legal,
+              email <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>. For legal,
               privacy, and IP matters, write to{' '}
-              <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>.
+              <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>.
             </p>
           </section>
 

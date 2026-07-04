@@ -1,12 +1,12 @@
 # Privacy Policy
 
-**Last updated:** May 2026
+**Last updated:** July 2026
 
 **Step Weave** is operated by **Foxhill AI LLC**, located at 9878 W. Belleview Ave, Suite 2393, Denver, CO 80123. This Privacy Policy explains what personal information we collect, how we use it, who we share it with, and what rights you have over your data.
 
 By using Step Weave, you agree to the practices described in this policy. This policy applies to our website at [https://www.stepweave.com](https://www.stepweave.com) and all related services.
 
-> **Note:** Have a qualified attorney review this before publishing, particularly if you sell to customers in the EU, UK, or California.
+> **Note:** Have a qualified attorney review this before publishing, particularly if you sell to customers in California.
 
 ---
 
@@ -22,7 +22,7 @@ By using Step Weave, you agree to the practices described in this policy. This p
 8. [Children's Privacy](#8-childrens-privacy)
 9. [Your Privacy Rights](#9-your-privacy-rights)
 10. [California Residents (CCPA)](#10-california-residents-ccpa)
-11. [EU and UK Residents (GDPR / UK GDPR)](#11-eu-and-uk-residents-gdpr--uk-gdpr)
+11. [EU and UK Availability](#11-eu-and-uk-availability)
 12. [Third-Party Links](#12-third-party-links)
 13. [Changes to This Policy](#13-changes-to-this-policy)
 14. [Contact Us](#14-contact-us)
@@ -55,7 +55,7 @@ When you visit or use Step Weave, we automatically collect:
 
 ### Information from Third Parties
 
-- **Sign-in providers** — if you log in via Google or Meta, we receive your name, email address, and profile photo from that provider, subject to your settings with them
+
 - **Payment processors** — Stripe provides us with transaction confirmations, payout statuses, and fraud signals; we do not receive your full card number
 - **Fulfillment partners** — print-on-demand partners such as Printful may share order status and shipping tracking information with us
 - **AI and design tool partners** — partners such as OpenAI and Fal may process design prompts or images you submit through our design tools
@@ -93,7 +93,7 @@ We share information with companies that help us operate Step Weave, including:
 - **Printful and other POD partners** — order fulfillment and manufacturing; they receive your shipping address and print files for paid orders
 - **Supabase** — file and data storage
 - **OpenAI / Fal** — AI-powered design and image generation features
-- **Google / Meta** — if you use social sign-in
+- **Google** — if you use social sign-in
 - **Email and analytics providers** — to send transactional and marketing emails and analyze site usage
 
 These partners are contractually required to use your information only to provide services to us and to protect it appropriately.
@@ -127,7 +127,7 @@ We use cookies and similar technologies (such as pixels and local storage) to op
 ### Types of Cookies We Use
 
 - **Essential cookies** — required for the site to function, such as keeping you logged in and remembering items in your cart. These cannot be disabled.
-- **Analytics cookies** — help us understand how visitors use the site so we can improve it (e.g., Google Analytics)
+- **Analytics cookies** — would help us understand how visitors use the site; Step Weave does not currently use a third-party analytics service, but this category is available in our cookie settings for future use
 - **Preference cookies** — remember your settings and preferences across visits
 - **Marketing cookies** — used to deliver relevant advertising and track the effectiveness of campaigns (only with your consent)
 
@@ -150,8 +150,6 @@ We retain your personal information for as long as necessary to:
 
 When you delete your account, we will delete or anonymize your personal information within a reasonable period, except for information we are required to retain by law or for legitimate business purposes such as completed order records.
 
-Design files and content you have deleted will be removed from active systems, though they may persist in backups for a limited period.
-
 ---
 
 ## 6. Data Security
@@ -163,7 +161,7 @@ We take reasonable technical and organizational measures to protect your persona
 - Access controls limiting who within our organization can access personal data
 - Use of PCI-compliant payment processing through Stripe (we never store full card numbers)
 
-No system is completely secure. While we work hard to protect your information, we cannot guarantee absolute security. If you believe your account has been compromised, contact us immediately at [legal@stepweave.com](mailto:legal@stepweave.com).
+No system is completely secure. While we work hard to protect your information, we cannot guarantee absolute security. If you believe your account has been compromised, contact us immediately at [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com).
 
 In the event of a data breach that affects your rights or freedoms, we will notify affected users and relevant authorities as required by applicable law.
 
@@ -173,7 +171,7 @@ In the event of a data breach that affects your rights or freedoms, we will noti
 
 Step Weave is operated from the United States. If you are located outside the U.S., your information will be transferred to and processed in the United States, where data protection laws may differ from those in your country.
 
-Where required by law (for example, for EU/UK users), we rely on appropriate transfer mechanisms such as Standard Contractual Clauses to ensure your data is protected when transferred internationally.
+Step Weave does not currently support sales to customers located in the European Union or United Kingdom — see [Section 11](#11-eu-and-uk-availability) for details.
 
 Your order may also be fulfilled by manufacturing partners located in other countries, including mainland China or other regions used by our fulfillment partners. Only the information necessary to fulfill your order (shipping address and print files) is shared with those partners.
 
@@ -183,7 +181,7 @@ Your order may also be fulfilled by manufacturing partners located in other coun
 
 Step Weave is not directed at children under the age of 13. We do not knowingly collect personal information from children under 13. If we become aware that we have collected personal information from a child under 13 without parental consent, we will take steps to delete that information promptly.
 
-If you believe a child under 13 has provided us with personal information, please contact us at [legal@stepweave.com](mailto:legal@stepweave.com).
+If you believe a child under 13 has provided us with personal information, please contact us at [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com).
 
 ---
 
@@ -197,7 +195,7 @@ Regardless of where you live, you have the following rights with respect to your
 - **Opt out of marketing** — unsubscribe from marketing emails at any time using the unsubscribe link in any email, or by contacting us
 - **Data portability** — request your data in a portable, machine-readable format where technically feasible
 
-To exercise any of these rights, email us at [legal@stepweave.com](mailto:legal@stepweave.com). We will respond within 30 days. We may need to verify your identity before processing your request.
+To exercise any of these rights, email us at [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com). We will respond within 30 days. We may need to verify your identity before processing your request.
 
 ---
 
@@ -223,41 +221,13 @@ If you are a California resident, you have additional rights under the **Califor
 | Inferences | Preferences based on activity | Yes |
 | Financial information | Payment details (processed by Stripe) | Limited |
 
-To submit a CCPA request, email [legal@stepweave.com](mailto:legal@stepweave.com) or use the contact information in [Section 14](#14-contact-us). You may also authorize an agent to make a request on your behalf.
+To submit a CCPA request, email [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com) or use the contact information in [Section 14](#14-contact-us). You may also authorize an agent to make a request on your behalf.
 
 ---
 
-## 11. EU and UK Residents (GDPR / UK GDPR)
+## 11. EU and UK Availability
 
-If you are located in the European Union or United Kingdom, the **General Data Protection Regulation (GDPR)** or **UK GDPR** applies to your personal data.
-
-### Legal Bases for Processing
-
-We process your personal data on the following legal bases:
-
-- **Contract performance** — to fulfill your orders, manage your account, and provide our services
-- **Legitimate interests** — to improve our platform, prevent fraud, and communicate relevant updates, where these interests are not overridden by your rights
-- **Legal obligation** — to comply with applicable laws and regulations
-- **Consent** — for marketing communications and non-essential cookies, where required
-
-### Your GDPR Rights
-
-In addition to the rights in Section 9, you have the right to:
-
-- **Restrict processing** — ask us to limit how we use your data in certain circumstances
-- **Object to processing** — object to processing based on legitimate interests or for direct marketing
-- **Withdraw consent** — where processing is based on consent, withdraw it at any time without affecting the lawfulness of prior processing
-- **Lodge a complaint** — with your local data protection authority (for EU residents, your national supervisory authority; for UK residents, the Information Commissioner's Office)
-
-### Data Controller
-
-The data controller for your personal information is:
-
-**Foxhill AI LLC**
-9878 W. Belleview Ave, Suite 2393, Denver, CO 80123
-[legal@stepweave.com](mailto:legal@stepweave.com)
-
-> **Note for counsel:** If you are actively marketing to EU/UK customers, consider whether you need to appoint an EU or UK representative under Article 27 of the GDPR / UK GDPR.
+Step Weave does not currently support sales to customers located in the European Union or United Kingdom. If you are located in one of these regions and would like to use Step Weave, please email us at [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com) — we are evaluating adding support for these regions in the future.
 
 ---
 
@@ -280,7 +250,7 @@ We encourage you to review this policy periodically. Your continued use of Step 
 If you have questions, concerns, or requests related to this Privacy Policy, please contact us:
 
 **Step Weave** · Foxhill AI LLC
-**Email:** [legal@stepweave.com](mailto:legal@stepweave.com)
+**Email:** [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com)
 **Mail:** 9878 W. Belleview Ave, Suite 2393, Denver, CO 80123
 
 We aim to respond to all privacy inquiries within **5 business days**.

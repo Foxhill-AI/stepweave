@@ -21,7 +21,7 @@ export default function CookiesPage() {
         <article className="cookies-page">
           <h1 className="cookies-page-title">Cookie Policy</h1>
           <p className="cookies-page-meta">
-            <strong>Last updated:</strong> May 2026
+            <strong>Last updated:</strong> July 2026
           </p>
 
           <p className="cookies-page-intro">
@@ -152,44 +152,10 @@ export default function CookiesPage() {
 
             <h3 id="cookies-h-analytics">Analytics and Performance Cookies</h3>
             <p>
-              These cookies help us understand how visitors use Step Weave — which pages are popular, where users drop
-              off, and how the site performs. All data collected is aggregated and does not identify you personally. We
-              use this information to improve the site.
-            </p>
-            <div className="cookies-table-wrap">
-              <table className="cookies-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Cookie</th>
-                    <th scope="col">Provider</th>
-                    <th scope="col">Purpose</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Analytics session</td>
-                    <td>Google Analytics</td>
-                    <td>Tracks page views, session duration, and navigation paths</td>
-                  </tr>
-                  <tr>
-                    <td>User identifier</td>
-                    <td>Google Analytics</td>
-                    <td>Distinguishes unique visitors (anonymized)</td>
-                  </tr>
-                  <tr>
-                    <td>Performance metrics</td>
-                    <td>Internal</td>
-                    <td>Monitors page load times and errors</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p>
-              You can opt out of analytics cookies through our cookie banner or by installing the{' '}
-              <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener noreferrer">
-                Google Analytics Opt-Out Browser Add-on
-              </a>
-              .
+              Step Weave does not currently use a third-party analytics service. Our cookie banner includes an
+              Analytics category so you have granular control in place before any such tool is introduced. If we add
+              one in the future (for example, to understand which pages are popular or how the site performs), we
+              will name the specific provider here and describe what it collects.
             </p>
 
             <h3 id="cookies-h-functional">Functional / Preference Cookies</h3>
@@ -228,45 +194,10 @@ export default function CookiesPage() {
 
             <h3 id="cookies-h-marketing">Marketing and Advertising Cookies</h3>
             <p>
-              These cookies are used to show you relevant advertisements on Step Weave and on other websites, and to
-              measure the effectiveness of our marketing campaigns. We only set these cookies with your consent.
-            </p>
-            <div className="cookies-table-wrap">
-              <table className="cookies-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Cookie</th>
-                    <th scope="col">Provider</th>
-                    <th scope="col">Purpose</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Ad conversion tracking</td>
-                    <td>Google Ads</td>
-                    <td>Tracks whether an ad click led to a purchase</td>
-                  </tr>
-                  <tr>
-                    <td>Remarketing</td>
-                    <td>Google / Meta</td>
-                    <td>Enables showing Step Weave ads to past visitors on other platforms</td>
-                  </tr>
-                  <tr>
-                    <td>Campaign attribution</td>
-                    <td>Meta Pixel</td>
-                    <td>Measures effectiveness of ads on Facebook and Instagram</td>
-                  </tr>
-                  <tr>
-                    <td>A/B test variant</td>
-                    <td>Internal</td>
-                    <td>Tracks which version of a page or feature you saw during testing</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p>
-              You can withdraw consent for marketing cookies at any time through our cookie banner or your browser
-              settings.
+              Step Weave does not currently run advertising, remarketing, or ad-conversion cookies. Our cookie banner
+              includes a Marketing category so you have granular control in place before any such tool is
+              introduced. If we add advertising features in the future, we will only set these cookies with your
+              consent and will name the specific providers here.
             </p>
           </section>
 
@@ -303,21 +234,10 @@ export default function CookiesPage() {
                     <td>
                       <strong>Google</strong>
                     </td>
-                    <td>Analytics, sign-in, and advertising</td>
+                    <td>Social sign-in (OAuth)</td>
                     <td>
                       <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">
                         policies.google.com/privacy
-                      </a>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Meta (Facebook)</strong>
-                    </td>
-                    <td>Social sign-in and advertising</td>
-                    <td>
-                      <a href="https://www.facebook.com/privacy/policy" target="_blank" rel="noopener noreferrer">
-                        facebook.com/privacy/policy
                       </a>
                     </td>
                   </tr>
@@ -342,18 +262,7 @@ export default function CookiesPage() {
                 </tbody>
               </table>
             </div>
-            <p>
-              We do not control third-party cookies. To opt out of third-party advertising cookies, you can also use
-              industry opt-out tools such as the{' '}
-              <a href="https://optout.networkadvertising.org" target="_blank" rel="noopener noreferrer">
-                NAI Opt-Out Tool
-              </a>{' '}
-              or{' '}
-              <a href="https://optout.aboutads.info" target="_blank" rel="noopener noreferrer">
-                YourAdChoices
-              </a>
-              .
-            </p>
+            <p>We do not control third-party cookies.</p>
           </section>
 
           <hr />
@@ -383,14 +292,6 @@ export default function CookiesPage() {
                     <td>30 days (or until you sign out)</td>
                   </tr>
                   <tr>
-                    <td>Analytics identifiers</td>
-                    <td>Up to 2 years</td>
-                  </tr>
-                  <tr>
-                    <td>Marketing / ad cookies</td>
-                    <td>90 days to 1 year</td>
-                  </tr>
-                  <tr>
                     <td>Preference cookies</td>
                     <td>Up to 1 year</td>
                   </tr>
@@ -401,6 +302,9 @@ export default function CookiesPage() {
                 </tbody>
               </table>
             </div>
+            <p>
+              If we introduce analytics or marketing cookies in the future, we will add their typical durations here.
+            </p>
             <p>
               You can delete cookies at any time through your browser settings. Note that deleting essential cookies may
               log you out or affect site functionality.
@@ -466,38 +370,19 @@ export default function CookiesPage() {
             </p>
 
             <h3 id="cookies-h-optout-tools">Through Third-Party Opt-Out Tools</h3>
-            <ul>
-              <li>
-                <strong>Google Analytics:</strong>{' '}
-                <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener noreferrer">
-                  tools.google.com/dlpage/gaoptout
-                </a>
-              </li>
-              <li>
-                <strong>Google Ads:</strong>{' '}
-                <a href="https://adssettings.google.com" target="_blank" rel="noopener noreferrer">
-                  adssettings.google.com
-                </a>
-              </li>
-              <li>
-                <strong>Meta / Facebook Ads:</strong>{' '}
-                <a href="https://www.facebook.com/ads/preferences" target="_blank" rel="noopener noreferrer">
-                  facebook.com/ads/preferences
-                </a>
-              </li>
-              <li>
-                <strong>Network Advertising Initiative:</strong>{' '}
-                <a href="https://optout.networkadvertising.org" target="_blank" rel="noopener noreferrer">
-                  optout.networkadvertising.org
-                </a>
-              </li>
-              <li>
-                <strong>Digital Advertising Alliance:</strong>{' '}
-                <a href="https://optout.aboutads.info" target="_blank" rel="noopener noreferrer">
-                  optout.aboutads.info
-                </a>
-              </li>
-            </ul>
+            <p>
+              Step Weave does not currently run third-party analytics or advertising services, so there are no
+              vendor-specific opt-out tools to link to today. If we introduce such services in the future, we will
+              list the relevant opt-out tools here (for example, industry resources such as the{' '}
+              <a href="https://optout.networkadvertising.org" target="_blank" rel="noopener noreferrer">
+                Network Advertising Initiative
+              </a>{' '}
+              or{' '}
+              <a href="https://optout.aboutads.info" target="_blank" rel="noopener noreferrer">
+                Digital Advertising Alliance
+              </a>
+              ).
+            </p>
           </section>
 
           <hr />
@@ -561,7 +446,7 @@ export default function CookiesPage() {
                 <strong>Step Weave</strong> · Foxhill AI LLC
               </p>
               <p>
-                <strong>Email:</strong> <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>
+                <strong>Email:</strong> <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>
               </p>
               <p>
                 <strong>Mail:</strong> 9878 W. Belleview Ave, Suite 2393, Denver, CO 80123

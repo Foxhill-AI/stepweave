@@ -9,7 +9,7 @@ import './privacy.css'
 export const metadata: Metadata = {
   title: 'Privacy Policy | Step Weave',
   description:
-    'How Step Weave (Foxhill AI LLC) collects, uses, shares, and protects personal information — cookies, retention, security, GDPR, CCPA, and contact.',
+    'How Step Weave (Foxhill AI LLC) collects, uses, shares, and protects personal information — cookies, retention, security, CCPA, and contact.',
 }
 
 export default function PrivacyPage() {
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         <article className="privacy-page">
           <h1 className="privacy-page-title">Privacy Policy</h1>
           <p className="privacy-page-meta">
-            <strong>Last updated:</strong> May 2026
+            <strong>Last updated:</strong> July 2026
           </p>
 
           <p className="privacy-page-intro">
@@ -34,12 +34,6 @@ export default function PrivacyPage() {
             <a href="https://www.stepweave.com">https://www.stepweave.com</a> and all related services.
           </p>
 
-          <blockquote className="privacy-note">
-            <p>
-              <strong>Note:</strong> Have a qualified attorney review this before publishing, particularly if you sell to
-              customers in the EU, UK, or California.
-            </p>
-          </blockquote>
 
           <hr />
 
@@ -77,7 +71,7 @@ export default function PrivacyPage() {
                 <a href="#10-california-residents-ccpa">California Residents (CCPA)</a>
               </li>
               <li>
-                <a href="#11-eu-and-uk-residents-gdpr--uk-gdpr">EU and UK Residents (GDPR / UK GDPR)</a>
+                <a href="#11-eu-and-uk-availability">EU and UK Availability</a>
               </li>
               <li>
                 <a href="#12-third-party-links">Third-Party Links</a>
@@ -154,7 +148,7 @@ export default function PrivacyPage() {
             <h3 id="privacy-h-collect-third">Information from Third Parties</h3>
             <ul>
               <li>
-                <strong>Sign-in providers</strong> — if you log in via Google or Meta, we receive your name, email
+                <strong>Sign-in providers</strong> — if you log in via Google, we receive your name, email
                 address, and profile photo from that provider, subject to your settings with them
               </li>
               <li>
@@ -243,7 +237,7 @@ export default function PrivacyPage() {
                 <strong>OpenAI / Fal</strong> — AI-powered design and image generation features
               </li>
               <li>
-                <strong>Google / Meta</strong> — if you use social sign-in
+                <strong>Google</strong> — if you use social sign-in
               </li>
               <li>
                 <strong>Email and analytics providers</strong> — to send transactional and marketing emails and analyze site
@@ -296,8 +290,9 @@ export default function PrivacyPage() {
                 and remembering items in your cart. These cannot be disabled.
               </li>
               <li>
-                <strong>Analytics cookies</strong> — help us understand how visitors use the site so we can improve it
-                (e.g., Google Analytics)
+                <strong>Analytics cookies</strong> — would help us understand how visitors use the site; Step Weave
+                does not currently use a third-party analytics service, but this category is available in our cookie
+                settings for future use
               </li>
               <li>
                 <strong>Preference cookies</strong> — remember your settings and preferences across visits
@@ -356,7 +351,7 @@ export default function PrivacyPage() {
             <p>
               No system is completely secure. While we work hard to protect your information, we cannot guarantee absolute
               security. If you believe your account has been compromised, contact us immediately at{' '}
-              <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>.
+              <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>.
             </p>
             <p>
               In the event of a data breach that affects your rights or freedoms, we will notify affected users and
@@ -374,8 +369,8 @@ export default function PrivacyPage() {
               your country.
             </p>
             <p>
-              Where required by law (for example, for EU/UK users), we rely on appropriate transfer mechanisms such as
-              Standard Contractual Clauses to ensure your data is protected when transferred internationally.
+              Step Weave does not currently support sales to customers located in the European Union or United
+              Kingdom — see <a href="#11-eu-and-uk-availability">Section 11</a> for details.
             </p>
             <p>
               Your order may also be fulfilled by manufacturing partners located in other countries, including mainland
@@ -395,7 +390,7 @@ export default function PrivacyPage() {
             </p>
             <p>
               If you believe a child under 13 has provided us with personal information, please contact us at{' '}
-              <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>.
+              <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>.
             </p>
           </section>
 
@@ -425,7 +420,7 @@ export default function PrivacyPage() {
               </li>
             </ul>
             <p>
-              To exercise any of these rights, email us at <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>.
+              To exercise any of these rights, email us at <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>.
               We will respond within 30 days. We may need to verify your identity before processing your request.
             </p>
           </section>
@@ -512,7 +507,7 @@ export default function PrivacyPage() {
               </table>
             </div>
             <p>
-              To submit a CCPA request, email <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> or use the
+              To submit a CCPA request, email <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> or use the
               contact information in <a href="#14-contact-us">Section 14</a>. You may also authorize an agent to make a
               request on your behalf.
             </p>
@@ -520,70 +515,14 @@ export default function PrivacyPage() {
 
           <hr />
 
-          <section id="11-eu-and-uk-residents-gdpr--uk-gdpr" className="privacy-section" aria-labelledby="privacy-h-gdpr">
-            <h2 id="privacy-h-gdpr">11. EU and UK Residents (GDPR / UK GDPR)</h2>
+          <section id="11-eu-and-uk-availability" className="privacy-section" aria-labelledby="privacy-h-gdpr">
+            <h2 id="privacy-h-gdpr">11. EU and UK Availability</h2>
             <p>
-              If you are located in the European Union or United Kingdom, the <strong>General Data Protection Regulation
-              (GDPR)</strong> or <strong>UK GDPR</strong> applies to your personal data.
+              Step Weave does not currently support sales to customers located in the European Union or United
+              Kingdom. If you are located in one of these regions and would like to use Step Weave, please email us
+              at <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> — we are evaluating
+              adding support for these regions in the future.
             </p>
-
-            <h3 id="privacy-h-gdpr-bases">Legal Bases for Processing</h3>
-            <p>We process your personal data on the following legal bases:</p>
-            <ul>
-              <li>
-                <strong>Contract performance</strong> — to fulfill your orders, manage your account, and provide our
-                services
-              </li>
-              <li>
-                <strong>Legitimate interests</strong> — to improve our platform, prevent fraud, and communicate relevant
-                updates, where these interests are not overridden by your rights
-              </li>
-              <li>
-                <strong>Legal obligation</strong> — to comply with applicable laws and regulations
-              </li>
-              <li>
-                <strong>Consent</strong> — for marketing communications and non-essential cookies, where required
-              </li>
-            </ul>
-
-            <h3 id="privacy-h-gdpr-rights">Your GDPR Rights</h3>
-            <p>In addition to the rights in Section 9, you have the right to:</p>
-            <ul>
-              <li>
-                <strong>Restrict processing</strong> — ask us to limit how we use your data in certain circumstances
-              </li>
-              <li>
-                <strong>Object to processing</strong> — object to processing based on legitimate interests or for direct
-                marketing
-              </li>
-              <li>
-                <strong>Withdraw consent</strong> — where processing is based on consent, withdraw it at any time without
-                affecting the lawfulness of prior processing
-              </li>
-              <li>
-                <strong>Lodge a complaint</strong> — with your local data protection authority (for EU residents, your
-                national supervisory authority; for UK residents, the Information Commissioner&apos;s Office)
-              </li>
-            </ul>
-
-            <h3 id="privacy-h-gdpr-controller">Data Controller</h3>
-            <p>The data controller for your personal information is:</p>
-            <div className="privacy-contact-block">
-              <p>
-                <strong>Foxhill AI LLC</strong>
-              </p>
-              <p>9878 W. Belleview Ave, Suite 2393, Denver, CO 80123</p>
-              <p>
-                <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>
-              </p>
-            </div>
-
-            <blockquote className="privacy-note">
-              <p>
-                <strong>Note for counsel:</strong> If you are actively marketing to EU/UK customers, consider whether you
-                need to appoint an EU or UK representative under Article 27 of the GDPR / UK GDPR.
-              </p>
-            </blockquote>
           </section>
 
           <hr />
@@ -622,7 +561,7 @@ export default function PrivacyPage() {
                 <strong>Step Weave</strong> · Foxhill AI LLC
               </p>
               <p>
-                <strong>Email:</strong> <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>
+                <strong>Email:</strong> <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>
               </p>
               <p>
                 <strong>Mail:</strong> 9878 W. Belleview Ave, Suite 2393, Denver, CO 80123

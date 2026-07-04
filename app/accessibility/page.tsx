@@ -100,7 +100,7 @@ export default function AccessibilityPage() {
             <p>
               If you have trouble using any part of Step Weave, or if you&apos;d like to request
               content in an alternative format, email us at{' '}
-              <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>. Please tell us:
+              <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>. Please tell us:
             </p>
             <ul>
               <li>The page or feature you were using (a URL is helpful)</li>

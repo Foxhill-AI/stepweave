@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Last updated:** May 2026
+**Last updated:** July 2026
 
 ---
 
@@ -35,9 +35,9 @@ We may update these Terms from time to time. When we do, we will update the **La
 
 **Age.** You must be at least 13 years old to use Step Weave, or older if required by law in your region. By creating an account, you confirm you meet the minimum age requirement.
 
-**Account Information.** You agree to provide accurate, current, and complete information when registering, whether through email/password or a supported sign-in provider such as Google or Meta.
+**Account Information.** You agree to provide accurate, current, and complete information when registering, whether through email/password or a supported sign-in provider such as Google.
 
-**Account Security.** You are responsible for keeping your login credentials confidential. If you believe your account has been compromised, notify us immediately at [legal@stepweave.com](mailto:legal@stepweave.com).
+**Account Security.** You are responsible for keeping your login credentials confidential. If you believe your account has been compromised, notify us immediately at [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com).
 
 **Account Responsibility.** You are responsible for all activity that occurs under your account. One person may hold one seller account unless we expressly authorize otherwise. We reserve the right to suspend or close accounts involved in fraud, abuse, repeated policy violations, illegal activity, or conduct that poses a risk to our payment or fulfillment partners.
 
@@ -86,7 +86,7 @@ Step Weave is a creative community. To keep it safe and welcoming, you may **not
 
 We actively moderate content. Violations may result in content removal, account suspension, or permanent bans. Payment holds may also be applied when required by our payment partners.
 
-**Intellectual Property Complaints.** If you believe your intellectual property rights have been violated, email [legal@stepweave.com](mailto:legal@stepweave.com) with a description of the issue, relevant links or order/product IDs, and your contact information. Filing false or bad-faith reports may have consequences.
+**Intellectual Property Complaints.** If you believe your intellectual property rights have been violated, email [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com) with a description of the issue, relevant links or order/product IDs, and your contact information. Filing false or bad-faith reports may have consequences.
 
 Our day-to-day community expectations are further described in our [Community Guidelines](https://www.stepweave.com/guidelines).
 
@@ -112,7 +112,7 @@ This license ends when you delete your content, except for content required to f
 
 **Payment Processing.** All payments and seller payouts are processed through [Stripe](https://stripe.com/legal). By using Step Weave as a seller, you also agree to Stripe's [Services Agreement](https://stripe.com/legal/ssa) and, where applicable, their [Connected Account Agreement](https://stripe.com/connect-account/legal).
 
-**Platform Fee.** On marketplace sales, Step Weave deducts a platform fee from each qualifying transaction. The default platform fee is **15%** of the merchandise subtotal (1,500 basis points), unless otherwise configured. Fees are subject to change with notice.
+**Platform Fee.** On marketplace sales, Step Weave deducts a platform fee from each qualifying transaction. Current fee rates are available on our [Pricing page](https://www.stepweave.com/pricing) and may vary by seller plan or product category. Fees are subject to change with notice.
 
 **Subscriptions.** If subscription plans are offered, current pricing will be listed on our [Pricing page](https://www.stepweave.com/pricing) and reflected in Stripe receipts.
 
@@ -142,6 +142,10 @@ After you complete a purchase, we transmit your order and print files to our pri
 
 Step Weave shoes and other products may be manufactured **outside the United States**, including in countries such as mainland China or other regions used by our fulfillment partners. Production location may vary by product or partner.
 
+### EU and UK Availability
+
+Step Weave does not currently support sales to customers located in the European Union or United Kingdom. If you are located in one of these regions and would like to purchase from Step Weave, please email us at [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com) — we are evaluating adding support for these regions in the future.
+
 ### International Shipping and Customs
 
 If your order ships internationally, you are responsible for:
@@ -168,11 +172,11 @@ The following situations are generally **final sale** and not eligible for cance
 
 Once production has begun, cancellation may not be possible.
 
-> **Note:** Mandatory consumer protection laws in your jurisdiction (such as EU or UK consumer rights) may provide rights that override the above. Those rights are not affected by these Terms.
+> **Note:** Mandatory consumer protection laws in your jurisdiction may provide rights that override the above. Those rights are not affected by these Terms.
 
 ### Exceptions — Contact Us
 
-Email [legal@stepweave.com](mailto:legal@stepweave.com) promptly with photos and your order/product ID if:
+Email [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com) promptly with photos and your order/product ID if:
 
 - **(a)** The print has a **material defect** — not normal POD variation
 - **(b)** You received the **wrong item or SKU**
@@ -209,15 +213,13 @@ We may suspend or terminate accounts that violate these Terms, with or without n
 
 ## 12. Disputes and Governing Law
 
-**Contact Us First.** If you have a dispute with Step Weave, please email [legal@stepweave.com](mailto:legal@stepweave.com) before initiating formal proceedings. Most issues can be resolved quickly this way.
+**Contact Us First.** If you have a dispute with Step Weave, please email [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com) before initiating formal proceedings. Most issues can be resolved quickly this way.
 
 **Governing Law.** These Terms are governed by the laws of the **State of Colorado**, without regard to its conflict-of-law principles.
 
 **Venue.** Any disputes not resolved informally shall be brought exclusively in the state or federal courts located in **Denver, Colorado**, and you consent to personal jurisdiction in those courts.
 
-**Consumer Rights Abroad.** Buyers in the EU, UK, or other jurisdictions with mandatory consumer protections may have the right to bring claims in their local courts. Nothing in this section is intended to waive rights that cannot legally be waived.
-
-> **Note for counsel:** This section should be reviewed by a qualified attorney to address arbitration clauses, class-action waivers, jury waivers, and any mandatory consumer dispute resolution requirements applicable to the jurisdictions where you operate.
+**Availability.** Step Weave does not currently support sales to customers located in the European Union or United Kingdom (see [Section 9](#9-orders-manufacturing-shipping-and-returns)). For buyers in other jurisdictions with mandatory consumer protections, nothing in this section is intended to waive rights that cannot legally be waived.
 
 ---
 
@@ -234,8 +236,8 @@ If any provision of these Terms is found to be unenforceable, the remaining prov
 StepWeave.com is owned and maintained by Foxhill AI LLC
 
 **Mailing Address:** 9878 W. Belleview Ave, Suite 2393, Denver, CO 80123
-**Support & Trust & Safety:** [stepweave_legal@foxhillai.com](mailto:stepweave_legal@foxhillai.com)
+**Support & Trust & Safety:** [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com)
 
-**IP / DMCA Notices:** [stepweave_legal@foxhillai.com](mailto:stepweave_legal@foxhillai.com)
+**IP / DMCA Notices:** [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com)
 
 We aim to respond within 2–3 business days.

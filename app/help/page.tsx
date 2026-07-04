@@ -66,7 +66,7 @@ export default function HelpPage() {
             </p>
             <p>
               <Link href="/contact">Contact us</Link> · For legal, IP, or privacy questions,
-              email <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>.
+              email <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>.
             </p>
           </div>
 
