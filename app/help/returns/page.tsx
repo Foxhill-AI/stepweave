@@ -126,7 +126,7 @@ export default function ReturnsHelpPage() {
             <h2>How to request a refund</h2>
             <ol>
               <li>
-                Email <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> as soon as you
+                Email <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> as soon as you
                 notice the issue.
               </li>
               <li>
@@ -204,7 +204,7 @@ export default function ReturnsHelpPage() {
             </p>
             <p>
               For details, see Section 9 of our <Link href="/terms">Terms of Use</Link>, or
-              contact <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> with your
+              contact <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> with your
               specific situation.
             </p>
           </section>

@@ -1,6 +1,6 @@
 # Cookie Policy
 
-**Last updated:** May 2026
+**Last updated:** July 2026
 
 **Step Weave** is operated by **Foxhill AI LLC**, located at 9878 W. Belleview Ave, Suite 2393, Denver, CO 80123. This Cookie Policy explains what cookies are, which ones we use on [https://www.stepweave.com](https://www.stepweave.com), why we use them, and how you can control them.
 
@@ -57,15 +57,7 @@ These cookies are strictly necessary for Step Weave to function. Without them, c
 
 ### Analytics and Performance Cookies
 
-These cookies help us understand how visitors use Step Weave — which pages are popular, where users drop off, and how the site performs. All data collected is aggregated and does not identify you personally. We use this information to improve the site.
-
-| Cookie | Provider | Purpose |
-|--------|----------|---------|
-| Analytics session | Google Analytics | Tracks page views, session duration, and navigation paths |
-| User identifier | Google Analytics | Distinguishes unique visitors (anonymized) |
-| Performance metrics | Internal | Monitors page load times and errors |
-
-You can opt out of analytics cookies through our cookie banner or by installing the [Google Analytics Opt-Out Browser Add-on](https://tools.google.com/dlpage/gaoptout).
+Step Weave does not currently use a third-party analytics service. Our cookie banner includes an Analytics category so you have granular control in place before any such tool is introduced. If we add one in the future (for example, to understand which pages are popular or how the site performs), we will name the specific provider here and describe what it collects.
 
 ### Functional / Preference Cookies
 
@@ -80,16 +72,7 @@ These cookies remember choices you make to provide a more personalized experienc
 
 ### Marketing and Advertising Cookies
 
-These cookies are used to show you relevant advertisements on Step Weave and on other websites, and to measure the effectiveness of our marketing campaigns. We only set these cookies with your consent.
-
-| Cookie | Provider | Purpose |
-|--------|----------|---------|
-| Ad conversion tracking | Google Ads | Tracks whether an ad click led to a purchase |
-| Remarketing | Google / Meta | Enables showing Step Weave ads to past visitors on other platforms |
-| Campaign attribution | Meta Pixel | Measures effectiveness of ads on Facebook and Instagram |
-| A/B test variant | Internal | Tracks which version of a page or feature you saw during testing |
-
-You can withdraw consent for marketing cookies at any time through our cookie banner or your browser settings.
+Step Weave does not currently run advertising, remarketing, or ad-conversion cookies. Our cookie banner includes a Marketing category so you have granular control in place before any such tool is introduced. If we add advertising features in the future, we will only set these cookies with your consent and will name the specific providers here.
 
 ---
 
@@ -100,12 +83,11 @@ Some cookies on Step Weave are set directly by third-party services we use. Thes
 | Third Party | Why They Set Cookies | Their Privacy Policy |
 |-------------|---------------------|---------------------|
 | **Stripe** | Secure payment processing and fraud prevention | [stripe.com/privacy](https://stripe.com/privacy) |
-| **Google** | Analytics, sign-in, and advertising | [policies.google.com/privacy](https://policies.google.com/privacy) |
-| **Meta (Facebook)** | Social sign-in and advertising | [facebook.com/privacy/policy](https://www.facebook.com/privacy/policy) |
+| **Google** | Social sign-in (OAuth) | [policies.google.com/privacy](https://policies.google.com/privacy) |
 | **Supabase** | Authentication and data storage | [supabase.com/privacy](https://supabase.com/privacy) |
 | **OpenAI / Fal** | AI design tool processing | See their respective privacy policies |
 
-We do not control third-party cookies. To opt out of third-party advertising cookies, you can also use industry opt-out tools such as the [NAI Opt-Out Tool](https://optout.networkadvertising.org) or [YourAdChoices](https://optout.aboutads.info).
+We do not control third-party cookies.
 
 ---
 
@@ -120,10 +102,10 @@ Cookies fall into two duration categories:
 | Cookie Type | Typical Duration |
 |-------------|-----------------|
 | Authentication / login | 30 days (or until you sign out) |
-| Analytics identifiers | Up to 2 years |
-| Marketing / ad cookies | 90 days to 1 year |
 | Preference cookies | Up to 1 year |
 | Cookie consent record | 1 year |
+
+If we introduce analytics or marketing cookies in the future, we will add their typical durations here.
 
 You can delete cookies at any time through your browser settings. Note that deleting essential cookies may log you out or affect site functionality.
 
@@ -150,11 +132,7 @@ Note that blocking all cookies through your browser — including essential ones
 
 ### Through Third-Party Opt-Out Tools
 
-- **Google Analytics:** [tools.google.com/dlpage/gaoptout](https://tools.google.com/dlpage/gaoptout)
-- **Google Ads:** [adssettings.google.com](https://adssettings.google.com)
-- **Meta / Facebook Ads:** [facebook.com/ads/preferences](https://www.facebook.com/ads/preferences)
-- **Network Advertising Initiative:** [optout.networkadvertising.org](https://optout.networkadvertising.org)
-- **Digital Advertising Alliance:** [optout.aboutads.info](https://optout.aboutads.info)
+Step Weave does not currently run third-party analytics or advertising services, so there are no vendor-specific opt-out tools to link to today. If we introduce such services in the future, we will list the relevant opt-out tools here (for example, industry resources such as the [Network Advertising Initiative](https://optout.networkadvertising.org) or [Digital Advertising Alliance](https://optout.aboutads.info)).
 
 ---
 
@@ -189,7 +167,7 @@ If the changes are material, we will notify you through our cookie consent banne
 If you have questions about our use of cookies or this policy, please contact us:
 
 **Step Weave** · Foxhill AI LLC
-**Email:** [legal@stepweave.com](mailto:legal@stepweave.com)
+**Email:** [stepweave_admin@foxhillai.com](mailto:stepweave_admin@foxhillai.com)
 **Mail:** 9878 W. Belleview Ave, Suite 2393, Denver, CO 80123
 
 We aim to respond to all inquiries within **5 business days**.

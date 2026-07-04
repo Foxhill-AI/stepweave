@@ -240,7 +240,7 @@ export default function GuidelinesPage() {
             </p>
             <p>
               If you believe your intellectual property has been infringed on Step Weave, please contact us at{' '}
-              <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> with details of the alleged infringement,
+              <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> with details of the alleged infringement,
               including links or product/order IDs and your contact information. We will investigate and respond promptly.
               Filing false or bad-faith reports may have consequences.
             </p>
@@ -382,7 +382,7 @@ export default function GuidelinesPage() {
               content that conflicts with our values even if not explicitly listed above.
             </p>
             <p>
-              Appeals can be submitted to <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>. Please include
+              Appeals can be submitted to <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>. Please include
               your account information and a description of why you believe the action was taken in error. We aim to
               respond to appeals within 5 business days.
             </p>
@@ -399,7 +399,7 @@ export default function GuidelinesPage() {
             <p className="guidelines-report-block">
               <strong>
                 To report a violation, email us at{' '}
-                <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>
+                <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>
               </strong>
             </p>
             <p>Please include:</p>
@@ -418,7 +418,7 @@ export default function GuidelinesPage() {
             These guidelines work together with our{' '}
             <Link href="/terms">Terms of Service</Link>, <Link href="/privacy">Privacy Policy</Link>, and{' '}
             <Link href="/cookies">Cookie Policy</Link>. For questions, contact us at{' '}
-            <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>.
+            <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>.
           </p>
         </article>
       </main>

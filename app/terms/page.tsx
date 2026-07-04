@@ -21,7 +21,7 @@ export default function TermsPage() {
         <article className="terms-page">
           <h1 className="terms-page-title">Terms of Service</h1>
           <p className="terms-page-meta">
-            <strong>Last updated:</strong> May 2026
+            <strong>Last updated:</strong> July 2026
           </p>
 
           <hr />
@@ -108,7 +108,7 @@ export default function TermsPage() {
             <p>
               <strong>Account Security.</strong> You are responsible for keeping your login credentials confidential. If
               you believe your account has been compromised, notify us immediately at{' '}
-              <a href="mailto:legal@stepweave.com">legal@stepweave.com</a>.
+              <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>.
             </p>
             <p>
               <strong>Account Responsibility.</strong> You are responsible for all activity that occurs under your
@@ -206,7 +206,7 @@ export default function TermsPage() {
             </p>
             <p>
               <strong>Intellectual Property Complaints.</strong> If you believe your intellectual property rights have
-              been violated, email <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> with a description of the
+              been violated, email <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> with a description of the
               issue, relevant links or order/product IDs, and your contact information. Filing false or bad-faith reports
               may have consequences.
             </p>
@@ -267,8 +267,8 @@ export default function TermsPage() {
             </p>
             <p>
               <strong>Platform Fee.</strong> On marketplace sales, Step Weave deducts a platform fee from each
-              qualifying transaction. The default platform fee is <strong>15%</strong> of the merchandise subtotal (1,500
-              basis points), unless otherwise configured. Fees are subject to change with notice.
+              qualifying transaction. Current fee rates are available on our <Link href="/pricing">Pricing page</Link>{' '}
+              and may vary by seller plan or product category. Fees are subject to change with notice.
             </p>
             <p>
               <strong>Subscriptions.</strong> If subscription plans are offered, current pricing will be listed on our{' '}
@@ -327,6 +327,14 @@ export default function TermsPage() {
               location may vary by product or partner.
             </p>
 
+            <h3 id="orders-eu-uk-availability">EU and UK Availability</h3>
+            <p>
+              Step Weave does not currently support sales to customers located in the European Union or United
+              Kingdom. If you are located in one of these regions and would like to purchase from Step Weave, please
+              email us at <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> — we are
+              evaluating adding support for these regions in the future.
+            </p>
+
             <h3 id="orders-international">International Shipping and Customs</h3>
             <p>If your order ships internationally, you are responsible for:</p>
             <ul>
@@ -363,14 +371,14 @@ export default function TermsPage() {
             <p>Once production has begun, cancellation may not be possible.</p>
             <blockquote className="terms-note">
               <p>
-                <strong>Note:</strong> Mandatory consumer protection laws in your jurisdiction (such as EU or UK consumer
-                rights) may provide rights that override the above. Those rights are not affected by these Terms.
+                <strong>Note:</strong> Mandatory consumer protection laws in your jurisdiction may provide rights that
+                override the above. Those rights are not affected by these Terms.
               </p>
             </blockquote>
 
             <h3 id="orders-exceptions">Exceptions — Contact Us</h3>
             <p>
-              Email <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> promptly with photos and your
+              Email <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> promptly with photos and your
               order/product ID if:
             </p>
             <ul>
@@ -447,7 +455,7 @@ export default function TermsPage() {
             <h2 id="terms-h-disputes">12. Disputes and Governing Law</h2>
             <p>
               <strong>Contact Us First.</strong> If you have a dispute with Step Weave, please email{' '}
-              <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> before initiating formal proceedings. Most
+              <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> before initiating formal proceedings. Most
               issues can be resolved quickly this way.
             </p>
             <p>
@@ -460,17 +468,12 @@ export default function TermsPage() {
               those courts.
             </p>
             <p>
-              <strong>Consumer Rights Abroad.</strong> Buyers in the EU, UK, or other jurisdictions with mandatory
-              consumer protections may have the right to bring claims in their local courts. Nothing in this section is
-              intended to waive rights that cannot legally be waived.
+              <strong>Availability.</strong> Step Weave does not currently support sales to customers located in the
+              European Union or United Kingdom (see{' '}
+              <a href="#9-orders-manufacturing-shipping-and-returns">Section 9</a>). For buyers in other jurisdictions
+              with mandatory consumer protections, nothing in this section is intended to waive rights that cannot
+              legally be waived.
             </p>
-            <blockquote className="terms-note">
-              <p>
-                <strong>Note for counsel:</strong> This section should be reviewed by a qualified attorney to address
-                arbitration clauses, class-action waivers, jury waivers, and any mandatory consumer dispute resolution
-                requirements applicable to the jurisdictions where you operate.
-              </p>
-            </blockquote>
           </section>
 
           <hr />
@@ -503,11 +506,11 @@ export default function TermsPage() {
               </p>
               <p>
                 <strong>Support &amp; Trust &amp; Safety:</strong>{' '}
-                <a href="mailto:stepweave_legal@foxhillai.com">stepweave_legal@foxhillai.com</a>
+                <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>
               </p>
               <p>
                 <strong>IP / DMCA Notices:</strong>{' '}
-                <a href="mailto:stepweave_legal@foxhillai.com">stepweave_legal@foxhillai.com</a>
+                <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a>
               </p>
             </div>
             <p>We aim to respond within 2–3 business days.</p>

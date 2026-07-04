@@ -143,7 +143,7 @@ export default function GettingStartedPage() {
               <p>
                 If you signed up with Google or Facebook, you don&apos;t have a Step Weave password
                 — sign in with that provider instead, or contact{' '}
-                <a href="mailto:legal@stepweave.com">legal@stepweave.com</a> if you&apos;ve lost
+                <a href="mailto:stepweave_admin@foxhillai.com">stepweave_admin@foxhillai.com</a> if you&apos;ve lost
                 access to it.
               </p>
             </div>
