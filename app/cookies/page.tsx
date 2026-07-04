@@ -390,9 +390,8 @@ export default function CookiesPage() {
           <section id="6-cookie-consent-banner" className="cookies-section" aria-labelledby="cookies-h-consent-ui">
             <h2 id="cookies-h-consent-ui">6. Cookie Consent Banner</h2>
             <p>
-              For users in the <strong>EU, UK, and other regions</strong> where cookie consent is required by law (such
-              as under the ePrivacy Directive or UK PECR), we display a cookie consent banner on your first visit. We
-              will not set non-essential cookies until you have given your consent.
+              We display a cookie consent banner on your first visit and will not set non-essential cookies until you
+              have given your consent. This applies to all visitors regardless of location.
             </p>
             <p>
               Your consent preferences are stored so you are not asked repeatedly. You can change your preferences at any

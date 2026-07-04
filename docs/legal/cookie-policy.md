@@ -138,7 +138,7 @@ Step Weave does not currently run third-party analytics or advertising services,
 
 ## 6. Cookie Consent Banner
 
-For users in the **EU, UK, and other regions** where cookie consent is required by law (such as under the ePrivacy Directive or UK PECR), we display a cookie consent banner on your first visit. We will not set non-essential cookies until you have given your consent.
+We display a cookie consent banner on your first visit and will not set non-essential cookies until you have given your consent. This applies to all visitors regardless of location.
 
 Your consent preferences are stored so you are not asked repeatedly. You can change your preferences at any time using the **Cookie Settings** link in our site footer.
 

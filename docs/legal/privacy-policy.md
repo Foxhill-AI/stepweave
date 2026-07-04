@@ -94,7 +94,7 @@ We share information with companies that help us operate Step Weave, including:
 - **Supabase** — file and data storage
 - **OpenAI / Fal** — AI-powered design and image generation features
 - **Google** — if you use social sign-in
-- **Email and analytics providers** — to send transactional and marketing emails and analyze site usage
+- **Resend** — sends transactional emails (order confirmations, account and subscription notices) and marketing emails you opt into
 
 These partners are contractually required to use your information only to provide services to us and to protect it appropriately.
 
