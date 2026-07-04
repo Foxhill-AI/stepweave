@@ -240,8 +240,8 @@ export default function PrivacyPage() {
                 <strong>Google</strong> — if you use social sign-in
               </li>
               <li>
-                <strong>Email and analytics providers</strong> — to send transactional and marketing emails and analyze site
-                usage
+                <strong>Resend</strong> — sends transactional emails (order confirmations, account and subscription
+                notices) and marketing emails you opt into
               </li>
             </ul>
             <p>
