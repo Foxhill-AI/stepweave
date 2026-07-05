@@ -1,19 +1,19 @@
-# Responsive Web Template
+# Step Weave
 
-A clean, modern, content-driven web platform template inspired by well-known content and community-based applications.
-
-This template is designed to be a solid starting point for SaaS products, content platforms, or community-driven websites.
+Step Weave is a print-on-demand marketplace where creators design custom products with AI-assisted and manual design tools, then sell them to the community. Shoppers can browse, purchase, and follow their favorite creators; sellers get design tools, order fulfillment via Printful, and payouts via Stripe.
 
 ---
 
 ## Tech Stack
 
-- **Frontend:** Next.js 14 (App Router), React, CSS
+- **Frontend:** Next.js 14 (App Router), React, TypeScript, plain CSS
 - **Authentication & Database:** Supabase (Email/Password and OAuth with Google & Facebook)
 - **Payments:** Stripe (Checkout and Subscriptions)
+- **Print-on-demand fulfillment:** Printful
+- **AI design tools:** OpenAI and Fal
 - **Email:** Resend (optional)
 - **Features included:**  
-  User authentication, user profiles, shopping cart, collections, search functionality, responsive layout, and accessible UI components.
+  User authentication, user profiles, seller storefronts, an AI-assisted and manual design tool, shopping cart, checkout, order tracking, search functionality, responsive layout, and accessible UI components.
 
 ---
 
@@ -188,7 +188,7 @@ NEXT_PUBLIC_ENABLE_NEWSLETTER=true
 1. Make sure you are inside the project folder:
 
    ```bash
-   cd Template-1
+   cd stepweave
    ```
 2. Start the development server:
 

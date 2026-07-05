@@ -4,7 +4,7 @@
 
 **Step Weave** (site metadata in `app/layout.tsx`) is a **content- and commerce-oriented web app**: marketplace, user profiles, cart/checkout, optional blog/newsletter/contact (feature-flagged), and a **design tool** for creating **print-on-demand style products** using **Printful** as the fulfillment/catalog backend, with **Supabase** for data and auth and **Stripe** for payments/subscriptions.
 
-It began from a **responsive web template** (`package.json` name `responsive-web-template`) and has grown domain-specific features (design drafts, Printful integration, AI pattern generation).
+It began from a **responsive web template** (`package.json` name originally `responsive-web-template`, now renamed `stepweave`) and has grown domain-specific features (design drafts, Printful integration, AI pattern generation).
 
 ## Primary use cases (implemented flows)
 
