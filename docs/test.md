@@ -36,5 +36,5 @@
 
 ## Notes
 
-- Align CI job names with product branding (**Step Weave**) even if `package.json` still says `responsive-web-template`.
-- Adding tests does not require renaming the package, but documenting the canonical name in README helps contributors.
+- `package.json`'s `name` field is now `stepweave` (was `responsive-web-template`); align any CI job names with product branding (**Step Weave**) accordingly.
+- `README.md` now documents the canonical name and setup steps for contributors.

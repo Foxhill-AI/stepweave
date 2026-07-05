@@ -9,8 +9,9 @@ Honest assessment based on source inspection (TODOs, comments, structure, and kn
 | **Clone product** | `components/MyProductsTab.tsx`: `// TODO: clone product + variants` |
 | **Manual design mode** | `ManualEditorPlaceholder.tsx` — sidebar/pills UI only; not wired to draft uploads / Printful like the AI path |
 | **Media uploader** | `MediaUploaderUI.tsx`: **“UI only – no actual upload”** in `handleDrop` / `handleClick` |
-| **Branding vs package name** | `package.json`: `responsive-web-template` vs app title **Step Weave** — may confuse CI/docs |
 | **Shoe template overlay** | `ShoeDesignEditor` centers overlay on template image; API rows can include `print_area_*` / `template_width` — **not** used yet for pixel-perfect alignment on the PNG |
+
+**Resolved:** `package.json` `name` (and `package-lock.json`) renamed from `responsive-web-template` to `stepweave`; `README.md` rewritten to describe Step Weave instead of generic template boilerplate.
 
 ## 2. Stubbed or missing integrations
 

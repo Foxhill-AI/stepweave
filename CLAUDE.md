@@ -2,7 +2,7 @@
 
 ## Project identity
 
-- **Name in package.json:** `responsive-web-template` (branding in app is **Step Weave**).
+- **Name in package.json:** `stepweave` (branding in app is **Step Weave**).
 - **Stack:** Next.js **14** (App Router), React 18, **TypeScript** (no Tailwind — styling is **plain CSS** in `styles/`).
 - **Data:** **Supabase** (Postgres + Auth + Storage) via `@supabase/supabase-js` and `@supabase/ssr`.
 - **Scripts:** `npm run dev`, `npm run dev:clean` (deletes `.next` then `next dev` — use when chunks/cache break), `npm run build`, `npm run lint`. **There is no test runner configured.**
@@ -41,7 +41,6 @@
 ## What to avoid touching without explicit intent
 
 - **Production auth/payment flows:** `middleware.ts`, `app/api/webhooks/stripe/route.ts`, `app/api/checkout*/route.ts`, `app/api/subscription/*` — require careful testing.
-- **README clone instructions** if they point at an external template repo — may be legacy; confirm with the team before rewriting marketing docs.
 - **Mass refactor of `lib/supabaseClient.ts`** without a plan — high blast radius.
 
 ## Related docs
