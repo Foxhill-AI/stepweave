@@ -4,21 +4,15 @@ import { Suspense, useState, useEffect } from 'react'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { useSearchParams, usePathname, useRouter } from 'next/navigation'
 import AdvancedSearchModal, { type AdvancedSearchParams } from './AdvancedSearchModal'
-import { getCategories, type CategoryRow } from '@/lib/supabaseClient'
 import '../styles/Subnavbar.css'
 
 function SubnavbarInner() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showFilters, setShowFilters] = useState(false)
-  const [categories, setCategories] = useState<CategoryRow[]>([])
   const searchParams = useSearchParams()
   const pathname = usePathname()
   const router = useRouter()
   const selectedCategory = searchParams.get('category') ?? 'all'
-
-  useEffect(() => {
-    getCategories().then(setCategories)
-  }, [])
 
   useEffect(() => {
     if (pathname === '/search') {
@@ -40,7 +34,6 @@ function SubnavbarInner() {
     const urlParams = new URLSearchParams()
     const term = params.hasWords.trim()
     if (term) urlParams.set('q', term)
-    if (params.category && params.category !== 'all') urlParams.set('category', params.category)
     if (params.creator.trim()) urlParams.set('creator', params.creator.trim())
     if (params.dateCreated && params.dateCreated !== 'any') urlParams.set('date', params.dateCreated)
     if (params.exactMatch.trim()) urlParams.set('exact', params.exactMatch.trim())
@@ -55,7 +48,6 @@ function SubnavbarInner() {
     pathname === '/search'
       ? {
           hasWords: searchParams.get('q') ?? '',
-          category: searchParams.get('category') ?? 'all',
           creator: searchParams.get('creator') ?? '',
           dateCreated: (searchParams.get('date') ?? 'any') as AdvancedSearchParams['dateCreated'],
           exactMatch: searchParams.get('exact') ?? '',
@@ -113,7 +105,6 @@ function SubnavbarInner() {
         isOpen={showFilters}
         onClose={() => setShowFilters(false)}
         initialParams={advancedSearchInitialParams}
-        categories={categories}
         onSearch={handleAdvancedSearch}
       />
     </nav>
