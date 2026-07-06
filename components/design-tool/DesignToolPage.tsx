@@ -28,10 +28,9 @@ import {
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import { useAuth } from '@/components/AuthProvider'
 import {
-  getCategories,
   updateDesignDraft,
 } from '@/lib/supabaseClient'
-import type { CategoryRow, DesignDraftRow } from '@/lib/supabaseClient'
+import type { DesignDraftRow } from '@/lib/supabaseClient'
 import PublishFlowModal from './PublishFlowModal'
 import { fetchPreviewMockupsWithRetry } from '@/lib/design-tool/previewMockupsFetch'
 import '../../styles/DesignTool.css'
@@ -64,7 +63,6 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   const [designData, setDesignData] = useState<Record<string, unknown>>(
     draft?.design_state && typeof draft.design_state === 'object' ? (draft.design_state as Record<string, unknown>) : {}
   )
-  const [categories, setCategories] = useState<CategoryRow[]>([])
   /** Local copy of draft so we can update pattern_image_url after upload without refetch. */
   const [localDraft, setLocalDraft] = useState<DesignDraftRow | null>(draft ?? null)
   /** Resolved signed URL for draft pattern image (when using Storage). */
@@ -141,14 +139,6 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
       setDesignData(draft.design_state as Record<string, unknown>)
     }
   }, [draft?.id])
-
-  useEffect(() => {
-    let cancelled = false
-    getCategories().then((rows) => {
-      if (!cancelled) setCategories(rows)
-    })
-    return () => { cancelled = true }
-  }, [])
 
   // Fetch signed URL when draft has a pattern stored in Storage (private bucket).
   useEffect(() => {
@@ -847,7 +837,6 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
         localDraft={localDraft}
         printfulVariantId={printfulVariantId}
         variantOptions={variantOptions}
-        categories={categories}
         isEditingPublishedProduct={isEditingPublishedProduct}
         designData={designData}
         initialStep={autoPublish ? 'publish' : undefined}

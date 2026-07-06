@@ -5,11 +5,10 @@ import { useRouter } from 'next/navigation'
 import PricingEstimatePanel, { formatPricingMoney } from './PricingEstimatePanel'
 import type { PricingEstimateOk } from '@/lib/printful/pricingEstimate'
 import type { DesignDraftRow } from '@/lib/supabaseClient'
-import { updateDesignDraft, updateProduct, setProductCategories, getProductById } from '@/lib/supabaseClient'
+import { updateDesignDraft, updateProduct, getProductById } from '@/lib/supabaseClient'
 
 type FlowStep = 'buy' | 'publish' | 'both-skipped'
 
-type CategoryRow = { id: number; name: string }
 type VariantOption = { id: number; color: string; size: string; image: string }
 
 interface PublishFlowModalProps {
@@ -19,7 +18,6 @@ interface PublishFlowModalProps {
   localDraft: DesignDraftRow | null
   printfulVariantId: number | null
   variantOptions?: VariantOption[]
-  categories: CategoryRow[]
   isEditingPublishedProduct: boolean
   designData: Record<string, unknown>
   /** When true, skip straight to the publish step (e.g. coming from post-purchase confirmation). */
@@ -33,7 +31,6 @@ export default function PublishFlowModal({
   localDraft,
   printfulVariantId,
   variantOptions = [],
-  categories,
   isEditingPublishedProduct,
   designData,
   initialStep,
@@ -50,7 +47,6 @@ export default function PublishFlowModal({
   // Publish step state
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
-  const [categoryId, setCategoryId] = useState<number | ''>('')
   const [publishEstimate, setPublishEstimate] = useState<PricingEstimateOk | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createLoading, setCreateLoading] = useState(false)
@@ -62,11 +58,9 @@ export default function PublishFlowModal({
     let cancelled = false
     getProductById(pid).then((p) => {
       if (cancelled || !p) return
-      const row = p as { name?: string; price?: number; product_category?: Array<{ category_id: number }> }
+      const row = p as { name?: string; price?: number }
       if (typeof row.name === 'string' && row.name.trim()) setName(row.name)
       if (row.price != null && Number.isFinite(Number(row.price))) setPrice(String(row.price))
-      const firstCat = row.product_category?.[0]?.category_id
-      setCategoryId(firstCat != null && firstCat > 0 ? firstCat : '')
     })
     return () => { cancelled = true }
   }, [localDraft?.final_product_id])
@@ -148,7 +142,6 @@ export default function PublishFlowModal({
           design_data: { source: 'design_draft' },
         })
         if (!okProduct) { setCreateError('Failed to update product. Please try again.'); return }
-        await setProductCategories(existingProductId, categoryId !== '' ? [categoryId as number] : [])
         router.push('/profile')
         return
       }
@@ -160,7 +153,6 @@ export default function PublishFlowModal({
           name: trimmedName,
           price: priceNum,
           baseCost: publishEstimate?.baseCosts ?? undefined,
-          categoryId: categoryId !== '' ? (categoryId as number) : undefined,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -300,7 +292,7 @@ export default function PublishFlowModal({
             </h3>
             <p className="pf-modal-desc">
               {isEditingPublishedProduct
-                ? 'Update your product name, price, or category.'
+                ? 'Update your product name or price.'
                 : 'Share your design and earn money each time someone buys a pair.'}
             </p>
 
@@ -344,19 +336,6 @@ export default function PublishFlowModal({
                 className="pf-modal-estimate"
               />
             )}
-
-            <label htmlFor="pf-category" className="design-tool-label">Category</label>
-            <select
-              id="pf-category"
-              className="design-tool-select"
-              value={categoryId === '' ? '' : String(categoryId)}
-              onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
-            >
-              <option value="">No category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
 
             {createError && (
               <p className="design-tool-form-error" role="alert">{createError}</p>
