@@ -168,6 +168,53 @@
   animation: homepage-fade-in 0.4s ease-out both;
 }
 
+.marketplace-shoe-filter-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.marketplace-shoe-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  padding: 2px;
+  max-width: 100%;
+}
+
+.marketplace-shoe-filter-btn {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-radius: calc(var(--border-radius) - 2px);
+  background: transparent;
+  color: var(--color-text-light);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.marketplace-shoe-filter-btn:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+
+.marketplace-shoe-filter-btn-active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.marketplace-shoe-filter-btn-active:hover {
+  background: var(--color-primary-dark);
+  color: white;
+}
+
 @media (max-width: 767px) {
   .homepage-main {
     padding: 0 0 var(--spacing-md);
