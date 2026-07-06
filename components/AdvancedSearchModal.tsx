@@ -13,7 +13,6 @@ export interface AdvancedSearchParams {
   exclude: string
   dateCreated: DateCreatedOption
   creator: string
-  category: string
 }
 
 const DATE_OPTIONS: { value: DateCreatedOption; label: string }[] = [
@@ -30,14 +29,12 @@ const emptyParams: AdvancedSearchParams = {
   exclude: '',
   dateCreated: 'any',
   creator: '',
-  category: 'all',
 }
 
 interface AdvancedSearchModalProps {
   isOpen: boolean
   onClose: () => void
   initialParams?: Partial<AdvancedSearchParams>
-  categories: { id: number; name: string; slug: string }[]
   onSearch: (params: AdvancedSearchParams) => void
 }
 
@@ -45,7 +42,6 @@ export default function AdvancedSearchModal({
   isOpen,
   onClose,
   initialParams,
-  categories,
   onSearch,
 }: AdvancedSearchModalProps) {
   const [params, setParams] = useState<AdvancedSearchParams>({ ...emptyParams, ...initialParams })
@@ -54,7 +50,7 @@ export default function AdvancedSearchModal({
     if (isOpen) {
       setParams({ ...emptyParams, ...initialParams })
     }
-  }, [isOpen, initialParams?.hasWords, initialParams?.exactMatch, initialParams?.mustContain, initialParams?.exclude, initialParams?.dateCreated, initialParams?.creator, initialParams?.category])
+  }, [isOpen, initialParams?.hasWords, initialParams?.exactMatch, initialParams?.mustContain, initialParams?.exclude, initialParams?.dateCreated, initialParams?.creator])
 
   const handleClear = () => {
     setParams({ ...emptyParams })
@@ -173,25 +169,6 @@ export default function AdvancedSearchModal({
                 onChange={(e) => update('creator', e.target.value)}
                 autoComplete="off"
               />
-            </div>
-            <div className="advanced-search-field">
-              <label htmlFor="category-adv" className="advanced-search-label">
-                Category
-              </label>
-              <select
-                id="category-adv"
-                className="advanced-search-select"
-                value={params.category}
-                onChange={(e) => update('category', e.target.value)}
-                aria-label="Category"
-              >
-                <option value="all">All</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.slug}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
         </section>
