@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, type MutableRefObject } from 'react'
 import { Upload, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { buildStandardMockupGallery } from '@/lib/productMockups/canonicalViews'
 import ShoeDesignEditor from './ShoeDesignEditor'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import type {
@@ -22,6 +23,8 @@ const BUCKET = 'design-patterns'
 export type MockupExtraItem = {
   title: string
   mockup_url: string
+  /** Canonical camera view ('top' | 'left' | 'right' | 'back' | 'front') */
+  view?: string
 }
 
 /** One placement from Printful mockups (dynamic tabs). */
@@ -29,6 +32,7 @@ export type PlacementTab = {
   placement: string
   label: string
   mockup_url: string
+  view?: string
   extra_mockups?: MockupExtraItem[]
 }
 
@@ -303,13 +307,13 @@ export default function PreviewWorkspace({
     setIsDragging(false)
   }
 
-  // Flatten ALL placements + their extra angles into one unified gallery
+  // Standardized gallery: one image per canonical view (Top, Left, Right, Back) —
+  // same set the marketplace product page shows, no duplicate angles.
   const allPhotos: Array<{ title: string; mockup_url: string }> = tabs
-    ? tabs.flatMap((t) =>
-        t.mockup_url
-          ? [{ title: t.label, mockup_url: t.mockup_url }, ...(t.extra_mockups ?? [])]
-          : []
-      )
+    ? buildStandardMockupGallery(tabs).map((img) => ({
+        title: img.label,
+        mockup_url: img.url,
+      }))
     : []
   const clampedIndex = Math.min(activeGalleryIndex, Math.max(0, allPhotos.length - 1))
   const selectedMockupUrl = allPhotos[clampedIndex]?.mockup_url ?? ''

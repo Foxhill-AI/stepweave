@@ -36,6 +36,7 @@ import {
   resolveMockupPlacementsForDisplay,
   type StoredMockupPlacement,
 } from '@/lib/productMockups/storage'
+import { viewHintFromPrintfulUrl } from '@/lib/productMockups/canonicalViews'
 
 const BUCKET = 'design-patterns'
 /** Long enough for Printful to fetch the pattern image during mockup generation */
@@ -44,14 +45,30 @@ const SIGNED_URL_FOR_PRINTFUL_SEC = 7200
 export type PreviewMockupExtra = {
   title: string
   mockup_url: string
+  /** Canonical camera view ('top' | 'left' | 'right' | 'back' | 'front') */
+  view?: string
 }
 
 export type PreviewMockupPlacement = {
   placement: string
   label: string
   mockup_url: string
+  view?: string
   extra_mockups?: PreviewMockupExtra[]
 }
+
+/**
+ * Standard gallery views and the Printful `options` names that render them.
+ * The default task usually renders only Left/Right/Front; whatever is missing
+ * afterwards is requested in a second task so every product gets as close to
+ * Top/Left/Right/Back as Printful supports.
+ */
+const VIEW_OPTION_CANDIDATES: Array<{ view: string; names: string[] }> = [
+  { view: 'top', names: ['Front 2', 'Top'] },
+  { view: 'left', names: ['Left', 'Left Front'] },
+  { view: 'right', names: ['Right', 'Right Front'] },
+  { view: 'back', names: ['Back'] },
+]
 
 /**
  * POST /api/design-drafts/[id]/preview-mockups
@@ -392,8 +409,41 @@ export async function POST(
   }
 
   let batch: Awaited<ReturnType<typeof createTaskAndPoll>>
+  let extraViewsBatch: Awaited<ReturnType<typeof createTaskAndPoll>> | null = null
   try {
     batch = await createTaskAndPoll(productId, variantId, files, headers)
+
+    // Figure out which canonical views the default task did NOT render and
+    // request them in a second task. (A separate task is required — Printful
+    // silently drops e.g. "Back" when combined with Left/Right options.)
+    if (batch.ok) {
+      const presentViews = new Set<string>()
+      for (const m of batch.mockups) {
+        for (const u of [m.mockup_url, ...(m.extra_mockups ?? []).map((e) => e.mockup_url)]) {
+          const view = u ? viewHintFromPrintfulUrl(u) : null
+          if (view) presentViews.add(view)
+        }
+      }
+      const productOptions = printfilesResult.options ?? []
+      const missingViewOptions: string[] = []
+      for (const { view, names } of VIEW_OPTION_CANDIDATES) {
+        if (presentViews.has(view)) continue
+        const name = names.find((n) => productOptions.includes(n))
+        if (name) missingViewOptions.push(name)
+      }
+      if (missingViewOptions.length > 0) {
+        extraViewsBatch = await createTaskAndPoll(productId, variantId, files, headers, {
+          options: missingViewOptions,
+        })
+        if (!extraViewsBatch.ok) {
+          console.warn(
+            '[preview-mockups] extra views task failed —',
+            extraViewsBatch.reason,
+            missingViewOptions
+          )
+        }
+      }
+    }
   } finally {
     if (slot === 'granted') {
       await releasePrintfulMockupSlot(admin, slotHolder)
@@ -401,23 +451,53 @@ export async function POST(
   }
   const urlByPlacement = new Map<string, string>()
   const extrasByPlacement = new Map<string, PreviewMockupExtra[]>()
+  const productViewExtras: PreviewMockupExtra[] = []
   let mockupErrorReason: string | undefined
 
   if (batch.ok) {
     mergeMockups(urlByPlacement, batch.mockups)
+    // Printful repeats the same extra camera angles under every placement;
+    // keep each unique image URL once so the stored gallery has no duplicates.
+    const seenUrls = new Set<string>(urlByPlacement.values())
     for (const m of batch.mockups) {
       const url = (m.mockup_url ?? '').trim()
       const existing = extrasByPlacement.get(m.placement) ?? []
       // Option-group variant for the same placement → treat as extra
-      if (url && m.option_group && urlByPlacement.get(m.placement) !== url) {
+      if (url && m.option_group && urlByPlacement.get(m.placement) !== url && !seenUrls.has(url)) {
         existing.push({ title: m.option_group, mockup_url: url })
+        seenUrls.add(url)
       }
       for (const e of m.extra_mockups ?? []) {
-        if (e.mockup_url?.trim()) {
-          existing.push({ title: e.title ?? '', mockup_url: e.mockup_url })
+        const extraUrl = (e.mockup_url ?? '').trim()
+        if (extraUrl && !seenUrls.has(extraUrl)) {
+          existing.push({ title: e.title ?? '', mockup_url: extraUrl })
+          seenUrls.add(extraUrl)
         }
       }
       if (existing.length) extrasByPlacement.set(m.placement, existing)
+    }
+
+    // Second task results: whole-product views missing from the default set
+    // (top-down / back / left / right), one per unique URL.
+    if (extraViewsBatch?.ok) {
+      const titles: Record<string, string> = {
+        top: 'Top',
+        back: 'Back',
+        left: 'Left',
+        right: 'Right',
+        front: 'Front',
+      }
+      for (const m of extraViewsBatch.mockups) {
+        const urls = [m.mockup_url, ...(m.extra_mockups ?? []).map((e) => e.mockup_url)]
+        for (const raw of urls) {
+          const url = (raw ?? '').trim()
+          if (!url || seenUrls.has(url)) continue
+          seenUrls.add(url)
+          const view = viewHintFromPrintfulUrl(url)
+          const title = (view && titles[view]) || 'Product view'
+          productViewExtras.push({ title, mockup_url: url, ...(view ? { view } : {}) })
+        }
+      }
     }
   } else {
     mockupErrorReason = batch.reason
@@ -434,14 +514,29 @@ export async function POST(
   }
 
   const placements: PreviewMockupPlacement[] = placementKeys.map((placement) => {
-    const extras = extrasByPlacement.get(placement)
+    const mainUrl = urlByPlacement.get(placement) ?? ''
+    const mainView = mainUrl ? viewHintFromPrintfulUrl(mainUrl) : null
+    const extras = extrasByPlacement.get(placement)?.map((ex) => {
+      const exView = ex.view ?? viewHintFromPrintfulUrl(ex.mockup_url)
+      return { ...ex, ...(exView ? { view: exView } : {}) }
+    })
     return {
       placement,
       label: availablePlacements[placement] ?? placement,
-      mockup_url: urlByPlacement.get(placement) ?? '',
-      ...(extras ? { extra_mockups: extras } : {}),
+      mockup_url: mainUrl,
+      ...(mainView ? { view: mainView } : {}),
+      ...(extras?.length ? { extra_mockups: extras } : {}),
     }
   })
+
+  if (productViewExtras.length > 0) {
+    placements.push({
+      placement: '_product_views',
+      label: 'Product views',
+      mockup_url: '',
+      extra_mockups: productViewExtras,
+    })
+  }
 
   const anyUrl = placements.some((p) => p.mockup_url)
 
@@ -479,6 +574,7 @@ export async function POST(
         placement: p.placement,
         label: p.label,
         mockup_url: p.mockup_url,
+        ...(p.view ? { view: p.view } : {}),
         ...(p.extra_mockups?.length ? { extra_mockups: p.extra_mockups } : {}),
       }))
     } else {
