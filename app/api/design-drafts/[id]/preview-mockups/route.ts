@@ -14,6 +14,7 @@ import {
   createTaskAndPoll,
   mergeMockups,
   PRINTFUL_BASE,
+  type MockupResult,
   type PrintfulPrintfilesResult,
 } from '@/lib/printful/mockupTask'
 import {
@@ -69,6 +70,25 @@ const VIEW_OPTION_CANDIDATES: Array<{ view: string; names: string[] }> = [
   { view: 'right', names: ['Right', 'Right Front'] },
   { view: 'back', names: ['Back'] },
 ]
+
+/**
+ * Athletic shoes (shoe_left / shoe_right layout) ignore `options` camera filters and
+ * return 400. Verified on product 658: mockup styles via `option_groups` instead.
+ */
+const ATHLETIC_VIEW_OPTION_GROUPS: Array<{ view: string; groups: string[] }> = [
+  { view: 'left', groups: ['Lifestyle 2', 'Flat 2'] },
+  { view: 'right', groups: ['Flat Lifestyle'] },
+  { view: 'back', groups: ['Flat 3', 'Flat 6'] },
+]
+
+function isAthleticShoeLayout(placementKeys: string[]): boolean {
+  const keys = new Set(placementKeys)
+  return (
+    keys.has('shoe_left') &&
+    keys.has('shoe_right') &&
+    !placementKeys.some((k) => k.includes('quarter'))
+  )
+}
 
 /**
  * POST /api/design-drafts/[id]/preview-mockups
@@ -409,38 +429,78 @@ export async function POST(
   }
 
   let batch: Awaited<ReturnType<typeof createTaskAndPoll>>
-  let extraViewsBatch: Awaited<ReturnType<typeof createTaskAndPoll>> | null = null
+  /** Extra Printful tasks — one per missing canonical view (batched options fail on some shoe types). */
+  const extraViewTasks: Array<{ requestedView: string; mockups: MockupResult[] }> = []
   try {
     batch = await createTaskAndPoll(productId, variantId, files, headers)
 
-    // Figure out which canonical views the default task did NOT render and
-    // request them in a second task. (A separate task is required — Printful
-    // silently drops e.g. "Back" when combined with Left/Right options.)
+    // Default task often returns only Front (or duplicates the same URL on every
+    // placement). Request each missing Top/Left/Right/Back view in its own task —
+    // Printful rejects batched options on athletic shoes and drops Back when mixed.
     if (batch.ok) {
       const presentViews = new Set<string>()
-      for (const m of batch.mockups) {
-        for (const u of [m.mockup_url, ...(m.extra_mockups ?? []).map((e) => e.mockup_url)]) {
-          const view = u ? viewHintFromPrintfulUrl(u) : null
-          if (view) presentViews.add(view)
+      const noteViewsFromMockups = (mockups: MockupResult[]) => {
+        for (const m of mockups) {
+          for (const u of [
+            m.mockup_url,
+            ...(m.extra_mockups ?? []).map((e: { mockup_url?: string }) => e.mockup_url),
+          ]) {
+            const view = u ? viewHintFromPrintfulUrl(u) : null
+            if (view) presentViews.add(view)
+          }
         }
       }
-      const productOptions = printfilesResult.options ?? []
-      const missingViewOptions: string[] = []
-      for (const { view, names } of VIEW_OPTION_CANDIDATES) {
-        if (presentViews.has(view)) continue
-        const name = names.find((n) => productOptions.includes(n))
-        if (name) missingViewOptions.push(name)
+      noteViewsFromMockups(batch.mockups)
+
+      const athleticLayout = isAthleticShoeLayout(placementKeys)
+      if (athleticLayout && presentViews.has('front')) {
+        // Gallery uses front as the top slot when no true top-down shot exists.
+        presentViews.add('top')
       }
-      if (missingViewOptions.length > 0) {
-        extraViewsBatch = await createTaskAndPoll(productId, variantId, files, headers, {
-          options: missingViewOptions,
-        })
-        if (!extraViewsBatch.ok) {
-          console.warn(
-            '[preview-mockups] extra views task failed —',
-            extraViewsBatch.reason,
-            missingViewOptions
-          )
+
+      if (athleticLayout) {
+        const productOptionGroups = printfilesResult.option_groups ?? []
+        for (const { view, groups } of ATHLETIC_VIEW_OPTION_GROUPS) {
+          if (presentViews.has(view)) continue
+          const groupName = groups.find((g) => productOptionGroups.includes(g))
+          if (!groupName) continue
+
+          const viewBatch = await createTaskAndPoll(productId, variantId, files, headers, {
+            option_groups: [groupName],
+          })
+          if (!viewBatch.ok) {
+            console.warn('[preview-mockups] athletic view task failed', {
+              view,
+              groupName,
+              reason: viewBatch.reason,
+            })
+            continue
+          }
+          noteViewsFromMockups(viewBatch.mockups)
+          presentViews.add(view)
+          extraViewTasks.push({ requestedView: view, mockups: viewBatch.mockups })
+        }
+      } else {
+        const productOptions = printfilesResult.options ?? []
+        for (const { view, names } of VIEW_OPTION_CANDIDATES) {
+          if (presentViews.has(view)) continue
+          const optionName = names.find((n) => productOptions.includes(n))
+          if (!optionName) continue
+
+          const viewBatch = await createTaskAndPoll(productId, variantId, files, headers, {
+            options: [optionName],
+          })
+          if (!viewBatch.ok) {
+            console.warn('[preview-mockups] view task failed', {
+              view,
+              optionName,
+              reason: viewBatch.reason,
+            })
+            continue
+          }
+          noteViewsFromMockups(viewBatch.mockups)
+          presentViews.add(view)
+          extraViewTasks.push({ requestedView: view, mockups: viewBatch.mockups })
         }
       }
     }
@@ -477,25 +537,27 @@ export async function POST(
       if (existing.length) extrasByPlacement.set(m.placement, existing)
     }
 
-    // Second task results: whole-product views missing from the default set
-    // (top-down / back / left / right), one per unique URL.
-    if (extraViewsBatch?.ok) {
-      const titles: Record<string, string> = {
-        top: 'Top',
-        back: 'Back',
-        left: 'Left',
-        right: 'Right',
-        front: 'Front',
-      }
-      for (const m of extraViewsBatch.mockups) {
+    // Per-view tasks: whole-product angles (top / back / left / right), one URL each.
+    const viewTitles: Record<string, string> = {
+      top: 'Top',
+      back: 'Back',
+      left: 'Left',
+      right: 'Right',
+      front: 'Front',
+    }
+    for (const { requestedView, mockups } of extraViewTasks) {
+      for (const m of mockups) {
         const urls = [m.mockup_url, ...(m.extra_mockups ?? []).map((e) => e.mockup_url)]
         for (const raw of urls) {
           const url = (raw ?? '').trim()
           if (!url || seenUrls.has(url)) continue
           seenUrls.add(url)
-          const view = viewHintFromPrintfulUrl(url)
-          const title = (view && titles[view]) || 'Product view'
-          productViewExtras.push({ title, mockup_url: url, ...(view ? { view } : {}) })
+          const view = viewHintFromPrintfulUrl(url) ?? requestedView
+          productViewExtras.push({
+            title: viewTitles[view] ?? 'Product view',
+            mockup_url: url,
+            view,
+          })
         }
       }
     }
