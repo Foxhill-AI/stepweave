@@ -89,11 +89,3 @@ export function pickPrimaryMockupUrl(placements: MockupPlacementRow[]): string |
 
   return candidates[0].url
 }
-
-/** Sort placement rows for gallery: same priority as card, then stable. */
-export function compareMockupPlacementsForGallery(a: MockupPlacementRow, b: MockupPlacementRow): number {
-  const rankA = rankMockupCandidate(`${a.placement} ${a.label}`)
-  const rankB = rankMockupCandidate(`${b.placement} ${b.label}`)
-  if (rankA !== rankB) return rankA - rankB
-  return norm(a.placement).localeCompare(norm(b.placement))
-}

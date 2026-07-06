@@ -9,6 +9,8 @@ export type StoredMockupExtra = {
   mockup_path?: string
   /** Legacy Printful temp URL — not persisted on new saves */
   mockup_url?: string
+  /** Canonical camera view ('top' | 'left' | 'right' | 'back' | 'front' | 'branding') */
+  view?: string
 }
 
 export type StoredMockupPlacement = {
@@ -16,13 +18,15 @@ export type StoredMockupPlacement = {
   label: string
   mockup_path?: string
   mockup_url?: string
+  /** Canonical camera view of the main mockup */
+  view?: string
   extra_mockups?: StoredMockupExtra[]
 }
 
 /** Placement row with resolved `mockup_url` for display (signed or legacy http). */
 export type ResolvedMockupPlacement = StoredMockupPlacement & {
   mockup_url: string
-  extra_mockups?: Array<{ title: string; mockup_url: string }>
+  extra_mockups?: Array<{ title: string; mockup_url: string; view?: string }>
 }
 
 function slugSegment(value: string): string {
@@ -76,10 +80,12 @@ export function mockupPlacementsForDatabase(
       label: p.label,
     }
     if (p.mockup_path?.trim()) row.mockup_path = p.mockup_path.trim()
+    if (p.view?.trim()) row.view = p.view.trim()
     const extras = (p.extra_mockups ?? [])
       .map((ex) => {
         const extra: StoredMockupExtra = { title: ex.title }
         if (ex.mockup_path?.trim()) extra.mockup_path = ex.mockup_path.trim()
+        if (ex.view?.trim()) extra.view = ex.view.trim()
         return extra
       })
       .filter((ex) => ex.mockup_path)
@@ -136,6 +142,8 @@ export async function downloadAndUploadMockup(
 
 /**
  * Download Printful temp mockups and store under design-patterns/{userId}/{draftId}/mockups/.
+ * Printful sometimes serves the same image URL under several placements — those
+ * are stored once and the path is reused, so galleries can dedupe by URL.
  */
 export async function persistPrintfulMockupsToStorage(
   admin: SupabaseClient,
@@ -144,45 +152,64 @@ export async function persistPrintfulMockupsToStorage(
   placements: StoredMockupPlacement[]
 ): Promise<StoredMockupPlacement[]> {
   const stored: StoredMockupPlacement[] = []
+  const pathBySourceUrl = new Map<string, string>()
+
+  const uploadOnce = async (params: {
+    placement: string
+    label: string
+    extraTitle?: string
+    sourceUrl: string
+  }): Promise<string | null> => {
+    const existing = pathBySourceUrl.get(params.sourceUrl)
+    if (existing) return existing
+    const uploaded = await downloadAndUploadMockup(admin, {
+      authUserId,
+      draftId,
+      ...params,
+    })
+    if (!uploaded) return null
+    pathBySourceUrl.set(params.sourceUrl, uploaded.path)
+    return uploaded.path
+  }
 
   for (const p of placements) {
     const row: StoredMockupPlacement = {
       placement: p.placement,
       label: p.label,
+      ...(p.view?.trim() ? { view: p.view.trim() } : {}),
     }
 
     const mainUrl = p.mockup_url?.trim() ?? ''
     if (p.mockup_path?.trim()) {
       row.mockup_path = p.mockup_path.trim()
     } else if (mainUrl && isExternalPrintfulMockupUrl(mainUrl)) {
-      const uploaded = await downloadAndUploadMockup(admin, {
-        authUserId,
-        draftId,
+      const path = await uploadOnce({
         placement: p.placement,
         label: p.label,
         sourceUrl: mainUrl,
       })
-      if (uploaded) row.mockup_path = uploaded.path
+      if (path) row.mockup_path = path
     } else if (mainUrl && isMockupStoragePath(mainUrl)) {
       row.mockup_path = mainUrl
     }
 
     const extras: StoredMockupExtra[] = []
     for (const ex of p.extra_mockups ?? []) {
-      const extraRow: StoredMockupExtra = { title: ex.title }
+      const extraRow: StoredMockupExtra = {
+        title: ex.title,
+        ...(ex.view?.trim() ? { view: ex.view.trim() } : {}),
+      }
       const exUrl = ex.mockup_url?.trim() ?? ''
       if (ex.mockup_path?.trim()) {
         extraRow.mockup_path = ex.mockup_path.trim()
       } else if (exUrl && isExternalPrintfulMockupUrl(exUrl)) {
-        const uploaded = await downloadAndUploadMockup(admin, {
-          authUserId,
-          draftId,
+        const path = await uploadOnce({
           placement: p.placement,
           label: p.label,
           extraTitle: ex.title,
           sourceUrl: exUrl,
         })
-        if (uploaded) extraRow.mockup_path = uploaded.path
+        if (path) extraRow.mockup_path = path
       } else if (exUrl && isMockupStoragePath(exUrl)) {
         extraRow.mockup_path = exUrl
       }
@@ -236,7 +263,7 @@ export async function resolveMockupPlacementsForDisplay(
       if (legacy.startsWith('http')) displayUrl = legacy
     }
 
-    const extras: Array<{ title: string; mockup_url: string }> = []
+    const extras: Array<{ title: string; mockup_url: string; view?: string }> = []
     for (const ex of p.extra_mockups ?? []) {
       let exUrl = ''
       if (ex.mockup_path?.trim()) {
@@ -245,7 +272,13 @@ export async function resolveMockupPlacementsForDisplay(
       if (!exUrl && ex.mockup_url?.trim()?.startsWith('http')) {
         exUrl = ex.mockup_url.trim()
       }
-      if (exUrl) extras.push({ title: ex.title, mockup_url: exUrl })
+      if (exUrl) {
+        extras.push({
+          title: ex.title,
+          mockup_url: exUrl,
+          ...(ex.view?.trim() ? { view: ex.view.trim() } : {}),
+        })
+      }
     }
 
     resolved.push({
@@ -253,6 +286,7 @@ export async function resolveMockupPlacementsForDisplay(
       label: p.label,
       mockup_path: p.mockup_path,
       mockup_url: displayUrl,
+      ...(p.view?.trim() ? { view: p.view.trim() } : {}),
       ...(extras.length ? { extra_mockups: extras } : {}),
     })
   }

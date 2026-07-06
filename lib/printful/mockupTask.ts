@@ -19,6 +19,8 @@ export type PrintfulPrintfilesResult = {
   }>
   available_placements?: Record<string, string>
   option_groups?: string[]
+  /** Camera views available for this product (e.g. "Left", "Back", "Front 2"). */
+  options?: string[]
 }
 
 export type FileEntry = {
@@ -49,6 +51,8 @@ export function parse429WaitMs(responseText: string): number {
 /** Optional Printful create-task fields (e.g. silhouette templates). */
 export type CreateMockupTaskOptions = {
   option_groups?: string[]
+  /** Camera views to render (from printfiles `options`, e.g. ["Back", "Front 2"]). */
+  options?: string[]
 }
 
 export type MockupExtra = {
@@ -84,6 +88,9 @@ export async function createTaskAndPoll(
   }
   if (options?.option_groups?.length) {
     taskRequestBody.option_groups = options.option_groups
+  }
+  if (options?.options?.length) {
+    taskRequestBody.options = options.options
   }
 
   for (let r = 0; r < MAX_429_RETRIES; r++) {
