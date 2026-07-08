@@ -7,9 +7,9 @@ const MAX_SIZE_BYTES = 10 * 1024 * 1024
 
 /**
  * POST /api/design-drafts/[id]/reference-image
- * Accepts multipart FormData with a `file` field.
- * Uploads to design-patterns/{userId}/{draftId}/reference-{ts}.{ext}
- * Returns { storagePath }.
+ * Accepts JSON { fileName, contentType, fileSize }.
+ * Returns { signedUrl, storagePath } — the client uploads directly to Supabase Storage
+ * using a PUT to signedUrl, bypassing Vercel's 4.5 MB body limit.
  */
 export async function POST(
   request: NextRequest,
@@ -48,21 +48,21 @@ export async function POST(
     return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
   }
 
-  let formData: FormData
+  let body: { fileName?: string; contentType?: string; fileSize?: number }
   try {
-    formData = await request.formData()
+    body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid form data' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const file = formData.get('file') as File | null
-  if (!file) {
-    return NextResponse.json({ error: 'file is required' }, { status: 400 })
+  const { fileName, contentType, fileSize } = body
+  if (!fileName || !contentType) {
+    return NextResponse.json({ error: 'fileName and contentType are required' }, { status: 400 })
   }
-  if (!file.type.startsWith('image/')) {
+  if (!contentType.startsWith('image/')) {
     return NextResponse.json({ error: 'File must be an image' }, { status: 400 })
   }
-  if (file.size > MAX_SIZE_BYTES) {
+  if (typeof fileSize === 'number' && fileSize > MAX_SIZE_BYTES) {
     return NextResponse.json({ error: `Image must be under ${MAX_SIZE_BYTES / 1024 / 1024} MB` }, { status: 400 })
   }
 
@@ -72,23 +72,19 @@ export async function POST(
     return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
   }
 
-  const dotIdx = file.name.lastIndexOf('.')
-  const ext = dotIdx >= 0 ? file.name.slice(dotIdx) : '.png'
+  const dotIdx = fileName.lastIndexOf('.')
+  const ext = dotIdx >= 0 ? fileName.slice(dotIdx) : '.png'
   const storagePath = `${authUser.id}/${draftId}/reference-${Date.now()}${ext}`
-  const buffer = Buffer.from(await file.arrayBuffer())
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
-  const { error: upErr } = await admin.storage
+  const { data: signedData, error: signedError } = await admin.storage
     .from(BUCKET)
-    .upload(storagePath, buffer, {
-      contentType: file.type || 'image/png',
-      upsert: false,
-    })
+    .createSignedUploadUrl(storagePath)
 
-  if (upErr) {
-    console.error('[reference-image] upload error', upErr.message)
-    return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 })
+  if (signedError || !signedData?.signedUrl) {
+    console.error('[reference-image] signed URL error', signedError?.message)
+    return NextResponse.json({ error: 'Could not create upload URL. Please try again.' }, { status: 500 })
   }
 
-  return NextResponse.json({ storagePath })
+  return NextResponse.json({ signedUrl: signedData.signedUrl, storagePath })
 }

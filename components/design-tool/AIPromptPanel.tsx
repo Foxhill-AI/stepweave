@@ -216,15 +216,15 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
 
       setReferenceUploading(true)
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-        const res = await fetch(`/api/design-drafts/${draftId}/reference-image`, {
+        // Step 1: get a signed upload URL from the server (no file data sent to Vercel)
+        const signRes = await fetch(`/api/design-drafts/${draftId}/reference-image`, {
           method: 'POST',
-          body: formData,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: file.name, contentType: file.type, fileSize: file.size }),
         })
-        const body = (await res.json().catch(() => ({}))) as { storagePath?: string; error?: string }
-        if (!res.ok) {
-          setError(body.error || 'Image upload failed.')
+        const signBody = (await signRes.json().catch(() => ({}))) as { signedUrl?: string; storagePath?: string; error?: string }
+        if (!signRes.ok) {
+          setError(signBody.error || 'Image upload failed.')
           setReferencePreviewUrl(null)
           if (blobUrlRef.current) {
             URL.revokeObjectURL(blobUrlRef.current)
@@ -232,7 +232,24 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
           }
           return
         }
-        setReferenceStoragePath(body.storagePath ?? null)
+
+        // Step 2: upload directly to Supabase Storage — bypasses Vercel body limit
+        const uploadRes = await fetch(signBody.signedUrl!, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        })
+        if (!uploadRes.ok) {
+          setError('Image upload failed. Please try again.')
+          setReferencePreviewUrl(null)
+          if (blobUrlRef.current) {
+            URL.revokeObjectURL(blobUrlRef.current)
+            blobUrlRef.current = null
+          }
+          return
+        }
+
+        setReferenceStoragePath(signBody.storagePath ?? null)
       } catch {
         setError('Image upload failed. Please try again.')
         setReferencePreviewUrl(null)
