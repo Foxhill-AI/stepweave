@@ -500,8 +500,8 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   )
 
   const handlePatternUploaded = useCallback(
-    (path: string, localUrl?: string) => {
-      const placementsList = uniqueTemplatePlacements(templateRows)
+    (path: string, localUrl?: string, placements?: string[]) => {
+      const placementsList = placements ?? uniqueTemplatePlacements(templateRows)
       if (placementsList.length === 0) return
 
       let current = parsePlacementImages(designDataRef.current)

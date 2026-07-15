@@ -11,7 +11,7 @@ import {
 } from '@/lib/designDraftState'
 import {
   getServerCanvasFontFamilyName,
-  getServerCanvasFontKind,
+  FONTS,
 } from '@/lib/fonts'
 
 /**
@@ -39,16 +39,23 @@ function ensureCanvasFontsRegistered(): void {
   if (canvasFontsRegistered) return
   const fontsDir = resolveFontsDir()
   console.info('[compositeImages] registering fonts from', fontsDir)
-  const entries: Array<[string, 'sans' | 'serif' | 'mono']> = [
-    ['NotoSans-Regular.ttf', 'sans'],
-    ['NotoSerif-Regular.ttf', 'serif'],
-    ['NotoSansMono-Regular.ttf', 'mono'],
+
+  // Noto fallbacks (sans / serif / mono)
+  const notoEntries: Array<[string, string]> = [
+    ['NotoSans-Regular.ttf', 'StepweaveNotoSans'],
+    ['NotoSerif-Regular.ttf', 'StepweaveNotoSerif'],
+    ['NotoSansMono-Regular.ttf', 'StepweaveNotoMono'],
   ]
-  for (const [file, kind] of entries) {
+  // Per-font TTFs for exact preview fidelity
+  const fontEntries: Array<[string, string]> = FONTS
+    .filter((f) => f.serverCanvasFontFile && f.serverCanvasFamily)
+    .map((f) => [f.serverCanvasFontFile!, f.serverCanvasFamily!])
+
+  for (const [file, familyName] of [...notoEntries, ...fontEntries]) {
     const fullPath = path.join(fontsDir, file)
     if (!fs.existsSync(fullPath)) {
       console.error(
-        '[compositeImages] MISSING font file — tofu likely:',
+        '[compositeImages] MISSING font file:',
         fullPath,
         '| cwd:',
         process.cwd(),
@@ -57,7 +64,6 @@ function ensureCanvasFontsRegistered(): void {
       )
       continue
     }
-    const familyName = getServerCanvasFontFamilyName(kind)
     const result = GlobalFonts.registerFromPath(fullPath, familyName)
     if (result == null) {
       console.error(
@@ -247,8 +253,7 @@ function renderTextToBuffer(areaWidth: number, areaHeight: number, input: Compos
   const h = Math.max(1, Math.round(areaHeight))
   const canvas = createCanvas(w, h)
   const ctx = canvas.getContext('2d')
-  const kind = getServerCanvasFontKind(input.fontFamily)
-  const family = getServerCanvasFontFamilyName(kind)
+  const family = getServerCanvasFontFamilyName(input.fontFamily)
   const size = Math.max(1, Math.round(input.fontSize))
   let x = w / 2 + input.dx
   let y = h / 2 + input.dy
