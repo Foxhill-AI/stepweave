@@ -48,7 +48,7 @@ interface PreviewWorkspaceProps {
   draftId?: number
   authUserId?: string | null
   onImageSelect?: (imageUrl: string) => void
-  onPatternUploaded?: (path: string, localUrl?: string) => void
+  onPatternUploaded?: (path: string, localUrl?: string, placements?: string[]) => void
   imageUrl?: string | null
   onImageClear?: () => void
   /** Template rows from Printful for shoe canvas display. */
@@ -134,6 +134,8 @@ export default function PreviewWorkspace({
   const [textFont, setTextFont] = useState(FONTS[0].value)
   const [textColor, setTextColor] = useState('#000000')
   const [textSize, setTextSize] = useState(120)
+  const [pendingUpload, setPendingUpload] = useState<{ path: string; localUrl: string } | null>(null)
+  const [pendingSelectedPlacements, setPendingSelectedPlacements] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevPreviewLoadingRef = useRef(previewLoading)
   const prevHadImageRef = useRef(false)
@@ -264,7 +266,16 @@ export default function PreviewWorkspace({
           setUploadError(error.message || 'Upload failed.')
           return
         }
-        onPatternUploaded?.(path, URL.createObjectURL(file))
+        const localUrl = URL.createObjectURL(file)
+        const allPlacements = templateWithUrl.map((r) => r.placement)
+        if (allPlacements.length > 1) {
+          // Show placement picker before applying
+          setPendingUpload({ path, localUrl })
+          setPendingSelectedPlacements(new Set(allPlacements))
+        } else {
+          // Only one placement (or none) — apply immediately, no picker needed
+          onPatternUploaded?.(path, localUrl)
+        }
       } catch {
         setUploadError('Upload failed. Please try again.')
       } finally {
@@ -374,6 +385,57 @@ export default function PreviewWorkspace({
         <div className="preview-upload-hero">
           <div className="preview-loading-spinner" style={{ marginBottom: '0.75rem' }} aria-hidden />
           <p className="preview-loading-message">Uploading your design…</p>
+        </div>
+      )}
+
+      {/* Placement picker: shown after upload when multiple placements exist */}
+      {pendingUpload && (
+        <div className="preview-text-panel preview-placement-picker">
+          <p className="preview-placement-picker-title">Add image to which views?</p>
+          <div className="preview-placement-picker-options">
+            {templateWithUrl.map((row) => (
+              <label key={row.placement} className="preview-placement-picker-option">
+                <input
+                  type="checkbox"
+                  checked={pendingSelectedPlacements.has(row.placement)}
+                  onChange={(e) => {
+                    setPendingSelectedPlacements((prev) => {
+                      const next = new Set(prev)
+                      if (e.target.checked) next.add(row.placement)
+                      else next.delete(row.placement)
+                      return next
+                    })
+                  }}
+                />
+                {row.label}
+              </label>
+            ))}
+          </div>
+          <div className="preview-text-panel-actions">
+            <button
+              type="button"
+              className="design-tool-btn design-tool-btn-secondary"
+              onClick={() => setPendingUpload(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="design-tool-btn design-tool-btn-publish"
+              disabled={pendingSelectedPlacements.size === 0}
+              onClick={() => {
+                if (!pendingUpload) return
+                onPatternUploaded?.(
+                  pendingUpload.path,
+                  pendingUpload.localUrl,
+                  [...pendingSelectedPlacements]
+                )
+                setPendingUpload(null)
+              }}
+            >
+              Add to {pendingSelectedPlacements.size === templateWithUrl.length ? 'all views' : `${pendingSelectedPlacements.size} view${pendingSelectedPlacements.size !== 1 ? 's' : ''}`}
+            </button>
+          </div>
         </div>
       )}
 

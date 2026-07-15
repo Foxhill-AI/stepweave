@@ -3025,6 +3025,39 @@
   justify-content: flex-end;
 }
 
+/* ── Placement picker panel ─────────────────────────────────────────────────── */
+
+.preview-placement-picker-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0 0 0.625rem;
+  color: var(--color-text, #111);
+}
+
+.preview-placement-picker-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.875rem;
+}
+
+.preview-placement-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.preview-placement-picker-option input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--color-primary, #0066cc);
+  flex-shrink: 0;
+}
+
 /* ── Printful pricing estimate (create product drawer) ─────────────────────── */
 
 .design-tool-pricing-estimate {
