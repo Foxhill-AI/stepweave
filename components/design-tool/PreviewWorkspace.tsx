@@ -428,7 +428,7 @@ export default function PreviewWorkspace({
                 onPatternUploaded?.(
                   pendingUpload.path,
                   pendingUpload.localUrl,
-                  [...pendingSelectedPlacements]
+                  Array.from(pendingSelectedPlacements)
                 )
                 setPendingUpload(null)
               }}
