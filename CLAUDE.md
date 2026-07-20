@@ -37,6 +37,8 @@
 - **Do not put secrets in client bundles:** Only `NEXT_PUBLIC_*` belongs in browser code.
 - **Respect RLS:** Client helpers assume Supabase RLS policies (e.g. `design_draft_*_own`). Service role routes bypass RLS — use only server-side.
 - **Monolith caution:** Before adding new Supabase helpers, check if `lib/supabaseClient.ts` already has a pattern; avoid duplicating query logic across files without reason.
+- **Do not publish blogs without confirmation:** Do not insert/update `article` rows, run publish SQL against production Supabase, or otherwise make a post live on `/blog` unless the user explicitly confirms.
+- **Do not check in code without confirmation:** Do not `git commit`, `git push`, or open PRs unless the user explicitly asks you to.
 
 ## What to avoid touching without explicit intent
 
