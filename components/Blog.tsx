@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Search, ArrowRight, Clock, User } from 'lucide-react'
 import Link from 'next/link'
-import { subscribeNewsletter, type ArticleRow } from '@/lib/supabaseClient'
+import type { ArticleRow } from '@/lib/supabaseClient'
 import '../styles/Blog.css'
 
 interface Article {
@@ -96,29 +96,6 @@ export default function Blog({ isLoggedIn = false, userName, userAvatar, searchE
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [newsletterEmail, setNewsletterEmail] = useState('')
-  const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const [newsletterMessage, setNewsletterMessage] = useState('')
-
-  const handleBlogNewsletterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newsletterEmail.trim()) return
-    setNewsletterStatus('loading')
-    setNewsletterMessage('')
-    const { ok, error, alreadySubscribed } = await subscribeNewsletter(newsletterEmail)
-    if (ok) {
-      setNewsletterStatus('success')
-      setNewsletterMessage(
-        alreadySubscribed
-          ? 'Este correo ya está registrado.'
-          : '¡Gracias! Tu registro fue exitoso.'
-      )
-      if (!alreadySubscribed) setNewsletterEmail('')
-    } else {
-      setNewsletterStatus('error')
-      setNewsletterMessage(error ?? 'Algo salió mal. Inténtalo de nuevo.')
-    }
-  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
@@ -173,12 +150,6 @@ export default function Blog({ isLoggedIn = false, userName, userAvatar, searchE
     Trends: articles.filter(a => a.category === 'Trends').length,
     Innovation: articles.filter(a => a.category === 'Innovation').length,
   }
-
-  const popularTags = ['3D Design', '3D Printing', 'Digital Art', 'Tutorials', 'Patterns', 'Innovation', 'Maker Space', 'Beginners']
-  
-  const recentArticles = articles
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 4)
 
   return (
     <div className="blog-page">
@@ -367,61 +338,6 @@ export default function Blog({ isLoggedIn = false, userName, userAvatar, searchE
             ))}
           </div>
         </div>
-
-        {/* Sidebar */}
-        <aside className="blog-sidebar">
-          {/* Popular Tags */}
-          <section className="blog-sidebar-section">
-            <h3 className="blog-sidebar-title">Popular Tags</h3>
-            <div className="blog-popular-tags">
-              {popularTags.map((tag, index) => (
-                <button key={index} className="blog-popular-tag">{tag}</button>
-              ))}
-            </div>
-          </section>
-
-          {/* Recent Articles */}
-          <section className="blog-sidebar-section">
-            <h3 className="blog-sidebar-title">Recent Articles</h3>
-            <ul className="blog-recent-articles">
-              {recentArticles.map((article) => (
-                <li key={article.id} className="blog-recent-item">
-                  <Link href={`/blog/${article.slug}`} className="blog-recent-link">
-                    {article.title}
-                  </Link>
-                  <span className="blog-recent-date">{article.date}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          {/* Newsletter Signup */}
-          <section className="blog-sidebar-section">
-            <h3 className="blog-sidebar-title">Stay Updated</h3>
-            <p className="blog-newsletter-description">
-              Get the latest articles and tutorials delivered to your inbox.
-            </p>
-            <form onSubmit={handleBlogNewsletterSubmit} className="blog-newsletter-form">
-              <input
-                type="email"
-                placeholder="Your email"
-                className="blog-newsletter-input"
-                value={newsletterEmail}
-                onChange={(e) => { setNewsletterEmail(e.target.value); setNewsletterStatus('idle') }}
-                required
-                disabled={newsletterStatus === 'loading'}
-              />
-              <button type="submit" className="blog-newsletter-button" disabled={newsletterStatus === 'loading'}>
-                Subscribe
-              </button>
-            </form>
-            {newsletterMessage && (
-              <p className={`blog-newsletter-message blog-newsletter-message--${newsletterStatus}`} role="status">
-                {newsletterMessage}
-              </p>
-            )}
-          </section>
-        </aside>
       </div>
     </div>
   )
