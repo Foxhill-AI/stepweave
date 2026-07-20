@@ -49,7 +49,11 @@ export default async function BlogArticlePage({ params }: Props) {
   const article = await getArticleBySlug(slug)
   if (!article) notFound()
 
-  const author = article.user_account?.username ?? 'Unknown'
+  const AUTHOR_BYLINES: Record<string, string> = {
+    'custom-patterns-womens-shoes': 'Cindy',
+  }
+  const author =
+    article.user_account?.username ?? AUTHOR_BYLINES[article.slug] ?? 'Unknown'
   const date = formatArticleDate(article.published_at)
 
   return (

@@ -137,6 +137,15 @@
   justify-content: center;
 }
 
+.blog-featured-image-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .blog-featured-info {
   flex: 1;
   padding: var(--spacing-xl);
@@ -455,6 +464,13 @@
   width: 100%;
   height: 100%;
   background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%);
+}
+
+.blog-article-image-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .blog-article-content {
