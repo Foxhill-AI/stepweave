@@ -45,27 +45,7 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: var(--spacing-2xl) var(--spacing-md);
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--spacing-2xl);
-}
-
-@media (min-width: 1024px) {
-  .blog-container {
-    grid-template-columns: 1fr 300px;
-    gap: var(--spacing-2xl);
-  }
-}
-
-/* Mobile: Ensure content appears before sidebar */
-@media (max-width: 1023px) {
-  .blog-content {
-    order: 1;
-  }
-
-  .blog-sidebar {
-    order: 2;
-  }
+  display: block;
 }
 
 .blog-content {
