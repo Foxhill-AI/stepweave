@@ -11,7 +11,7 @@ interface Article {
   slug: string
   title: string
   description: string
-  category: 'Tutorials' | 'Guides' | 'Trends'
+  category: 'Tutorials' | 'Guides' | 'Trends' | 'Innovation'
   author: string
   date: string
   readTime: string
@@ -24,6 +24,15 @@ interface Article {
 const AUTHOR_BYLINES: Record<string, string> = {
   'custom-patterns-womens-shoes': 'Cindy',
   'taco-kicks-two-tacos-and-a-hike': 'Cindy',
+}
+
+/** Per-article category + tags (article table has no category/tag columns yet). */
+const ARTICLE_META: Record<
+  string,
+  { category: Article['category']; tags: string[] }
+> = {
+  'custom-patterns-womens-shoes': { category: 'Tutorials', tags: ['Patterns'] },
+  'taco-kicks-two-tacos-and-a-hike': { category: 'Innovation', tags: ['Innovation'] },
 }
 
 function estimateReadTime(content: string): string {
@@ -53,16 +62,17 @@ function plainDescription(row: ArticleRow): string {
 }
 
 function mapRowToArticle(row: ArticleRow, index: number): Article {
+  const meta = ARTICLE_META[row.slug]
   return {
     id: String(row.id),
     slug: row.slug,
     title: row.title,
     description: plainDescription(row),
-    category: 'Tutorials',
+    category: meta?.category ?? 'Tutorials',
     author: row.user_account?.username ?? AUTHOR_BYLINES[row.slug] ?? 'Unknown',
     date: formatArticleDate(row.published_at),
     readTime: estimateReadTime(row.content),
-    tags: [],
+    tags: meta?.tags ?? [],
     image: firstImageSrc(row.content),
     featured: index === 0,
   }
@@ -161,6 +171,7 @@ export default function Blog({ isLoggedIn = false, userName, userAvatar, searchE
     Tutorials: articles.filter(a => a.category === 'Tutorials').length,
     Guides: articles.filter(a => a.category === 'Guides').length,
     Trends: articles.filter(a => a.category === 'Trends').length,
+    Innovation: articles.filter(a => a.category === 'Innovation').length,
   }
 
   const popularTags = ['3D Design', '3D Printing', 'Digital Art', 'Tutorials', 'Patterns', 'Innovation', 'Maker Space', 'Beginners']
@@ -260,6 +271,12 @@ export default function Blog({ isLoggedIn = false, userName, userAvatar, searchE
               onClick={() => setSelectedCategory('Trends')}
             >
               Trends ({categoryCounts.Trends})
+            </button>
+            <button
+              className={`blog-filter-button ${selectedCategory === 'Innovation' ? 'active' : ''}`}
+              onClick={() => setSelectedCategory('Innovation')}
+            >
+              Innovation ({categoryCounts.Innovation})
             </button>
           </div>
           )}
