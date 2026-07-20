@@ -20,6 +20,11 @@ interface Article {
   featured?: boolean
 }
 
+/** Bylines when author_user_account_id is unset (guest / editorial authors). */
+const AUTHOR_BYLINES: Record<string, string> = {
+  'custom-patterns-womens-shoes': 'Cindy',
+}
+
 function estimateReadTime(content: string): string {
   const words = content.trim().split(/\s+/).filter(Boolean).length
   const minutes = Math.max(1, Math.ceil(words / 200))
@@ -35,18 +40,29 @@ function formatArticleDate(iso: string | null): string {
   })
 }
 
+function firstImageSrc(html: string): string | undefined {
+  const match = html.match(/<img[^>]+src=["']([^"']+)["']/i)
+  return match?.[1]
+}
+
+function plainDescription(row: ArticleRow): string {
+  if (row.summary?.trim()) return row.summary.trim()
+  const plain = row.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  return plain.length > 160 ? `${plain.slice(0, 160)}…` : plain
+}
+
 function mapRowToArticle(row: ArticleRow, index: number): Article {
-  const description = row.summary ?? row.content.slice(0, 160) + (row.content.length > 160 ? '…' : '')
   return {
     id: String(row.id),
     slug: row.slug,
     title: row.title,
-    description,
+    description: plainDescription(row),
     category: 'Tutorials',
-    author: row.user_account?.username ?? 'Unknown',
+    author: row.user_account?.username ?? AUTHOR_BYLINES[row.slug] ?? 'Unknown',
     date: formatArticleDate(row.published_at),
     readTime: estimateReadTime(row.content),
     tags: [],
+    image: firstImageSrc(row.content),
     featured: index === 0,
   }
 }
@@ -175,9 +191,16 @@ export default function Blog({ isLoggedIn = false, userName, userAvatar, searchE
               <div className="blog-featured-badge">Featured Article</div>
               <div className="blog-featured-content">
                 <div className="blog-featured-image">
-                  <div className="blog-featured-image-placeholder">
-                    {/* Placeholder for featured image */}
-                  </div>
+                  {featuredArticle.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={featuredArticle.image}
+                      alt=""
+                      className="blog-featured-image-photo"
+                    />
+                  ) : (
+                    <div className="blog-featured-image-placeholder" />
+                  )}
                 </div>
                 <div className="blog-featured-info">
                   <div className="blog-featured-category">{featuredArticle.category}</div>
@@ -290,9 +313,16 @@ export default function Blog({ isLoggedIn = false, userName, userAvatar, searchE
                 <Link href={`/blog/${article.slug}`} className="blog-article-card-link">
                   <div className="blog-article-category">{article.category}</div>
                   <div className="blog-article-image">
-                    <div className="blog-article-image-placeholder">
-                      {/* Placeholder for article image */}
-                    </div>
+                    {article.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={article.image}
+                        alt=""
+                        className="blog-article-image-photo"
+                      />
+                    ) : (
+                      <div className="blog-article-image-placeholder" />
+                    )}
                   </div>
                   <div className="blog-article-content">
                     <h3 className="blog-article-title">{article.title}</h3>
