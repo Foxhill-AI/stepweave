@@ -6,8 +6,10 @@
 --   status = 'published'
 --   published_at set (not null) and in the past (or now)
 
+ALTER TABLE article ENABLE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS "Anyone can select published articles" ON article;
-z
+
 CREATE POLICY "Anyone can select published articles"
   ON article
   FOR SELECT
