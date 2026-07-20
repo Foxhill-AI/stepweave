@@ -51,6 +51,7 @@ export default async function BlogArticlePage({ params }: Props) {
 
   const AUTHOR_BYLINES: Record<string, string> = {
     'custom-patterns-womens-shoes': 'Cindy',
+    'taco-kicks-two-tacos-and-a-hike': 'Cindy',
   }
   const author =
     article.user_account?.username ?? AUTHOR_BYLINES[article.slug] ?? 'Unknown'

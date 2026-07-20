@@ -23,6 +23,7 @@ interface Article {
 /** Bylines when author_user_account_id is unset (guest / editorial authors). */
 const AUTHOR_BYLINES: Record<string, string> = {
   'custom-patterns-womens-shoes': 'Cindy',
+  'taco-kicks-two-tacos-and-a-hike': 'Cindy',
 }
 
 function estimateReadTime(content: string): string {
