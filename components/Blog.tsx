@@ -24,6 +24,8 @@ interface Article {
 const AUTHOR_BYLINES: Record<string, string> = {
   'custom-patterns-womens-shoes': 'Cindy',
   'taco-kicks-two-tacos-and-a-hike': 'Cindy',
+  'flower-shoes-from-my-photo': 'Cindy',
+  'custom-vans-from-a-shirt': 'Cindy',
 }
 
 /** Per-article category + tags (article table has no category/tag columns yet). */
@@ -33,6 +35,8 @@ const ARTICLE_META: Record<
 > = {
   'custom-patterns-womens-shoes': { category: 'Tutorials', tags: ['Patterns'] },
   'taco-kicks-two-tacos-and-a-hike': { category: 'Innovation', tags: ['Innovation'] },
+  'flower-shoes-from-my-photo': { category: 'Innovation', tags: ['Innovation'] },
+  'custom-vans-from-a-shirt': { category: 'Innovation', tags: ['Innovation'] },
 }
 
 function estimateReadTime(content: string): string {
