@@ -6,6 +6,9 @@ import { supabase } from '@/lib/supabaseClient'
 import { buildStandardMockupGallery } from '@/lib/productMockups/canonicalViews'
 import ShoeDesignEditor from './ShoeDesignEditor'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
+import {
+  isTextLayer,
+} from '@/lib/designDraftState'
 import type {
   ResolvedPlacementLayer,
   PlacementLayerPatch,
@@ -335,6 +338,11 @@ export default function PreviewWorkspace({
   const layerCount = activeLayers.length
   const hasMockups = Boolean(tabs?.some((t) => t.mockup_url?.trim()))
 
+  // Selected text layer — drives the inline edit panel
+  const selectedTextLayer = selectedLayerId
+    ? (activeLayers.find((l) => l.id === selectedLayerId && isTextLayer(l)) as (ResolvedPlacementLayer & { type: 'text'; text: string; fontFamily: string; fontSize: number; color: string }) | undefined)
+    : undefined
+
   const showShoeCanvas = useShoeCanvas && viewMode === 'canvas' && !mockupImagesLoading
   const showMockupsView = (viewMode === 'mockups' || !useShoeCanvas) && !mockupImagesLoading
 
@@ -479,6 +487,52 @@ export default function PreviewWorkspace({
             >
               <X size={13} aria-hidden /> Remove
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Text layer edit panel — shown when a text layer is selected */}
+      {selectedTextLayer && onLayerChange && viewMode === 'canvas' && !showTextPanel && (
+        <div className="preview-text-panel">
+          <input
+            type="text"
+            className="design-tool-input preview-text-panel-input"
+            value={selectedTextLayer.text}
+            onChange={(e) => onLayerChange(selectedTextLayer.id, { text: e.target.value })}
+            aria-label="Edit text"
+            placeholder="Text…"
+          />
+          <div className="preview-text-panel-row">
+            <select
+              className="design-tool-select preview-text-panel-font"
+              value={selectedTextLayer.fontFamily}
+              onChange={(e) => onLayerChange(selectedTextLayer.id, { fontFamily: e.target.value })}
+              aria-label="Font"
+              style={{ fontFamily: selectedTextLayer.fontFamily }}
+            >
+              {FONTS.map((f) => (
+                <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              className="design-tool-input preview-text-panel-size"
+              value={selectedTextLayer.fontSize}
+              min={20}
+              max={600}
+              onChange={(e) => onLayerChange(selectedTextLayer.id, { fontSize: Math.max(20, Number(e.target.value) || 20) })}
+              aria-label="Font size"
+              title="Font size (printfile pixels)"
+            />
+            <input
+              type="color"
+              className="preview-text-panel-color"
+              value={selectedTextLayer.color}
+              onChange={(e) => onLayerChange(selectedTextLayer.id, { color: e.target.value })}
+              aria-label="Text color"
+            />
           </div>
         </div>
       )}

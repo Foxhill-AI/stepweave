@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createHash } from 'crypto'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import {
   parsePrintfulPlacements,
@@ -116,7 +117,7 @@ export async function POST(
 
   const { data: draft, error: draftError } = await supabase
     .from('design_draft')
-    .select('id, user_account_id, base_model_id, pattern_image_url, design_state')
+    .select('id, user_account_id, base_model_id, pattern_image_url, design_state, mockup_urls')
     .eq('id', draftId)
     .maybeSingle()
 
@@ -169,6 +170,50 @@ export async function POST(
       { error: 'Select a Printful variant (color/size) before preview.' },
       { status: 400 }
     )
+  }
+
+  // ── Cache check ──────────────────────────────────────────────────────────────
+  // Hash the inputs that affect mockup output. If unchanged since last generation,
+  // serve stored mockups immediately without touching Printful.
+  const inputHashSource = JSON.stringify({
+    v: variantId,
+    p: (designState.pattern_images ?? null),
+    t: (designState.printful_placements ?? null),
+    g: globalPatternPath || null,
+  })
+  const inputHash = createHash('sha256').update(inputHashSource).digest('hex').slice(0, 16)
+
+  const storedHash = typeof designState._mockup_input_hash === 'string'
+    ? designState._mockup_input_hash
+    : null
+  const storedMockups = Array.isArray(draft.mockup_urls) && draft.mockup_urls.length > 0
+    ? (draft.mockup_urls as StoredMockupPlacement[])
+    : null
+
+  if (storedHash === inputHash && storedMockups) {
+    console.log('[preview-mockups] cache hit — serving stored mockups', { draftId, inputHash })
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (supabaseUrl && serviceRoleKey) {
+      const admin = createClient(supabaseUrl, serviceRoleKey)
+      const resolved = await resolveMockupPlacementsForDisplay(admin, storedMockups)
+      const anyUrl = resolved.some((p) => p.mockup_url)
+      if (anyUrl) {
+        return NextResponse.json({
+          product_id: productId,
+          variant_id: variantId,
+          placements: resolved.map((p) => ({
+            placement: p.placement,
+            label: p.label,
+            mockup_url: p.mockup_url,
+            ...(p.view ? { view: p.view } : {}),
+            ...(p.extra_mockups?.length ? { extra_mockups: p.extra_mockups } : {}),
+          })),
+          mockups_persisted: true,
+          from_cache: true,
+        })
+      }
+    }
   }
 
   console.log('[preview-mockups]', {
@@ -315,6 +360,34 @@ export async function POST(
 
   const printfileById = buildPrintfileById(printfilesResult)
 
+  // Reroute direct-image placements that would be cropped by Printful's position API.
+  // Printful's position does not support images larger than the print area or negative
+  // offsets — it clamps or ignores overflow, producing a random-looking crop. These
+  // must go through the server-side composite which clips naturally.
+  for (const [placement, t] of Object.entries(placementTransformOverrides)) {
+    const printfileId = variantMapping?.placements[placement]
+    const pf = printfileId != null ? printfileById.get(printfileId) : null
+    const areaWidth = pf?.width ?? 1800
+    const areaHeight = pf?.height ?? 1800
+    const layers = perPlacementPaths[placement]
+    const imgs = layers?.filter(isImageLayer) ?? []
+    if (imgs.length !== 1) continue
+    const layer = imgs[0]
+    const iw = typeof layer.w === 'number' && layer.w > 0 ? layer.w : areaWidth * Math.min(1, Math.max(0.05, layer.s))
+    const ih = typeof layer.h === 'number' && layer.h > 0 ? layer.h : areaHeight * Math.min(1, Math.max(0.05, layer.s))
+    const left = (areaWidth - iw) / 2 + (t.dx ?? layer.dx)
+    const top = (areaHeight - ih) / 2 + (t.dy ?? layer.dy)
+    const wouldCrop = left < 0 || top < 0 || left + iw > areaWidth || top + ih > areaHeight
+    if (wouldCrop) {
+      console.log('[preview-mockups] rerouting cropped direct-image to composite', {
+        placement, areaWidth, areaHeight, iw, ih, left, top,
+      })
+      delete imageUrlByPlacement[placement]
+      delete placementTransformOverrides[placement]
+      imageUrlByPlacement[`__pending__${placement}`] = placement
+    }
+  }
+
   const placementTransformOverridesEnriched = enrichDirectImagePlacementOverrides(
     placementTransformOverrides,
     perPlacementPaths,
@@ -359,16 +432,22 @@ export async function POST(
             .from(BUCKET)
             .upload(compositePath, compositedBuffer, { contentType: 'image/png', upsert: true })
           if (uploadErr) {
-            console.error('[preview-mockups] composite upload', uploadErr.message)
+            console.error('[preview-mockups] composite upload failed for', placement, uploadErr.message)
+            // Leave imageUrlByPlacement[placement] unset — Printful will use defaultImageUrl
+            // rather than silently showing the wrong layer stack.
             return
           }
           const { data: compositeSigned } = await admin.storage
             .from(BUCKET)
             .createSignedUrls([compositePath], SIGNED_URL_FOR_PRINTFUL_SEC)
           const compositeUrl = compositeSigned?.[0]?.signedUrl
-          if (compositeUrl) imageUrlByPlacement[placement] = compositeUrl
+          if (compositeUrl) {
+            imageUrlByPlacement[placement] = compositeUrl
+            console.log('[preview-mockups] composite ready for', placement, 'layers:', layerInputs.length)
+          }
         } catch (err) {
-          console.error('[preview-mockups] composite error', err)
+          console.error('[preview-mockups] composite render failed for', placement, err)
+          // Do not fall back — log clearly so the cause is diagnosable
         }
       })
     )
@@ -460,47 +539,65 @@ export async function POST(
 
       if (athleticLayout) {
         const productOptionGroups = printfilesResult.option_groups ?? []
-        for (const { view, groups } of ATHLETIC_VIEW_OPTION_GROUPS) {
-          if (presentViews.has(view)) continue
-          const groupName = groups.find((g) => productOptionGroups.includes(g))
-          if (!groupName) continue
-
-          const viewBatch = await createTaskAndPoll(productId, variantId, files, headers, {
-            option_groups: [groupName],
+        const viewsToFetch = ATHLETIC_VIEW_OPTION_GROUPS
+          .filter(({ view, groups }) => {
+            if (presentViews.has(view)) return false
+            return groups.some((g) => productOptionGroups.includes(g))
           })
-          if (!viewBatch.ok) {
-            console.warn('[preview-mockups] athletic view task failed', {
-              view,
-              groupName,
-              reason: viewBatch.reason,
+
+        const athleticResults = await Promise.all(
+          viewsToFetch.map(async ({ view, groups }) => {
+            const groupName = groups.find((g) => productOptionGroups.includes(g))!
+            const viewBatch = await createTaskAndPoll(productId, variantId, files, headers, {
+              option_groups: [groupName],
             })
-            continue
-          }
-          noteViewsFromMockups(viewBatch.mockups)
-          presentViews.add(view)
-          extraViewTasks.push({ requestedView: view, mockups: viewBatch.mockups })
+            if (!viewBatch.ok) {
+              console.warn('[preview-mockups] athletic view task failed', {
+                view,
+                groupName,
+                reason: viewBatch.reason,
+              })
+              return null
+            }
+            return { requestedView: view, mockups: viewBatch.mockups }
+          })
+        )
+        for (const result of athleticResults) {
+          if (!result) continue
+          noteViewsFromMockups(result.mockups)
+          presentViews.add(result.requestedView)
+          extraViewTasks.push(result)
         }
       } else {
         const productOptions = printfilesResult.options ?? []
-        for (const { view, names } of VIEW_OPTION_CANDIDATES) {
-          if (presentViews.has(view)) continue
-          const optionName = names.find((n) => productOptions.includes(n))
-          if (!optionName) continue
-
-          const viewBatch = await createTaskAndPoll(productId, variantId, files, headers, {
-            options: [optionName],
+        const viewsToFetch = VIEW_OPTION_CANDIDATES
+          .filter(({ view, names }) => {
+            if (presentViews.has(view)) return false
+            return names.some((n) => productOptions.includes(n))
           })
-          if (!viewBatch.ok) {
-            console.warn('[preview-mockups] view task failed', {
-              view,
-              optionName,
-              reason: viewBatch.reason,
+
+        const viewResults = await Promise.all(
+          viewsToFetch.map(async ({ view, names }) => {
+            const optionName = names.find((n) => productOptions.includes(n))!
+            const viewBatch = await createTaskAndPoll(productId, variantId, files, headers, {
+              options: [optionName],
             })
-            continue
-          }
-          noteViewsFromMockups(viewBatch.mockups)
-          presentViews.add(view)
-          extraViewTasks.push({ requestedView: view, mockups: viewBatch.mockups })
+            if (!viewBatch.ok) {
+              console.warn('[preview-mockups] view task failed', {
+                view,
+                optionName,
+                reason: viewBatch.reason,
+              })
+              return null
+            }
+            return { requestedView: view, mockups: viewBatch.mockups }
+          })
+        )
+        for (const result of viewResults) {
+          if (!result) continue
+          noteViewsFromMockups(result.mockups)
+          presentViews.add(result.requestedView)
+          extraViewTasks.push(result)
         }
       }
     }
@@ -629,6 +726,12 @@ export async function POST(
         console.error('[preview-mockups] persist mockup_urls:', persistError.message)
       } else {
         mockupsPersisted = true
+        // Persist input hash so the next Preview click can serve from cache
+        // if the design hasn't changed. Stored in design_state to avoid a schema migration.
+        void supabase
+          .from('design_draft')
+          .update({ design_state: { ...designState, _mockup_input_hash: inputHash } })
+          .eq('id', draftId)
       }
 
       const resolved = await resolveMockupPlacementsForDisplay(admin, stored)

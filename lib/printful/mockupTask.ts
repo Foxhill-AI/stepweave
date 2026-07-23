@@ -3,7 +3,7 @@ import { sleep } from '@/lib/printful/sleep'
 export const PRINTFUL_BASE = 'https://api.printful.com'
 
 export const POLL_INTERVAL_MS = 3000
-export const FIRST_WAIT_MS = 12000
+export const FIRST_WAIT_MS = 8000
 export const PER_TASK_MAX_MS = 75000
 export const MAX_429_RETRIES = 8
 
