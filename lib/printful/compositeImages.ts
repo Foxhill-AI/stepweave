@@ -11,6 +11,7 @@ import {
 } from '@/lib/designDraftState'
 import {
   getServerCanvasFontFamilyName,
+  getServerCanvasFontKind,
   FONTS,
 } from '@/lib/fonts'
 
@@ -35,12 +36,15 @@ function resolveFontsDir(): string {
 }
 
 let canvasFontsRegistered = false
+/** Families that were successfully registered; used to fall back to Noto when a font file is missing. */
+const registeredFamilies = new Set<string>()
+
 function ensureCanvasFontsRegistered(): void {
   if (canvasFontsRegistered) return
   const fontsDir = resolveFontsDir()
   console.info('[compositeImages] registering fonts from', fontsDir)
 
-  // Noto fallbacks (sans / serif / mono)
+  // Noto fallbacks (sans / serif / mono) — always attempted first
   const notoEntries: Array<[string, string]> = [
     ['NotoSans-Regular.ttf', 'StepweaveNotoSans'],
     ['NotoSerif-Regular.ttf', 'StepweaveNotoSerif'],
@@ -73,6 +77,7 @@ function ensureCanvasFontsRegistered(): void {
       )
     } else {
       console.info('[compositeImages] registered', file, 'as', familyName)
+      registeredFamilies.add(familyName)
     }
   }
   canvasFontsRegistered = true
@@ -111,9 +116,10 @@ export type CompositeTextInput = {
 export type CompositeInput = CompositeLayerInput | CompositeTextInput
 
 /**
- * Build composite inputs from design_state layers. All image layers are drawn first (bottom),
- * then all text layers (top). This avoids mockups missing text when array order is [text, image] —
- * the in-editor canvas can show the selected layer on top regardless of array order.
+ * Build composite inputs from design_state layers, preserving array order.
+ * Array index 0 = back (bottom), array index length-1 = front (top) — matches the
+ * z-order convention in the 2D editor (PlacementCanvasPreview / reorderPlacementLayer).
+ * Image layers missing a signed URL are skipped but do not abort the composite.
  */
 export function placementLayersToCompositeInputs(
   layers: PlacementLayer[],
@@ -123,9 +129,12 @@ export function placementLayersToCompositeInputs(
 ): CompositeInput[] {
   const inputs: CompositeInput[] = []
   for (const l of layers) {
-    if (!isImageLayer(l)) continue
-    const url = signedByPath.get(l.path)
-    if (url) {
+    if (isImageLayer(l)) {
+      const url = signedByPath.get(l.path)
+      if (!url) {
+        console.warn('[compositeImages] no signed URL for image layer path', l.path, '— layer skipped')
+        continue
+      }
       const { w, h } = getImageLayerDimensions(l, areaWidth, areaHeight)
       const op =
         typeof l.opacity === 'number' && Number.isFinite(l.opacity)
@@ -144,27 +153,25 @@ export function placementLayersToCompositeInputs(
         flipV: l.flipV === true,
         opacity: op,
       })
+    } else if (isTextLayer(l)) {
+      const op =
+        typeof l.opacity === 'number' && Number.isFinite(l.opacity)
+          ? Math.min(1, Math.max(0, l.opacity))
+          : 1
+      inputs.push({
+        kind: 'text',
+        text: l.text,
+        fontFamily: l.fontFamily,
+        fontSize: l.fontSize,
+        color: l.color,
+        dx: l.dx,
+        dy: l.dy,
+        rotation: l.rotation ?? 0,
+        flipH: l.flipH === true,
+        flipV: l.flipV === true,
+        opacity: op,
+      })
     }
-  }
-  for (const l of layers) {
-    if (!isTextLayer(l)) continue
-    const top =
-      typeof l.opacity === 'number' && Number.isFinite(l.opacity)
-        ? Math.min(1, Math.max(0, l.opacity))
-        : 1
-    inputs.push({
-      kind: 'text',
-      text: l.text,
-      fontFamily: l.fontFamily,
-      fontSize: l.fontSize,
-      color: l.color,
-      dx: l.dx,
-      dy: l.dy,
-      rotation: l.rotation ?? 0,
-      flipH: l.flipH === true,
-      flipV: l.flipV === true,
-      opacity: top,
-    })
   }
   return inputs
 }
@@ -253,7 +260,15 @@ function renderTextToBuffer(areaWidth: number, areaHeight: number, input: Compos
   const h = Math.max(1, Math.round(areaHeight))
   const canvas = createCanvas(w, h)
   const ctx = canvas.getContext('2d')
-  const family = getServerCanvasFontFamilyName(input.fontFamily)
+  // Prefer the font-specific family; fall back to Noto if that file wasn't deployed
+  const preferredFamily = getServerCanvasFontFamilyName(input.fontFamily)
+  const notoKind = getServerCanvasFontKind(input.fontFamily)
+  const notoFamily = notoKind === 'serif'
+    ? 'StepweaveNotoSerif'
+    : notoKind === 'mono'
+      ? 'StepweaveNotoMono'
+      : 'StepweaveNotoSans'
+  const family = registeredFamilies.has(preferredFamily) ? preferredFamily : notoFamily
   const size = Math.max(1, Math.round(input.fontSize))
   let x = w / 2 + input.dx
   let y = h / 2 + input.dy
