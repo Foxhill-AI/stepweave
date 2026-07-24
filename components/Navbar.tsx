@@ -162,6 +162,11 @@ function NavbarInner(_props?: NavbarProps) {
             >
               Marketplace
             </Link>
+            {isBlogEnabled() && (
+              <Link href="/blog" className={`navbar-link ${isActive('/blog') ? 'navbar-link-active' : ''}`}>
+                Blog
+              </Link>
+            )}
             {isLoggedIn ? (
               <>
                 <Link
@@ -180,19 +185,12 @@ function NavbarInner(_props?: NavbarProps) {
                 </Link>
               </>
             ) : (
-              <>
-                {isBlogEnabled() && (
-                  <Link href="/blog" className={`navbar-link ${isActive('/blog') ? 'navbar-link-active' : ''}`}>
-                    Blog
-                  </Link>
-                )}
-                <Link
-                  href="/pricing"
-                  className={`navbar-link ${isActive('/pricing') ? 'navbar-link-active' : ''}`}
-                >
-                  Pricing
-                </Link>
-              </>
+              <Link
+                href="/pricing"
+                className={`navbar-link ${isActive('/pricing') ? 'navbar-link-active' : ''}`}
+              >
+                Pricing
+              </Link>
             )}
           </div>
         </div>
@@ -329,6 +327,15 @@ function NavbarInner(_props?: NavbarProps) {
           >
             Marketplace
           </Link>
+          {isBlogEnabled() && (
+            <Link
+              href="/blog"
+              className={`navbar-mobile-link ${isActive('/blog') ? 'navbar-mobile-link-active' : ''}`}
+              onClick={toggleMobileMenu}
+            >
+              Blog
+            </Link>
+          )}
           {isLoggedIn ? (
             <>
               <Link
@@ -349,24 +356,13 @@ function NavbarInner(_props?: NavbarProps) {
               </Link>
             </>
           ) : (
-            <>
-              {isBlogEnabled() && (
-                <Link
-                  href="/blog"
-                  className={`navbar-mobile-link ${isActive('/blog') ? 'navbar-mobile-link-active' : ''}`}
-                  onClick={toggleMobileMenu}
-                >
-                  Blog
-                </Link>
-              )}
-              <Link
-                href="/pricing"
-                className={`navbar-mobile-link ${isActive('/pricing') ? 'navbar-mobile-link-active' : ''}`}
-                onClick={toggleMobileMenu}
-              >
-                Pricing
-              </Link>
-            </>
+            <Link
+              href="/pricing"
+              className={`navbar-mobile-link ${isActive('/pricing') ? 'navbar-mobile-link-active' : ''}`}
+              onClick={toggleMobileMenu}
+            >
+              Pricing
+            </Link>
           )}
           <Link
             href="/design-tool"

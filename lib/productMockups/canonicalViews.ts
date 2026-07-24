@@ -1,6 +1,6 @@
 /**
  * Standardized product mockup gallery: one image per canonical camera view,
- * always ordered Top → Left → Right → Back.
+ * ordered Left → Right → Back → Top (side view leads cards and product detail).
  *
  * Printful returns many overlapping mockups (one set per print placement, plus
  * "extra" angles that repeat across placements). Placement keys describe the
@@ -35,7 +35,7 @@ export type StandardGalleryImage = {
   label: string
 }
 
-const VIEW_ORDER: CanonicalMockupView[] = ['top', 'left', 'right', 'back']
+const VIEW_ORDER: CanonicalMockupView[] = ['left', 'right', 'back', 'top']
 
 export const CANONICAL_VIEW_LABELS: Record<CanonicalMockupView, string> = {
   top: 'Top view',
