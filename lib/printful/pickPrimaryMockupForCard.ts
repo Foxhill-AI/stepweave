@@ -1,13 +1,17 @@
 /**
  * Choose the best Printful mockup URL for product cards / primary hero image.
- * Priority: "left shoe" (not quarter) → "left shoe quarter" → other left → rest.
+ * Prefers a true side camera (left, then right) via the canonical gallery so we
+ * do not accidentally pick top-down "Front 2" shots that sit on left_* placements.
  */
+
+import { buildStandardMockupGallery } from '@/lib/productMockups/canonicalViews'
 
 export type MockupPlacementRow = {
   placement: string
   label: string
   mockup_url: string
-  extra_mockups?: Array<{ title: string; mockup_url: string }>
+  view?: string
+  extra_mockups?: Array<{ title: string; mockup_url: string; view?: string }>
 }
 
 function norm(s: string): string {
@@ -18,7 +22,7 @@ function isBrandingTitle(title: string): boolean {
   return norm(title).includes('brand')
 }
 
-/** Lower rank = shown first (card primary, gallery lead). */
+/** Lower rank = shown first (legacy text ranking; kept for tests / fallbacks). */
 export function rankMockupCandidate(searchText: string): number {
   const t = norm(searchText)
   if (t.includes('brand')) return 100
@@ -28,64 +32,42 @@ export function rankMockupCandidate(searchText: string): number {
   const shoe = t.includes('shoe')
   const quarter = t.includes('quarter')
 
-  // 0: left shoe view, not the quarter angle
   if (left && shoe && !quarter && !right) return 0
-  // Exact API keys sometimes used without "shoe" in label
   if ((t === 'left' || t.startsWith('left ')) && !quarter && !right && !shoe) return 0
-
-  // 1: left shoe quarter (fallback requested by product)
   if (left && shoe && quarter) return 1
   if (left && quarter) return 1
-
-  // 2: other left-side views
   if (left && !right) return 2
-
   if (right && shoe) return 4
   if (right) return 5
 
   return 8
 }
 
-type Candidate = { url: string; rank: number; order: number }
-
 /**
- * Flatten main + non-branding extra mockups into scored candidates.
+ * Prefer canonical left/right side views; fall back to any non-top gallery image,
+ * then any gallery image, then the first placement mockup_url.
  */
 export function pickPrimaryMockupUrl(placements: MockupPlacementRow[]): string | null {
-  const candidates: Candidate[] = []
-  let order = 0
+  const gallery = buildStandardMockupGallery(placements)
+  const side =
+    gallery.find((g) => g.view === 'left') ??
+    gallery.find((g) => g.view === 'right')
+  if (side?.url?.trim()) return side.url.trim()
 
-  const push = (url: string, textParts: string[]) => {
-    const text = textParts.filter(Boolean).join(' ')
-    const rank = rankMockupCandidate(text)
-    if (rank >= 100) return
-    const u = url.trim()
-    if (!u) return
-    candidates.push({ url: u, rank, order: order++ })
-  }
+  const nonTop = gallery.find((g) => g.view !== 'top')
+  if (nonTop?.url?.trim()) return nonTop.url.trim()
+
+  if (gallery[0]?.url?.trim()) return gallery[0].url.trim()
 
   for (const p of placements) {
-    const pl = norm(p.placement)
-    const lb = norm(p.label)
-    if (p.mockup_url?.trim()) {
-      push(p.mockup_url, [pl, lb])
-    }
+    const main = p.mockup_url?.trim()
+    if (main) return main
     for (const ex of p.extra_mockups ?? []) {
       if (!ex.mockup_url?.trim()) continue
       if (isBrandingTitle(ex.title ?? '')) continue
-      push(ex.mockup_url, [pl, lb, norm(ex.title ?? '')])
+      return ex.mockup_url.trim()
     }
   }
 
-  if (candidates.length === 0) {
-    const first = placements.find((p) => p.mockup_url?.trim())
-    return first?.mockup_url?.trim() ?? null
-  }
-
-  candidates.sort((a, b) => {
-    if (a.rank !== b.rank) return a.rank - b.rank
-    return a.order - b.order
-  })
-
-  return candidates[0].url
+  return null
 }

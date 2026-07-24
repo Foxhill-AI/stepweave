@@ -10,7 +10,7 @@ import {
 /**
  * GET /api/products/[id]/mockup-image
  * Returns the best single Printful mockup URL for the product (item cards).
- * Priority: left shoe → left shoe quarter → other left views → rest (see pickPrimaryMockupUrl).
+ * Priority: canonical left/side view → right → other non-top → rest (see pickPrimaryMockupUrl).
  * Public for active products; owner-only for drafts.
  * design_draft is queried with service-role client to bypass RLS.
  */

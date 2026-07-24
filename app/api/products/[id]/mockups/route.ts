@@ -15,7 +15,7 @@ export type MockupImageEntry = {
 /**
  * GET /api/products/[id]/mockups
  * Returns the standardized mockup gallery for a product: one image per canonical
- * camera view, ordered Top → Left → Right → Back. Branding shots and duplicate
+ * camera view, ordered Left → Right → Back → Top. Branding shots and duplicate
  * angles are excluded.
  * Public for active products; owner-only for drafts.
  */
