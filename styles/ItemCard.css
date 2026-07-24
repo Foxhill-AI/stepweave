@@ -161,6 +161,10 @@
   color: var(--color-text-light);
 }
 
+.item-card-sizing {
+  font-weight: 500;
+}
+
 .item-card-stat svg {
   flex-shrink: 0;
 }

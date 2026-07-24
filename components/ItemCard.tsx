@@ -22,6 +22,8 @@ interface ItemCardProps {
   price?: string
   rating?: number
   badge?: string
+  /** e.g. "Women's sizing" / "Men's sizing". */
+  sizingLabel?: string
   /** 'grid' = default card; 'list' = horizontal row (e.g. search results). */
   layout?: 'grid' | 'list'
 }
@@ -41,6 +43,7 @@ export default function ItemCard({
   price,
   rating = 0,
   badge,
+  sizingLabel,
   layout = 'grid',
 }: ItemCardProps) {
   const [staticImgFailed, setStaticImgFailed] = useState(false)
@@ -137,6 +140,11 @@ export default function ItemCard({
               <span className="item-card-stat" aria-label={`${views} views`}>
                 <Eye size={14} aria-hidden="true" />
                 {views >= 1000 ? `${(views / 1000).toFixed(1)}k` : views}
+              </span>
+            )}
+            {sizingLabel && (
+              <span className="item-card-stat item-card-sizing" aria-label={sizingLabel}>
+                {sizingLabel}
               </span>
             )}
             {likes > 0 && (
