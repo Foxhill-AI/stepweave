@@ -36,6 +36,6 @@ export function filterListingsByShoeAudience<T extends ListingLike>(
 
 export const SHOE_AUDIENCE_FILTER_OPTIONS: Array<{ value: ShoeAudienceFilter; label: string }> = [
   { value: 'all', label: 'All Shoes' },
-  { value: 'men', label: "Men's Shoes" },
-  { value: 'women', label: "Women's Shoes" },
+  { value: 'men', label: "Men's sizing" },
+  { value: 'women', label: "Women's sizing" },
 ]
