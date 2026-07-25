@@ -106,14 +106,23 @@ async function printfulHostedPreviewUrl(signedSourceUrl: string): Promise<string
 }
 
 /**
- * Prefer a public site URL; otherwise Storage (+ optional Printful CDN preview).
+ * Prefer a public site URL (verified with a HEAD request); otherwise Storage (+ optional Printful CDN preview).
  */
 export async function resolveFixedBrandingUrlForPrintful(
   admin: SupabaseClient
 ): Promise<string | null> {
   const fromSite = getFixedBrandingAbsoluteUrl()
   if (fromSite && !isUnreachableForPrintful(fromSite)) {
-    return fromSite
+    // Verify the URL actually returns the file before trusting it.
+    // NEXT_PUBLIC_SITE_URL might point to the wrong domain (e.g. a previous project),
+    // in which case Printful would get a 404 and fail the entire mockup task.
+    try {
+      const probe = await fetch(fromSite, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
+      if (probe.ok) return fromSite
+      console.warn('[fixedBranding] site URL returned', probe.status, '— falling back to Supabase storage')
+    } catch (e) {
+      console.warn('[fixedBranding] site URL unreachable:', e, '— falling back to Supabase storage')
+    }
   }
 
   const buf = await buildPrintSizedPng()
