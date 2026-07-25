@@ -530,12 +530,32 @@ export async function POST(
     fixedBrandingImageUrl: await resolveFixedBrandingUrlForPrintful(admin),
   })
 
+  // Pre-flight: HEAD-request each file URL so we know which one Printful would fail on.
+  // This runs in parallel and does not block task creation — it just logs + returns diagnostics.
+  const preflightResults = await Promise.all(
+    files.map(async (f) => {
+      try {
+        const r = await fetch(f.image_url, { method: 'HEAD', signal: AbortSignal.timeout(8000) })
+        return { placement: f.placement, status: r.status, ok: r.ok, urlPrefix: f.image_url.slice(0, 120) }
+      } catch (e) {
+        return { placement: f.placement, status: 0, ok: false, error: String(e), urlPrefix: f.image_url.slice(0, 120) }
+      }
+    })
+  )
+  const preflightFailed = preflightResults.filter((r) => !r.ok)
+  if (preflightFailed.length > 0) {
+    console.error('[preview-mockups] pre-flight URL check FAILED for', preflightFailed)
+  } else {
+    console.log('[preview-mockups] pre-flight URL check passed for all', preflightResults.length, 'files')
+  }
+
   console.log(
     '[preview-mockups] files',
     files.map((f) => ({
       placement: f.placement,
       urlPresent: f.image_url.trim().length > 0,
       urlLength: f.image_url.length,
+      position: f.position,
     }))
   )
 
@@ -819,5 +839,8 @@ export async function POST(
     ...(mockupErrorReason ? { mockup_error: mockupErrorReason } : {}),
     ...(printfulErrorCode != null ? { printful_error_code: printfulErrorCode } : {}),
     ...(printfulErrorMessage ? { printful_error_message: printfulErrorMessage } : {}),
+    // Debug fields — preflight check + file positions (remove once root cause identified)
+    _debug_preflight: preflightResults,
+    _debug_files: files.map((f) => ({ placement: f.placement, position: f.position, urlPrefix: f.image_url.slice(0, 120) })),
   })
 }
