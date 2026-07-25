@@ -448,6 +448,12 @@ export async function POST(
 
         try {
           const compositedBuffer = await compositeLayersToBuffer(areaWidth, areaHeight, layerInputs)
+          // Validate PNG magic bytes — if canvas binary on the server is wrong it may
+          // silently produce garbage bytes that pass upload but cause Printful "Internal Server Error"
+          const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+          if (compositedBuffer.length < 8 || !compositedBuffer.subarray(0, 4).equals(PNG_MAGIC)) {
+            throw new Error(`Canvas produced invalid PNG (${compositedBuffer.length} bytes, magic: ${compositedBuffer.subarray(0, 4).toString('hex')})`)
+          }
           const compositePath = `${authUserId}/${draftId}/composites/${placement}-${Date.now()}.png`
           const { error: uploadErr } = await admin.storage
             .from(BUCKET)
