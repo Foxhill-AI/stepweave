@@ -16,6 +16,7 @@ import {
   buildPrintfileById,
   resolvePlacementKeys,
 } from '@/lib/printful/buildMockupFiles'
+import { resolveFixedBrandingUrlForPrintful } from '@/lib/printful/resolveFixedBrandingUrl'
 
 const DEFAULT_PLACEHOLDER_IMAGE_URL = 'https://files.cdn.printful.com/upload/product-catalog-img/b7/b7427e7543b29d4f52a8bd5e4d80c946_l'
 
@@ -118,6 +119,16 @@ export async function GET(
     }
 
     const printfileById = buildPrintfileById(printfilesResult)
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const admin =
+      supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null
+
+    const fixedBrandingImageUrl = admin
+      ? await resolveFixedBrandingUrlForPrintful(admin)
+      : null
+
     const allFiles = buildMockupFileEntries({
       placementKeys,
       variantMapping,
@@ -125,6 +136,7 @@ export async function GET(
       imageUrlByPlacement: {},
       defaultImageUrl: placeholderUrl,
       placementTransforms: {},
+      fixedBrandingImageUrl,
     })
 
     const urlByPlacement = new Map<string, string>()
@@ -135,11 +147,6 @@ export async function GET(
         label: availablePlacements[placement] ?? placement,
         mockup_url: urlByPlacement.get(placement) ?? '',
       }))
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const admin =
-      supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null
 
     const slotHolder = crypto.randomUUID()
     const slot = admin

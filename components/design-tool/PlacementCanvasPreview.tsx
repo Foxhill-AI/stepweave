@@ -69,8 +69,11 @@ export default function PlacementCanvasPreview({
   const [stageClientWidth, setStageClientWidth] = useState(0)
   const [moveableTarget, setMoveableTarget] = useState<HTMLDivElement | null>(null)
 
-  const effectiveSelectedId =
-    layers.length === 1 ? layers[0].id : (externalSelectedId ?? null)
+  const effectiveSelectedId = disabled
+    ? null
+    : layers.length === 1
+      ? layers[0].id
+      : (externalSelectedId ?? null)
 
   const layersRef = useRef(layers)
   layersRef.current = layers

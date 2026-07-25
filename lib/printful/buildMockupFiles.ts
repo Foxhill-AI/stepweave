@@ -3,6 +3,10 @@ import {
   compactToPrintfulPosition,
   type PrintfulPlacementsState,
 } from '@/lib/designDraftState'
+import {
+  getFixedBrandingAbsoluteUrl,
+  isFixedBrandingPlacement,
+} from '@/lib/printful/fixedBranding'
 
 export function resolvePlacementKeys(
   printfilesResult: PrintfulPrintfilesResult,
@@ -45,9 +49,26 @@ export function buildMockupFileEntries(params: {
   /** Fallback image URL for placements not in imageUrlByPlacement. */
   defaultImageUrl?: string
   placementTransforms: PrintfulPlacementsState
+  /**
+   * Absolute URL for fixed Step Weave branding (Printful-reachable).
+   * Prefer resolveFixedBrandingUrlForPrintful() in server routes.
+   */
+  fixedBrandingImageUrl?: string | null
 }): FileEntry[] {
-  const { placementKeys, variantMapping, printfileById, imageUrlByPlacement, defaultImageUrl, placementTransforms } =
-    params
+  const {
+    placementKeys,
+    variantMapping,
+    printfileById,
+    imageUrlByPlacement,
+    defaultImageUrl,
+    placementTransforms,
+    fixedBrandingImageUrl,
+  } = params
+
+  const fixedBrandingUrl =
+    (typeof fixedBrandingImageUrl === 'string' && fixedBrandingImageUrl.trim()
+      ? fixedBrandingImageUrl.trim()
+      : null) || getFixedBrandingAbsoluteUrl()
 
   return placementKeys
     .map((placement) => {
@@ -55,11 +76,21 @@ export function buildMockupFileEntries(params: {
       const pf = printfileById.get(printfileId)
       const areaWidth = pf?.width ?? 1800
       const areaHeight = pf?.height ?? 1800
-      const t = placementTransforms[placement] ?? { s: 1, dx: 0, dy: 0 }
+      const useFixedBranding = isFixedBrandingPlacement(placement) && Boolean(fixedBrandingUrl)
+      if (isFixedBrandingPlacement(placement) && !fixedBrandingUrl) {
+        console.warn(
+          '[buildMockupFileEntries] branding placement present but no Printful-reachable branding URL'
+        )
+      }
+      const t = useFixedBranding
+        ? { s: 1, dx: 0, dy: 0 }
+        : (placementTransforms[placement] ?? { s: 1, dx: 0, dy: 0 })
       const position = compactToPrintfulPosition(areaWidth, areaHeight, t)
       return {
         placement,
-        image_url: imageUrlByPlacement[placement] ?? defaultImageUrl ?? '',
+        image_url: useFixedBranding
+          ? (fixedBrandingUrl as string)
+          : (imageUrlByPlacement[placement] ?? defaultImageUrl ?? ''),
         position,
       }
     })

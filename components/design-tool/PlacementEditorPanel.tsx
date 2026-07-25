@@ -11,6 +11,7 @@ import type {
 } from '@/lib/designDraftState'
 import { mergeAndClampPlacement, updatePlacementTransform, isTextLayer } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
+import { isFixedBrandingPlacement } from '@/lib/printful/fixedBranding'
 import PlacementCanvasPreview from './PlacementCanvasPreview'
 import ShoeDesignEditor from './ShoeDesignEditor'
 
@@ -45,6 +46,8 @@ interface PlacementEditorPanelProps {
   hideCanvas?: boolean
   /** When true, action buttons (save layout, update preview) are rendered elsewhere — skip them here. */
   hideActions?: boolean
+  /** Branding/label placement is fixed Step Weave mark — no transform controls. */
+  brandingLocked?: boolean
   // --- Multi-layer support ---
   /** Resolved layers for the active placement (image + text). When provided, controls operate on the selected layer. */
   activeLayers?: ResolvedPlacementLayer[]
@@ -75,6 +78,7 @@ export default function PlacementEditorPanel({
   onExternalActivePlacementChange,
   hideCanvas = false,
   hideActions = false,
+  brandingLocked = false,
   activeLayers,
   selectedLayerId,
   onLayerSelect,
@@ -175,7 +179,9 @@ export default function PlacementEditorPanel({
     }
   }, [productId, variantId, externalTemplateRows])
 
-  const templateWithUrl = effectiveTemplateRows.filter((r) => r.template_url?.trim())
+  const templateWithUrl = effectiveTemplateRows
+    .filter((r) => r.template_url?.trim())
+    .filter((r) => !isFixedBrandingPlacement(r.placement))
   const useShoeTemplateUi = !effectiveTemplatesLoading && templateWithUrl.length > 0
 
   const displayPlacement = useMemo(() => {
@@ -184,8 +190,12 @@ export default function PlacementEditorPanel({
         ? activePlacement
         : templateWithUrl[0].placement
     }
+    if (activePlacement && isFixedBrandingPlacement(activePlacement)) {
+      const fallback = meta.find((m) => !isFixedBrandingPlacement(m.placement))
+      return fallback?.placement ?? activePlacement
+    }
     return activePlacement
-  }, [useShoeTemplateUi, templateWithUrl, activePlacement])
+  }, [useShoeTemplateUi, templateWithUrl, activePlacement, meta])
 
   useEffect(() => {
     if (useShoeTemplateUi && displayPlacement !== activePlacement) {
@@ -214,7 +224,7 @@ export default function PlacementEditorPanel({
   /** Update transforms for the active layer or placement. */
   const patchActive = useCallback(
     (patch: Partial<{ s: number; dx: number; dy: number }>) => {
-      if (!editingPlacement) return
+      if (!editingPlacement || brandingLocked) return
 
       // Layer-based mode: update the selected layer's transform
       if (onLayerChange && selectedLayer) {
@@ -243,7 +253,17 @@ export default function PlacementEditorPanel({
         return updatePlacementTransform(prev, editingPlacement, merged)
       })
     },
-    [editingPlacement, onPlacementsStateChange, onLayerChange, selectedLayer, selectedIsText, t, currentTemplate, meta]
+    [
+      editingPlacement,
+      brandingLocked,
+      onPlacementsStateChange,
+      onLayerChange,
+      selectedLayer,
+      selectedIsText,
+      t,
+      currentTemplate,
+      meta,
+    ]
   )
 
   const handleSave = async () => {
@@ -298,7 +318,9 @@ export default function PlacementEditorPanel({
                 value={activePlacement}
                 onChange={(e) => setActivePlacement(e.target.value)}
               >
-                {meta.map((m) => (
+                {meta
+                  .filter((m) => !isFixedBrandingPlacement(m.placement))
+                  .map((m) => (
                   <option key={m.placement} value={m.placement}>
                     {m.label} ({m.area_width}×{m.area_height}px)
                   </option>
@@ -322,6 +344,7 @@ export default function PlacementEditorPanel({
               onLayerDuplicate={onLayerDuplicate}
               onPasteLayer={onPasteLayer}
               layerClipboardRef={layerClipboardRef}
+              disabled={brandingLocked}
             />
           )}
 
@@ -338,86 +361,91 @@ export default function PlacementEditorPanel({
               onLayerDuplicate={onLayerDuplicate}
               onPasteLayer={onPasteLayer}
               layerClipboardRef={layerClipboardRef}
+              disabled={brandingLocked}
             />
           )}
 
-          {(current || currentTemplate) && (
+          {brandingLocked ? (
+            <p className="placement-editor-hint" role="note">
+              Step Weave branding is fixed on this view and cannot be moved or replaced.
+            </p>
+          ) : (current || currentTemplate) ? (
             <div className="placement-editor-controls">
-                {selectedIsText && selectedLayer ? (
-                  <div className="placement-editor-field">
-                    <label htmlFor="pe-fontsize">Font size (px)</label>
+              {selectedIsText && selectedLayer ? (
+                <div className="placement-editor-field">
+                  <label htmlFor="pe-fontsize">Font size (px)</label>
+                  <input
+                    id="pe-fontsize"
+                    type="range"
+                    min={20}
+                    max={500}
+                    value={(selectedLayer as { fontSize: number }).fontSize}
+                    onChange={(e) =>
+                      onLayerChange?.(selectedLayer.id, { fontSize: Number(e.target.value) })
+                    }
+                  />
+                  <span className="placement-editor-value">
+                    {(selectedLayer as { fontSize: number }).fontSize}px
+                  </span>
+                </div>
+              ) : (
+                <div className="placement-editor-field">
+                  <label htmlFor="pe-scale">Scale in print area</label>
+                  <input
+                    id="pe-scale"
+                    type="range"
+                    min={5}
+                    max={100}
+                    value={Math.round(t.s * 100)}
+                    onChange={(e) =>
+                      patchActive({ s: Math.max(0.05, Number(e.target.value) / 100) })
+                    }
+                  />
+                  <span className="placement-editor-value">{Math.round(t.s * 100)}%</span>
+                </div>
+              )}
+              {selectedLayer && !selectedIsText && onLayerChange && (
+                <div className="placement-editor-field placement-editor-field--tile">
+                  <label className="placement-editor-checkbox">
                     <input
-                      id="pe-fontsize"
-                      type="range"
-                      min={20}
-                      max={500}
-                      value={(selectedLayer as { fontSize: number }).fontSize}
+                      type="checkbox"
+                      checked={Boolean((selectedLayer as { repeat?: boolean }).repeat)}
                       onChange={(e) =>
-                        onLayerChange?.(selectedLayer.id, { fontSize: Number(e.target.value) })
+                        onLayerChange(selectedLayer.id, { repeat: e.target.checked })
                       }
                     />
-                    <span className="placement-editor-value">
-                      {(selectedLayer as { fontSize: number }).fontSize}px
-                    </span>
-                  </div>
-                ) : (
-                  <div className="placement-editor-field">
-                    <label htmlFor="pe-scale">Scale in print area</label>
-                    <input
-                      id="pe-scale"
-                      type="range"
-                      min={5}
-                      max={100}
-                      value={Math.round(t.s * 100)}
-                      onChange={(e) =>
-                        patchActive({ s: Math.max(0.05, Number(e.target.value) / 100) })
-                      }
-                    />
-                    <span className="placement-editor-value">{Math.round(t.s * 100)}%</span>
-                  </div>
-                )}
-                {selectedLayer && !selectedIsText && onLayerChange && (
-                  <div className="placement-editor-field placement-editor-field--tile">
-                    <label className="placement-editor-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={Boolean((selectedLayer as { repeat?: boolean }).repeat)}
-                        onChange={(e) =>
-                          onLayerChange(selectedLayer.id, { repeat: e.target.checked })
-                        }
-                      />
-                      <span>Tile / repeat to fill area</span>
-                    </label>
-                    <p className="placement-editor-hint">
-                      Repeats the image at the current size in all directions (resize first for smaller tiles).
-                      Updates preview via server composite.
-                    </p>
-                  </div>
-                )}
-                <div className="placement-editor-field-row">
-                  <div className="placement-editor-field">
-                    <label htmlFor="pe-dx">Offset X (px)</label>
-                    <input
-                      id="pe-dx"
-                      type="number"
-                      className="design-tool-input"
-                      value={Math.round(t.dx)}
-                      onChange={(e) => patchActive({ dx: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="placement-editor-field">
-                    <label htmlFor="pe-dy">Offset Y (px)</label>
-                    <input
-                      id="pe-dy"
-                      type="number"
-                      className="design-tool-input"
-                      value={Math.round(t.dy)}
-                      onChange={(e) => patchActive({ dy: Number(e.target.value) || 0 })}
-                    />
-                  </div>
+                    <span>Tile / repeat to fill area</span>
+                  </label>
+                  <p className="placement-editor-hint">
+                    Repeats the image at the current size in all directions (resize first for smaller tiles).
+                    Updates preview via server composite.
+                  </p>
+                </div>
+              )}
+              <div className="placement-editor-field-row">
+                <div className="placement-editor-field">
+                  <label htmlFor="pe-dx">Offset X (px)</label>
+                  <input
+                    id="pe-dx"
+                    type="number"
+                    className="design-tool-input"
+                    value={Math.round(t.dx)}
+                    onChange={(e) => patchActive({ dx: Number(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="placement-editor-field">
+                  <label htmlFor="pe-dy">Offset Y (px)</label>
+                  <input
+                    id="pe-dy"
+                    type="number"
+                    className="design-tool-input"
+                    value={Math.round(t.dy)}
+                    onChange={(e) => patchActive({ dy: Number(e.target.value) || 0 })}
+                  />
                 </div>
               </div>
-          )}
+            </div>
+          ) : null}
 
           {!hideActions && (
             <>

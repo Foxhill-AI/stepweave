@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { buildStandardMockupGallery } from '@/lib/productMockups/canonicalViews'
 import ShoeDesignEditor from './ShoeDesignEditor'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
+import { excludeFixedBrandingPlacements, isFixedBrandingPlacement } from '@/lib/printful/fixedBranding'
 import {
   isTextLayer,
 } from '@/lib/designDraftState'
@@ -241,9 +242,22 @@ export default function PreviewWorkspace({
 
   const useStorageUpload = Boolean(draftId && authUserId && onPatternUploaded)
 
-  // Shoe canvas computations — use templateRows passed from parent
-  const templateWithUrl = templateRows?.filter((r) => r.template_url?.trim()) ?? []
+  // Shoe canvas: never show branding/label as a design step — that mark is applied
+  // server-side for Printful only.
+  const templateWithUrl = (templateRows ?? [])
+    .filter((r) => r.template_url?.trim())
+    .filter((r) => !isFixedBrandingPlacement(r.placement))
+  const editableTemplateRows = templateWithUrl
   const useShoeCanvas = templateWithUrl.length > 0
+  const brandingLocked = false
+
+  useEffect(() => {
+    if (!onActivePlacementChange) return
+    if (externalActivePlacement && isFixedBrandingPlacement(externalActivePlacement)) {
+      const first = templateWithUrl[0]?.placement
+      if (first) onActivePlacementChange(first)
+    }
+  }, [externalActivePlacement, templateWithUrl, onActivePlacementChange])
 
   const handleFile = async (file: File | null) => {
     setUploadError(null)
@@ -270,14 +284,14 @@ export default function PreviewWorkspace({
           return
         }
         const localUrl = URL.createObjectURL(file)
-        const allPlacements = templateWithUrl.map((r) => r.placement)
+        const allPlacements = excludeFixedBrandingPlacements(editableTemplateRows.map((r) => r.placement))
         if (allPlacements.length > 1) {
           // Show placement picker before applying
           setPendingUpload({ path, localUrl })
           setPendingSelectedPlacements(new Set(allPlacements))
         } else {
           // Only one placement (or none) — apply immediately, no picker needed
-          onPatternUploaded?.(path, localUrl)
+          onPatternUploaded?.(path, localUrl, allPlacements.length === 1 ? allPlacements : undefined)
         }
       } catch {
         setUploadError('Upload failed. Please try again.')
@@ -401,7 +415,7 @@ export default function PreviewWorkspace({
         <div className="preview-text-panel preview-placement-picker">
           <p className="preview-placement-picker-title">Add image to which views?</p>
           <div className="preview-placement-picker-options">
-            {templateWithUrl.map((row) => (
+            {editableTemplateRows.map((row) => (
               <label key={row.placement} className="preview-placement-picker-option">
                 <input
                   type="checkbox"
@@ -441,7 +455,7 @@ export default function PreviewWorkspace({
                 setPendingUpload(null)
               }}
             >
-              Add to {pendingSelectedPlacements.size === templateWithUrl.length ? 'all views' : `${pendingSelectedPlacements.size} view${pendingSelectedPlacements.size !== 1 ? 's' : ''}`}
+              Add to {pendingSelectedPlacements.size === editableTemplateRows.length ? 'all views' : `${pendingSelectedPlacements.size} view${pendingSelectedPlacements.size !== 1 ? 's' : ''}`}
             </button>
           </div>
         </div>
@@ -458,41 +472,49 @@ export default function PreviewWorkspace({
               <img src={thumbSrc} alt="" className="preview-image-bar-thumb" />
             ) : null
           })()}
-          <span className="preview-image-bar-label">
-            {layerCount > 1 ? `${layerCount} layers applied` : 'Pattern applied'}
-          </span>
-          <div className="preview-image-bar-actions">
-            <button
-              type="button"
-              className="preview-image-bar-btn"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload size={13} aria-hidden /> Add image
-            </button>
-            {onAddTextLayer && (
-              <button
-                type="button"
-                className="preview-image-bar-btn"
-                onClick={() => setShowTextPanel((v) => !v)}
-              >
-                T Add text
-              </button>
-            )}
-            <button
-              type="button"
-              className="preview-image-bar-btn preview-image-bar-btn--remove"
-              onClick={onImageClear}
-              aria-label="Remove selected layer"
-              disabled={layerCount === 0 && !hasPatternImage}
-            >
-              <X size={13} aria-hidden /> Remove
-            </button>
-          </div>
+          {brandingLocked ? (
+            <span className="preview-image-bar-label">
+              Step Weave branding — fixed on this view
+            </span>
+          ) : (
+            <>
+              <span className="preview-image-bar-label">
+                {layerCount > 1 ? `${layerCount} layers applied` : 'Pattern applied'}
+              </span>
+              <div className="preview-image-bar-actions">
+                <button
+                  type="button"
+                  className="preview-image-bar-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload size={13} aria-hidden /> Add image
+                </button>
+                {onAddTextLayer && (
+                  <button
+                    type="button"
+                    className="preview-image-bar-btn"
+                    onClick={() => setShowTextPanel((v) => !v)}
+                  >
+                    T Add text
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="preview-image-bar-btn preview-image-bar-btn--remove"
+                  onClick={onImageClear}
+                  aria-label="Remove selected layer"
+                  disabled={layerCount === 0 && !hasPatternImage}
+                >
+                  <X size={13} aria-hidden /> Remove
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* Text layer edit panel — shown when a text layer is selected */}
-      {selectedTextLayer && onLayerChange && viewMode === 'canvas' && !showTextPanel && (
+      {selectedTextLayer && onLayerChange && viewMode === 'canvas' && !showTextPanel && !brandingLocked && (
         <div className="preview-text-panel">
           <input
             type="text"
@@ -538,7 +560,7 @@ export default function PreviewWorkspace({
       )}
 
       {/* Text layer add panel */}
-      {showTextPanel && onAddTextLayer && viewMode === 'canvas' && (
+      {showTextPanel && onAddTextLayer && viewMode === 'canvas' && !brandingLocked && (
         <div className="preview-text-panel">
           <input
             type="text"
@@ -676,6 +698,7 @@ export default function PreviewWorkspace({
             onLayerDuplicate={onLayerDuplicate}
             onPasteLayer={onPasteLayer}
             layerClipboardRef={layerClipboardRef}
+            disabled={brandingLocked}
           />
         </div>
       )}
