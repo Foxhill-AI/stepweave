@@ -76,7 +76,7 @@ export async function createTaskAndPoll(
   options?: CreateMockupTaskOptions
 ): Promise<
   | { ok: true; mockups: MockupResult[] }
-  | { ok: false; reason: string; status?: number }
+  | { ok: false; reason: string; status?: number; printful_error?: string; printful_error_code?: number }
 > {
   let createRes: Response | null = null
   let bodyText = ''
@@ -158,8 +158,9 @@ export async function createTaskAndPoll(
         error: result.error,
         error_code: result.error_code,
         placements: files.map((f) => f.placement),
+        file_urls: files.map((f) => ({ placement: f.placement, url: f.image_url.slice(0, 120) })),
       })
-      return { ok: false, reason: 'task failed' }
+      return { ok: false, reason: 'task failed', printful_error: result.error, printful_error_code: result.error_code }
     }
     await sleep(POLL_INTERVAL_MS)
   }

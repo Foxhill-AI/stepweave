@@ -374,6 +374,11 @@ export async function POST(
   // Printful's position does not support images larger than the print area or negative
   // offsets — it clamps or ignores overflow, producing a random-looking crop. These
   // must go through the server-side composite which clips naturally.
+  // We keep the original URL as a fallback in __fallback__<placement> so that if the
+  // composite render fails (e.g. canvas binary not available), Printful still gets a
+  // valid image (with clamped crop rather than failing the whole task).
+  const fallbackUrlByPlacement: Record<string, string> = {}
+  const fallbackTransformByPlacement: Record<string, PlacementCompactTransform> = {}
   for (const [placement, t] of Object.entries(placementTransformOverrides)) {
     const printfileId = variantMapping?.placements[placement]
     const pf = printfileId != null ? printfileById.get(printfileId) : null
@@ -392,6 +397,9 @@ export async function POST(
       console.log('[preview-mockups] rerouting cropped direct-image to composite', {
         placement, areaWidth, areaHeight, iw, ih, left, top,
       })
+      // Save original for fallback
+      fallbackUrlByPlacement[placement] = imageUrlByPlacement[placement]
+      fallbackTransformByPlacement[placement] = t
       delete imageUrlByPlacement[placement]
       delete placementTransformOverrides[placement]
       imageUrlByPlacement[`__pending__${placement}`] = placement
@@ -412,6 +420,9 @@ export async function POST(
   const pendingPlacements = Object.keys(imageUrlByPlacement)
     .filter((k) => k.startsWith('__pending__'))
     .map((k) => k.slice('__pending__'.length))
+
+  /** Placements that fell back to direct image (composite failed) — need enriched transform, not full-canvas */
+  const compositeFallbackPlacements = new Set<string>()
 
   if (pendingPlacements.length > 0) {
     const authUserId = authUser.id
@@ -443,8 +454,12 @@ export async function POST(
             .upload(compositePath, compositedBuffer, { contentType: 'image/png', upsert: true })
           if (uploadErr) {
             console.error('[preview-mockups] composite upload failed for', placement, uploadErr.message)
-            // Leave imageUrlByPlacement[placement] unset — Printful will use defaultImageUrl
-            // rather than silently showing the wrong layer stack.
+            // Fall back to direct URL (wrong crop, but Printful task succeeds)
+            if (fallbackUrlByPlacement[placement]) {
+              imageUrlByPlacement[placement] = fallbackUrlByPlacement[placement]
+              compositeFallbackPlacements.add(placement)
+              console.warn('[preview-mockups] using fallback direct URL for', placement)
+            }
             return
           }
           const { data: compositeSigned } = await admin.storage
@@ -454,26 +469,54 @@ export async function POST(
           if (compositeUrl) {
             imageUrlByPlacement[placement] = compositeUrl
             console.log('[preview-mockups] composite ready for', placement, 'layers:', layerInputs.length)
+          } else if (fallbackUrlByPlacement[placement]) {
+            imageUrlByPlacement[placement] = fallbackUrlByPlacement[placement]
+            compositeFallbackPlacements.add(placement)
+            console.warn('[preview-mockups] composite sign failed, using fallback direct URL for', placement)
           }
         } catch (err) {
           console.error('[preview-mockups] composite render failed for', placement, err)
-          // Do not fall back — log clearly so the cause is diagnosable
+          // Fall back to direct URL so Printful task does not fail entirely
+          if (fallbackUrlByPlacement[placement]) {
+            imageUrlByPlacement[placement] = fallbackUrlByPlacement[placement]
+            compositeFallbackPlacements.add(placement)
+            console.warn('[preview-mockups] using fallback direct URL after render error for', placement)
+          }
         }
       })
     )
   }
 
   // Build final transform map:
-  // - Multi-layer composited placements → full-canvas (s:1, dx:0, dy:0)
-  // - Single-layer per-placement → layer's own transform
+  // - Composited placements (success) → full-canvas (s:1, dx:0, dy:0)
+  // - Fallback placements (composite failed, using direct URL) → enriched layer transform
+  // - Single-layer per-placement (direct) → layer's own enriched transform
   // - Global-fallback placements → printful_placements (unchanged)
   const finalTransforms = { ...placementTransforms }
   for (const placement of pendingPlacements) {
-    if (imageUrlByPlacement[placement]) {
+    if (imageUrlByPlacement[placement] && !compositeFallbackPlacements.has(placement)) {
       finalTransforms[placement] = { s: 1, dx: 0, dy: 0 }
     }
   }
-  for (const [placement, t] of Object.entries(placementTransformOverridesEnriched)) {
+  // Enrich direct + fallback-direct transforms with explicit pixel dimensions
+  const enrichedAfterComposite = enrichDirectImagePlacementOverrides(
+    {
+      ...placementTransformOverridesEnriched,
+      // Add fallback placements that reverted to their original transforms
+      ...Object.fromEntries(
+        Array.from(compositeFallbackPlacements)
+          .filter((p) => fallbackTransformByPlacement[p])
+          .map((p) => [p, fallbackTransformByPlacement[p]])
+      ),
+    },
+    perPlacementPaths,
+    (placement) => {
+      const printfileId = variantMapping?.placements[placement]
+      const pf = printfileId != null ? printfileById.get(printfileId) : null
+      return { width: pf?.width ?? 1800, height: pf?.height ?? 1800 }
+    }
+  )
+  for (const [placement, t] of Object.entries(enrichedAfterComposite)) {
     finalTransforms[placement] = t
   }
 
@@ -621,6 +664,8 @@ export async function POST(
   const extrasByPlacement = new Map<string, PreviewMockupExtra[]>()
   const productViewExtras: PreviewMockupExtra[] = []
   let mockupErrorReason: string | undefined
+  let printfulErrorCode: number | undefined
+  let printfulErrorMessage: string | undefined
 
   if (batch.ok) {
     mergeMockups(urlByPlacement, batch.mockups)
@@ -671,14 +716,21 @@ export async function POST(
     }
   } else {
     mockupErrorReason = batch.reason
+    if (!batch.ok && 'printful_error_code' in batch) {
+      printfulErrorCode = batch.printful_error_code
+      printfulErrorMessage = batch.printful_error
+    }
     console.error('[preview-mockups] Printful task failed —', {
       reason: batch.reason,
+      printful_error: printfulErrorMessage,
+      printful_error_code: printfulErrorCode,
       status: 'status' in batch ? batch.status : undefined,
       productId,
       variantId,
       fileSummary: files.map((f) => ({
         placement: f.placement,
         urlPresent: f.image_url.trim().length > 0,
+        urlPrefix: f.image_url.slice(0, 80),
       })),
     })
   }
@@ -765,5 +817,7 @@ export async function POST(
     mockup_generation_unavailable: !anyUrl,
     mockups_persisted: mockupsPersisted,
     ...(mockupErrorReason ? { mockup_error: mockupErrorReason } : {}),
+    ...(printfulErrorCode != null ? { printful_error_code: printfulErrorCode } : {}),
+    ...(printfulErrorMessage ? { printful_error_message: printfulErrorMessage } : {}),
   })
 }
