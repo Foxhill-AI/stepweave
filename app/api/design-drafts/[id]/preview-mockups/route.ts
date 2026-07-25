@@ -42,6 +42,10 @@ import {
 } from '@/lib/productMockups/storage'
 import { viewHintFromPrintfulUrl } from '@/lib/productMockups/canonicalViews'
 
+/** Extend Vercel serverless function timeout to 300s (Vercel Pro max).
+ * Default is 60s which is too short for Printful's mockup polling. */
+export const maxDuration = 300
+
 const BUCKET = 'design-patterns'
 /** Long enough for Printful to fetch the pattern image during mockup generation */
 const SIGNED_URL_FOR_PRINTFUL_SEC = 7200
