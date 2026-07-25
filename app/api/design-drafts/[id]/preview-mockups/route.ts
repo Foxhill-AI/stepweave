@@ -27,6 +27,8 @@ import {
   compositeLayersToBuffer,
   placementLayersToCompositeInputs,
 } from '@/lib/printful/compositeImages'
+import { isFixedBrandingPlacement } from '@/lib/printful/fixedBranding'
+import { resolveFixedBrandingUrlForPrintful } from '@/lib/printful/resolveFixedBrandingUrl'
 import {
   PRINTFUL_SLOT_BUSY_CODE,
   tryAcquirePrintfulMockupSlot,
@@ -180,6 +182,8 @@ export async function POST(
     p: (designState.pattern_images ?? null),
     t: (designState.printful_placements ?? null),
     g: globalPatternPath || null,
+    // Bump when fixed branding asset changes so cached mockups refresh.
+    b: 'branding-rect-stacked-v1',
   })
   const inputHash = createHash('sha256').update(inputHashSource).digest('hex').slice(0, 16)
 
@@ -274,6 +278,8 @@ export async function POST(
   const placementTransformOverrides: Record<string, PlacementCompactTransform> = {}
 
   for (const [placement, layers] of Object.entries(perPlacementPaths)) {
+    // Step Weave mark is forced in buildMockupFileEntries — ignore draft layers here.
+    if (isFixedBrandingPlacement(placement)) continue
     const imageLayers = layers.filter(isImageLayer)
     if (!placementLayersNeedServerComposite(layers) && imageLayers.length === 1) {
       // Single raster, no text, no rotation — Printful positions the raw URL
@@ -474,6 +480,7 @@ export async function POST(
     imageUrlByPlacement,
     defaultImageUrl,
     placementTransforms: finalTransforms,
+    fixedBrandingImageUrl: await resolveFixedBrandingUrlForPrintful(admin),
   })
 
   console.log(

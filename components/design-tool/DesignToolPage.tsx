@@ -26,6 +26,12 @@ import {
   type PlacementLayerReorderOp,
 } from '@/lib/designDraftState'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
+import {
+  excludeFixedBrandingPlacements,
+  isFixedBrandingPlacement,
+  STEPWEAVE_BRANDING_LAYER_ID,
+  STEPWEAVE_BRANDING_PUBLIC_PATH,
+} from '@/lib/printful/fixedBranding'
 import { useAuth } from '@/components/AuthProvider'
 import {
   updateDesignDraft,
@@ -297,8 +303,16 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
         if (!cancelled) {
           const rows = body.placements ?? []
           setTemplateRows(rows)
-          // Auto-select first placement if none is active yet
-          setActivePlacement((prev) => prev || rows[0]?.placement || '')
+          const firstEditable =
+            rows.find((r) => r.placement && !isFixedBrandingPlacement(r.placement))?.placement ??
+            ''
+          // Never land on branding/label — that placement is hidden from the design UI.
+          setActivePlacement((prev) => {
+            if (prev && !isFixedBrandingPlacement(prev) && rows.some((r) => r.placement === prev)) {
+              return prev
+            }
+            return firstEditable
+          })
         }
       })
       .catch(() => { if (!cancelled) setTemplateRows([]) })
@@ -353,7 +367,12 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
           typeof nextOrUpdater === 'function'
             ? nextOrUpdater(currentPlacements)
             : nextOrUpdater
-        return mergePrintfulPlacementsIntoDesignState(full, nextPlacements)
+        // Branding/label transforms are not client-editable.
+        const sanitized: PrintfulPlacementsState = { ...nextPlacements }
+        for (const key of Object.keys(sanitized)) {
+          if (isFixedBrandingPlacement(key)) delete sanitized[key]
+        }
+        return mergePrintfulPlacementsIntoDesignState(full, sanitized)
       })
     },
     []
@@ -405,7 +424,8 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
       if (!draftId) return
 
       // One image layer per Printful placement so template tabs + mockups all show the pattern.
-      const placementsList = uniqueTemplatePlacements(templateRows)
+      // Branding/label stays the fixed Step Weave mark (not the user pattern).
+      const placementsList = excludeFixedBrandingPlacements(uniqueTemplatePlacements(templateRows))
       let nextDesignState = designDataRef.current
       if (placementsList.length > 0) {
         let current = parsePlacementImages(nextDesignState)
@@ -429,7 +449,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
         designDataRef.current = nextDesignState
         setDesignData(nextDesignState)
         setSelectedLayerByPlacement((prev) => ({ ...prev, ...selectedPatch }))
-        if (!activePlacement) {
+        if (!activePlacement || isFixedBrandingPlacement(activePlacement)) {
           setActivePlacement(placementsList[0])
         }
         if (Object.keys(localPatch).length > 0) {
@@ -464,7 +484,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   const handleUseDirectly = useCallback(
     async (storagePath: string) => {
       if (!draftId) return
-      const placementsList = uniqueTemplatePlacements(templateRows)
+      const placementsList = excludeFixedBrandingPlacements(uniqueTemplatePlacements(templateRows))
       let nextDesignState = designDataRef.current
       if (placementsList.length > 0) {
         let current = parsePlacementImages(nextDesignState)
@@ -478,7 +498,9 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
         designDataRef.current = nextDesignState
         setDesignData(nextDesignState)
         setSelectedLayerByPlacement((prev) => ({ ...prev, ...selectedPatch }))
-        if (!activePlacement) setActivePlacement(placementsList[0])
+        if (!activePlacement || isFixedBrandingPlacement(activePlacement)) {
+          setActivePlacement(placementsList[0])
+        }
       }
       const ok = await updateDesignDraft(draftId, {
         pattern_image_url: storagePath,
@@ -501,7 +523,9 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
 
   const handlePatternUploaded = useCallback(
     (path: string, localUrl?: string, placements?: string[]) => {
-      const placementsList = placements ?? uniqueTemplatePlacements(templateRows)
+      const placementsList = excludeFixedBrandingPlacements(
+        placements ?? uniqueTemplatePlacements(templateRows)
+      )
       if (placementsList.length === 0) return
 
       let current = parsePlacementImages(designDataRef.current)
@@ -528,7 +552,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
         setLocalLayerUrls((prev) => ({ ...prev, ...localPatch }))
       }
       setSelectedLayerByPlacement((prev) => ({ ...prev, ...selectedPatch }))
-      if (!activePlacement) {
+      if (!activePlacement || isFixedBrandingPlacement(activePlacement)) {
         setActivePlacement(placementsList[0])
       }
     },
@@ -537,7 +561,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
 
   const handleLayerChange = useCallback(
     (layerId: string, patch: Parameters<typeof updatePlacementLayer>[3]) => {
-      if (!activePlacement) return
+      if (!activePlacement || isFixedBrandingPlacement(activePlacement)) return
       setDesignData((prev) => {
         const current = parsePlacementImages(prev)
         return mergePlacementImagesIntoDesignState(prev, updatePlacementLayer(current, activePlacement, layerId, patch))
@@ -548,7 +572,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
 
   const handleAddTextLayer = useCallback(
     (layer: PlacementTextLayer) => {
-      if (!activePlacement) return
+      if (!activePlacement || isFixedBrandingPlacement(activePlacement)) return
       setDesignData((prev) => {
         const current = parsePlacementImages(prev)
         return mergePlacementImagesIntoDesignState(prev, addPlacementTextLayer(current, activePlacement, layer))
@@ -560,6 +584,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
 
   const handleLayerRemove = useCallback(
     (placement: string, layerId: string) => {
+      if (isFixedBrandingPlacement(placement) || layerId === STEPWEAVE_BRANDING_LAYER_ID) return
       setDesignData((prev) => {
         const current = parsePlacementImages(prev)
         return mergePlacementImagesIntoDesignState(prev, removePlacementImageLayer(current, placement, layerId))
@@ -577,7 +602,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
 
   const handleCanvasLayerDelete = useCallback(
     (layerId: string) => {
-      if (!activePlacement) return
+      if (!activePlacement || isFixedBrandingPlacement(activePlacement)) return
       handleLayerRemove(activePlacement, layerId)
     },
     [activePlacement, handleLayerRemove]
@@ -585,7 +610,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
 
   const handleLayerReorder = useCallback(
     (layerId: string, op: PlacementLayerReorderOp) => {
-      if (!activePlacement) return
+      if (!activePlacement || isFixedBrandingPlacement(activePlacement)) return
       setDesignData((prev) =>
         mergePlacementImagesIntoDesignState(
           prev,
@@ -598,7 +623,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
 
   const handleLayerDuplicate = useCallback(
     (layerId: string) => {
-      if (!activePlacement) return
+      if (!activePlacement || isFixedBrandingPlacement(activePlacement)) return
       let newId: string | null = null
       setDesignData((prev) => {
         const cur = parsePlacementImages(prev)
@@ -617,7 +642,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
 
   const handlePasteLayer = useCallback(
     (layer: PlacementLayer) => {
-      if (!activePlacement) return
+      if (!activePlacement || isFixedBrandingPlacement(activePlacement)) return
       let newId: string | null = null
       setDesignData((prev) => {
         const cur = parsePlacementImages(prev)
@@ -652,12 +677,28 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   )
 
   const activeLayersResolved = (() => {
+    if (activePlacement && isFixedBrandingPlacement(activePlacement)) {
+      return [
+        {
+          id: STEPWEAVE_BRANDING_LAYER_ID,
+          path: STEPWEAVE_BRANDING_PUBLIC_PATH,
+          s: 1,
+          dx: 0,
+          dy: 0,
+          signedUrl: STEPWEAVE_BRANDING_PUBLIC_PATH,
+        },
+      ] satisfies ResolvedPlacementLayer[]
+    }
     const layers = parsePlacementImages(designData)[activePlacement] ?? []
     const urls = placementLayerSignedUrls[activePlacement] ?? {}
     return layers.map((l): ResolvedPlacementLayer =>
       isImageLayer(l) ? { ...l, signedUrl: urls[l.id] ?? localLayerUrls[l.id] ?? null } : l
     )
   })()
+
+  const brandingPlacementLocked = Boolean(
+    activePlacement && isFixedBrandingPlacement(activePlacement)
+  )
 
   // ── Step bar ─────────────────────────────────────────────────────────────
   const stepBar = isDraftEditor && (
@@ -744,14 +785,19 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
       onExternalActivePlacementChange={setActivePlacement}
       hideCanvas
       hideActions
+      brandingLocked={brandingPlacementLocked}
       activeLayers={activeLayersResolved}
-      selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
-      onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
-      onLayerChange={handleLayerChange}
-      onLayerDelete={handleCanvasLayerDelete}
-      onLayerReorder={handleLayerReorder}
-      onLayerDuplicate={handleLayerDuplicate}
-      onPasteLayer={handlePasteLayer}
+      selectedLayerId={brandingPlacementLocked ? null : (selectedLayerByPlacement[activePlacement] ?? null)}
+      onLayerSelect={
+        brandingPlacementLocked
+          ? undefined
+          : (id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))
+      }
+      onLayerChange={brandingPlacementLocked ? undefined : handleLayerChange}
+      onLayerDelete={brandingPlacementLocked ? undefined : handleCanvasLayerDelete}
+      onLayerReorder={brandingPlacementLocked ? undefined : handleLayerReorder}
+      onLayerDuplicate={brandingPlacementLocked ? undefined : handleLayerDuplicate}
+      onPasteLayer={brandingPlacementLocked ? undefined : handlePasteLayer}
       layerClipboardRef={layerClipboardRef}
     />
   ) : null
@@ -761,7 +807,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
       {stepBar}
       <div className="design-customize-layout">
         {/* Mobile: collapsible position slider panel */}
-        {placementEditorNode && (
+        {placementEditorNode && !brandingPlacementLocked && (
           <div className="design-customize-tools-mobile">
             <button
               type="button"
@@ -788,6 +834,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
             onImageSelect={(url) => setDesignData((prev) => ({ ...prev, imageUrl: url }))}
             onPatternUploaded={handlePatternUploaded}
             onImageClear={() => {
+              if (brandingPlacementLocked) return
               const placementImages = parsePlacementImages(designData)
               const selectedId = selectedLayerByPlacement[activePlacement]
               const layers = placementImages[activePlacement] ?? []
@@ -812,15 +859,21 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
             activePlacement={activePlacement}
             onActivePlacementChange={setActivePlacement}
             activeLayers={activeLayersResolved}
-            selectedLayerId={selectedLayerByPlacement[activePlacement] ?? null}
-            onLayerSelect={(id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))}
-            onLayerChange={handleLayerChange}
-            onLayerDelete={handleCanvasLayerDelete}
-            onLayerReorder={handleLayerReorder}
-            onLayerDuplicate={handleLayerDuplicate}
-            onPasteLayer={handlePasteLayer}
+            selectedLayerId={brandingPlacementLocked ? null : (selectedLayerByPlacement[activePlacement] ?? null)}
+            onLayerSelect={
+              brandingPlacementLocked
+                ? undefined
+                : (id) => setSelectedLayerByPlacement((prev) => ({ ...prev, [activePlacement]: id }))
+            }
+            onLayerChange={brandingPlacementLocked ? undefined : handleLayerChange}
+            onLayerDelete={brandingPlacementLocked ? undefined : handleCanvasLayerDelete}
+            onLayerReorder={brandingPlacementLocked ? undefined : handleLayerReorder}
+            onLayerDuplicate={brandingPlacementLocked ? undefined : handleLayerDuplicate}
+            onPasteLayer={brandingPlacementLocked ? undefined : handlePasteLayer}
             layerClipboardRef={layerClipboardRef}
-            onAddTextLayer={isDraftEditor ? handleAddTextLayer : undefined}
+            onAddTextLayer={
+              isDraftEditor && !brandingPlacementLocked ? handleAddTextLayer : undefined
+            }
             onSaveLayout={isDraftEditor ? handleSavePlacementLayout : undefined}
             onRefreshPrintfulPreview={isDraftEditor ? handleRefreshPrintfulPreview : undefined}
             saveLoading={placementSaveLoading}

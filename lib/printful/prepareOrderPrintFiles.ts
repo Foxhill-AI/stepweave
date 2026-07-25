@@ -20,6 +20,8 @@ import {
   compositeLayersToBuffer,
   placementLayersToCompositeInputs,
 } from '@/lib/printful/compositeImages'
+import { isFixedBrandingPlacement } from '@/lib/printful/fixedBranding'
+import { resolveFixedBrandingUrlForPrintful } from '@/lib/printful/resolveFixedBrandingUrl'
 import type { FileEntry } from '@/lib/printful/mockupTask'
 
 const BUCKET = 'design-patterns'
@@ -114,6 +116,8 @@ export async function prepareOrderPrintFilesFromSnapshot(
   const placementTransformOverrides: Record<string, PlacementCompactTransform> = {}
 
   for (const [placement, layers] of Object.entries(perPlacementPaths)) {
+    // Step Weave mark is forced in buildMockupFileEntries — ignore draft layers here.
+    if (isFixedBrandingPlacement(placement)) continue
     const imageLayers = layers.filter(isImageLayer)
     if (!placementLayersNeedServerComposite(layers) && imageLayers.length === 1) {
       const url = signedByPath.get(imageLayers[0].path)
@@ -240,6 +244,7 @@ export async function prepareOrderPrintFilesFromSnapshot(
     imageUrlByPlacement,
     defaultImageUrl,
     placementTransforms: finalTransforms,
+    fixedBrandingImageUrl: await resolveFixedBrandingUrlForPrintful(admin),
   })
 
   if (files.length === 0) {
