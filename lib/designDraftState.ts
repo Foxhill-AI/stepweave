@@ -64,13 +64,20 @@ export function compactToPrintfulPosition(
     width = Math.max(1, Math.round(areaWidth * s))
     height = Math.max(1, Math.round(areaHeight * s))
   }
-  const left = Math.round((areaWidth - width) / 2 + t.dx)
-  const top = Math.round((areaHeight - height) / 2 + t.dy)
+  // Clamp to valid range — Printful returns "Internal Server Error" for negative
+  // left/top or for positions that extend beyond the print area.
+  const rawLeft = Math.round((areaWidth - width) / 2 + t.dx)
+  const rawTop = Math.round((areaHeight - height) / 2 + t.dy)
+  const left = Math.max(0, Math.min(areaWidth - 1, rawLeft))
+  const top = Math.max(0, Math.min(areaHeight - 1, rawTop))
+  // If image was shifted so part extends beyond the right/bottom edge, trim the width/height
+  const clampedWidth = Math.max(1, Math.min(width, areaWidth - left))
+  const clampedHeight = Math.max(1, Math.min(height, areaHeight - top))
   return {
     area_width: areaWidth,
     area_height: areaHeight,
-    width,
-    height,
+    width: clampedWidth,
+    height: clampedHeight,
     top,
     left,
   }
