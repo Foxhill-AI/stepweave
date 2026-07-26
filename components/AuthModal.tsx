@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import Modal from './ui/Modal'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
+import { consumeAuthReturnTo } from '@/lib/authReturnTo'
 import '../styles/SignUpModal.css'
 
 type AuthView = 'login' | 'signup' | 'forgotPassword'
@@ -97,6 +98,14 @@ export default function AuthModal({
     }
   }
 
+  const finishAuthAndGo = () => {
+    handleClose()
+    if (typeof window === 'undefined') return
+    const fallback = `${window.location.pathname}${window.location.search}` || '/'
+    const dest = consumeAuthReturnTo(fallback)
+    window.location.assign(dest)
+  }
+
   const handleSocialAuth = async (provider: 'google' | 'facebook') => {
     if (!isSupabaseConfigured) {
       setError('Supabase URL is not configured. Set NEXT_PUBLIC_SUPABASE_URL in your host (e.g. Vercel) and redeploy.')
@@ -123,7 +132,7 @@ export default function AuthModal({
         setError('Login misconfigured: Supabase URL missing. Set NEXT_PUBLIC_SUPABASE_URL and redeploy.')
         return
       }
-      handleClose()
+      finishAuthAndGo()
     } finally {
       setIsLoading(false)
     }
@@ -145,8 +154,7 @@ export default function AuthModal({
         setError(data?.error ?? (res.status === 401 ? 'Invalid email or password.' : 'Sign in failed.'))
         return
       }
-      handleClose()
-      if (typeof window !== 'undefined') window.location.reload()
+      finishAuthAndGo()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed.')
     } finally {
@@ -215,8 +223,7 @@ export default function AuthModal({
           return
         }
       }
-      handleClose()
-      if (typeof window !== 'undefined') window.location.reload()
+      finishAuthAndGo()
     } finally {
       setIsLoading(false)
     }

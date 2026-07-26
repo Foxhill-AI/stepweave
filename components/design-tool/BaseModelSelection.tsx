@@ -1,23 +1,54 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { createDesignDraft } from '@/lib/supabaseClient'
+import { setAuthReturnTo } from '@/lib/authReturnTo'
 import type { PrintfulShoeProduct } from '@/app/api/printful/products/route'
 import '../../styles/DesignTool.css'
 
 const PENDING_SELECTION_KEY = 'design-tool-pending-selection'
 
+type PendingSelection = {
+  modelId: string
+  structuralColor: 'white' | 'black'
+}
+
+function readPendingSelection(): PendingSelection | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_SELECTION_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { modelId?: string; structuralColor?: 'white' | 'black' }
+    if (!parsed.modelId) return null
+    const structuralColor =
+      parsed.structuralColor === 'black' || parsed.structuralColor === 'white'
+        ? parsed.structuralColor
+        : 'white'
+    return { modelId: parsed.modelId, structuralColor }
+  } catch {
+    return null
+  }
+}
+
+function clearPendingSelection() {
+  try {
+    sessionStorage.removeItem(PENDING_SELECTION_KEY)
+  } catch {
+    // ignore
+  }
+}
+
 export default function BaseModelSelection() {
   const router = useRouter()
-  const { userAccount } = useAuth()
+  const { userAccount, loading: authLoading } = useAuth()
   const [products, setProducts] = useState<PrintfulShoeProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
   const [structuralColor, setStructuralColor] = useState<'white' | 'black'>('white')
   const [continueLoading, setContinueLoading] = useState(false)
+  const resumeStarted = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -42,27 +73,79 @@ export default function BaseModelSelection() {
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
+  // Restore pending shoe choice after login (UI selection).
   useEffect(() => {
     if (loading || products.length === 0) return
-    try {
-      const raw = typeof window !== 'undefined' ? sessionStorage.getItem(PENDING_SELECTION_KEY) : null
-      if (!raw) return
-      const parsed = JSON.parse(raw) as { modelId?: string; structuralColor?: 'white' | 'black' }
-      const modelId = parsed?.modelId
-      const color = parsed?.structuralColor
-      if (modelId && products.some((p) => p.id === modelId)) {
-        setSelectedModelId(modelId)
-        if (color === 'white' || color === 'black') setStructuralColor(color)
-      }
-    } catch {
-      // ignore invalid stored data
-    } finally {
-      if (typeof window !== 'undefined') sessionStorage.removeItem(PENDING_SELECTION_KEY)
+    const pending = readPendingSelection()
+    if (!pending) return
+    if (products.some((p) => p.id === pending.modelId)) {
+      setSelectedModelId(pending.modelId)
+      setStructuralColor(pending.structuralColor)
     }
   }, [loading, products])
+
+  const createDraftAndGo = useCallback(
+    async (modelId: string, color: 'white' | 'black', accountId: number) => {
+      setContinueLoading(true)
+      setError(null)
+      try {
+        let designState: Record<string, unknown> = {}
+        try {
+          const pr = await fetch(`/api/printful/products/${encodeURIComponent(modelId)}`)
+          if (pr.ok) {
+            const body = (await pr.json()) as {
+              variants?: Array<{ id: number; color?: string }>
+            }
+            const vars = body.variants ?? []
+            const want = color === 'white' ? 'white' : 'black'
+            const match = vars.find((v) => (v.color ?? '').toLowerCase() === want)
+            const vid = match?.id ?? vars[0]?.id
+            if (vid != null) designState = { printful_variant_id: vid }
+          }
+        } catch {
+          // continue without variant id; mockup API will use first variant
+        }
+
+        const result = await createDesignDraft(accountId, {
+          base_model_id: modelId,
+          base_model_provider: 'printful',
+          structural_color: color,
+          pattern_source_type: 'ai_generated',
+          design_state: designState,
+        })
+        if (result?.id) {
+          clearPendingSelection()
+          router.push(`/design-tool/${result.id}`)
+          return
+        }
+        setError('Could not create draft. Please try again.')
+      } catch {
+        setError('Something went wrong. Please try again.')
+      } finally {
+        setContinueLoading(false)
+      }
+    },
+    [router]
+  )
+
+  // After login, automatically continue creating the draft from the pending selection.
+  useEffect(() => {
+    if (authLoading || loading || products.length === 0) return
+    if (!userAccount?.id || resumeStarted.current) return
+    const pending = readPendingSelection()
+    if (!pending) return
+    if (!products.some((p) => p.id === pending.modelId)) {
+      clearPendingSelection()
+      return
+    }
+    resumeStarted.current = true
+    void createDraftAndGo(pending.modelId, pending.structuralColor, userAccount.id)
+  }, [authLoading, loading, products, userAccount, createDraftAndGo])
 
   const handleContinue = async () => {
     if (!selectedModelId) return
@@ -76,50 +159,12 @@ export default function BaseModelSelection() {
       } catch {
         // ignore storage errors
       }
-      router.push('/design-tool?openAuth=1')
+      setAuthReturnTo('/design-tool/new')
+      router.push('/design-tool/new?openAuth=1')
       return
     }
 
-    setContinueLoading(true)
-    setError(null)
-    try {
-      let designState: Record<string, unknown> = {}
-      try {
-        const pr = await fetch(`/api/printful/products/${encodeURIComponent(selectedModelId)}`)
-        if (pr.ok) {
-          const body = (await pr.json()) as {
-            variants?: Array<{ id: number; color?: string }>
-          }
-          const vars = body.variants ?? []
-          const want =
-            structuralColor === 'white' ? 'white' : 'black'
-          const match = vars.find(
-            (v) => (v.color ?? '').toLowerCase() === want
-          )
-          const vid = match?.id ?? vars[0]?.id
-          if (vid != null) designState = { printful_variant_id: vid }
-        }
-      } catch {
-        // continue without variant id; mockup API will use first variant
-      }
-
-      const result = await createDesignDraft(userAccount.id, {
-        base_model_id: selectedModelId,
-        base_model_provider: 'printful',
-        structural_color: structuralColor,
-        pattern_source_type: 'ai_generated',
-        design_state: designState,
-      })
-      if (result?.id) {
-        router.push(`/design-tool/${result.id}`)
-        return
-      }
-      setError('Could not create draft. Please try again.')
-    } catch {
-      setError('Something went wrong. Please try again.')
-    } finally {
-      setContinueLoading(false)
-    }
+    await createDraftAndGo(selectedModelId, structuralColor, userAccount.id)
   }
 
   return (
@@ -171,11 +216,11 @@ export default function BaseModelSelection() {
                     )}
                   </span>
                   <span className="base-model-card-name">{p.name}</span>
-                  {p.brand && (
-                    <span className="base-model-card-brand">{p.brand}</span>
-                  )}
+                  {p.brand && <span className="base-model-card-brand">{p.brand}</span>}
                   {selectedModelId === p.id && (
-                    <span className="base-model-card-selected-badge" aria-hidden="true">✓</span>
+                    <span className="base-model-card-selected-badge" aria-hidden="true">
+                      ✓
+                    </span>
                   )}
                 </button>
               ))}
@@ -183,9 +228,7 @@ export default function BaseModelSelection() {
 
             <div className="base-model-color-section">
               <p className="base-model-color-section-title">Structural color</p>
-              <p className="base-model-color-hint">
-                Laces, sole, and inside of the shoe
-              </p>
+              <p className="base-model-color-hint">Laces, sole, and inside of the shoe</p>
               <div className="base-model-color-cards" role="radiogroup" aria-label="Structural color">
                 {(['white', 'black'] as const).map((color) => (
                   <label
@@ -209,7 +252,9 @@ export default function BaseModelSelection() {
                       {color === 'white' ? 'White' : 'Black'}
                     </span>
                     {structuralColor === color && (
-                      <span className="base-model-color-card-check" aria-hidden="true">✓</span>
+                      <span className="base-model-color-card-check" aria-hidden="true">
+                        ✓
+                      </span>
                     )}
                   </label>
                 ))}
@@ -221,7 +266,7 @@ export default function BaseModelSelection() {
                 type="button"
                 className="design-tool-btn design-tool-btn-publish base-model-continue-btn"
                 disabled={!selectedModelId || continueLoading}
-                onClick={handleContinue}
+                onClick={() => void handleContinue()}
               >
                 {continueLoading ? 'Creating…' : 'Continue'}
               </button>

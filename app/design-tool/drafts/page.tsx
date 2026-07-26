@@ -11,6 +11,7 @@ import {
   getDesignDraftsByUser,
   type DesignDraftRow,
 } from '@/lib/supabaseClient'
+import { setAuthReturnTo } from '@/lib/authReturnTo'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -74,7 +75,8 @@ export default function DesignToolDraftsRoute() {
   useEffect(() => {
     if (authLoading) return
     if (!user) {
-      router.replace('/design-tool')
+      setAuthReturnTo('/design-tool/drafts')
+      router.replace('/design-tool/drafts?openAuth=1')
       return
     }
     let cancelled = false
@@ -87,7 +89,9 @@ export default function DesignToolDraftsRoute() {
         }
       })
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [user, authLoading, router])
 
   return (

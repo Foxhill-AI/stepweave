@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { consumeAuthReturnTo } from '@/lib/authReturnTo'
 
 // Guard at module scope so only one exchange runs per page load (survives Strict Mode remount).
 let authExchangeStarted = false
@@ -13,10 +14,14 @@ function AuthCallbackInner() {
   const [message, setMessage] = useState<string>('Signing you in…')
 
   useEffect(() => {
+    const goAfterAuth = () => {
+      const dest = consumeAuthReturnTo('/')
+      router.replace(dest)
+    }
+
     const code = searchParams.get('code')
     const errorParam = searchParams.get('error')
     const errorDescription = searchParams.get('error_description')
-    const hash = typeof window !== 'undefined' ? window.location.hash : ''
 
     if (errorParam) {
       setMessage(errorDescription || errorParam || 'Sign-in failed.')
@@ -26,7 +31,7 @@ function AuthCallbackInner() {
 
     if (code) {
       if (authExchangeStarted) {
-        router.replace('/')
+        goAfterAuth()
         return
       }
       authExchangeStarted = true
@@ -45,21 +50,17 @@ function AuthCallbackInner() {
         .then(() => {
           if (cancelled) return
           let fallbackId: ReturnType<typeof setTimeout> | null = null
-          const goHome = () => {
+          const go = () => {
             if (cancelled) return
             cancelled = true
             clearTimeout(timeoutId)
             if (fallbackId != null) clearTimeout(fallbackId)
-            // Use replace only — router.refresh() was resetting AuthProvider's client state
-            // (userAccount → null) right after fetchUserAccount had correctly set it.
-            // Auth cookies are already in the browser from exchangeCodeForSession, so
-            // server components will read them correctly on the next client-side navigation.
-            router.replace('/')
+            goAfterAuth()
           }
           if (typeof window !== 'undefined') {
-            window.addEventListener('auth-ready', goHome, { once: true })
+            window.addEventListener('auth-ready', go, { once: true })
           }
-          fallbackId = setTimeout(goHome, 3000)
+          fallbackId = setTimeout(go, 3000)
         })
         .catch((err) => {
           if (cancelled) return
@@ -85,12 +86,12 @@ function AuthCallbackInner() {
         return () => clearTimeout(t)
       }
       setMessage('Confirming your email…')
-      const t = setTimeout(() => router.replace('/'), 2000)
+      const t = setTimeout(() => goAfterAuth(), 2000)
       return () => clearTimeout(t)
     }
 
     setMessage('Redirecting…')
-    router.replace('/')
+    goAfterAuth()
   }, [searchParams, router])
 
   return (
