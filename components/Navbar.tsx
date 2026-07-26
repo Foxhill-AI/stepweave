@@ -18,6 +18,7 @@ import ProfileDropdown from './ProfileDropdown'
 import { useAuth } from '@/components/AuthProvider'
 import { getCartItemCount, getNotificationsForUser } from '@/lib/supabaseClient'
 import { isBlogEnabled } from '@/lib/blogConfig'
+import { setAuthReturnTo } from '@/lib/authReturnTo'
 import type { UserNotificationRow } from '@/lib/supabaseClient'
 import NavbarBrandShoeIcon from './NavbarBrandShoeIcon'
 import '../styles/Navbar.css'
@@ -127,19 +128,21 @@ function NavbarInner(_props?: NavbarProps) {
     setAuthModalOpen(true)
   }
 
+  const openDesignToolAuth = () => {
+    setAuthReturnTo('/design-tool')
+    openAuthModal('login')
+  }
+
   useEffect(() => {
     const openAuth = searchParams.get('openAuth')
-    if (openAuth === '1') {
-      openAuthModal('login')
+    if (openAuth === '1' || openAuth === 'signup') {
       const next = new URLSearchParams(searchParams.toString())
       next.delete('openAuth')
       const q = next.toString()
-      router.replace(pathname + (q ? `?${q}` : ''), { scroll: false })
-    } else if (openAuth === 'signup') {
-      openAuthModal('signup')
-      const next = new URLSearchParams(searchParams.toString())
-      next.delete('openAuth')
-      const q = next.toString()
+      const returnPath = pathname + (q ? `?${q}` : '')
+      // Keep an earlier explicit return (e.g. from Design Tool button) if already set.
+      setAuthReturnTo(returnPath, { onlyIfEmpty: true })
+      openAuthModal(openAuth === 'signup' ? 'signup' : 'login')
       router.replace(pathname + (q ? `?${q}` : ''), { scroll: false })
     }
   }, [searchParams, pathname, router])
@@ -196,10 +199,21 @@ function NavbarInner(_props?: NavbarProps) {
         </div>
         
         <div className="navbar-actions">
-          <Link href="/design-tool" className="navbar-button-design-tool">
-            <Palette size={18} aria-hidden />
-            <span>Design Tool</span>
-          </Link>
+          {isLoggedIn ? (
+            <Link href="/design-tool" className="navbar-button-design-tool">
+              <Palette size={18} aria-hidden />
+              <span>Design Tool</span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="navbar-button-design-tool"
+              onClick={openDesignToolAuth}
+            >
+              <Palette size={18} aria-hidden />
+              <span>Design Tool</span>
+            </button>
+          )}
           {isLoggedIn ? (
             <>
               <div className="navbar-notifications-wrapper">
@@ -364,13 +378,26 @@ function NavbarInner(_props?: NavbarProps) {
               Pricing
             </Link>
           )}
-          <Link
-            href="/design-tool"
-            className={`navbar-mobile-link navbar-mobile-button ${isActive('/design-tool') ? 'navbar-mobile-link-active' : ''}`}
-            onClick={toggleMobileMenu}
-          >
-            Design Tool
-          </Link>
+          {isLoggedIn ? (
+            <Link
+              href="/design-tool"
+              className={`navbar-mobile-link navbar-mobile-button ${isActive('/design-tool') ? 'navbar-mobile-link-active' : ''}`}
+              onClick={toggleMobileMenu}
+            >
+              Design Tool
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className={`navbar-mobile-link navbar-mobile-button ${isActive('/design-tool') ? 'navbar-mobile-link-active' : ''}`}
+              onClick={() => {
+                toggleMobileMenu()
+                openDesignToolAuth()
+              }}
+            >
+              Design Tool
+            </button>
+          )}
           {isLoggedIn ? (
             <>
               <Link
