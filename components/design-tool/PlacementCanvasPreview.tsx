@@ -211,7 +211,20 @@ export default function PlacementCanvasPreview({
     (e: React.PointerEvent, layer: ResolvedPlacementLayer) => {
       stageRef.current?.focus({ preventScroll: true })
       if (disabled) return
-      if (layer.id === effectiveSelectedIdRef.current) return
+      if (layer.id === effectiveSelectedIdRef.current) {
+        // Already selected — check if there's a different layer underneath.
+        // If so, select that layer instead (lets users click through stacked layers).
+        const elements = document.elementsFromPoint(e.clientX, e.clientY)
+        const belowEl = elements.find((el) => {
+          const id = (el as HTMLElement).dataset?.layerId
+          return id && id !== layer.id
+        }) as HTMLElement | undefined
+        if (belowEl?.dataset?.layerId) {
+          e.stopPropagation()
+          onLayerSelect?.(belowEl.dataset.layerId)
+        }
+        return
+      }
       e.stopPropagation()
       onLayerSelect?.(layer.id)
     },
@@ -372,7 +385,11 @@ export default function PlacementCanvasPreview({
         data-disabled={disabled ? 'true' : undefined}
         tabIndex={disabled ? undefined : 0}
         onPointerDown={(e) => {
-          if (e.target === e.currentTarget) e.currentTarget.focus({ preventScroll: true })
+          if (e.target === e.currentTarget) {
+            e.currentTarget.focus({ preventScroll: true })
+            // Click on empty canvas → deselect current layer
+            if (!disabled && effectiveSelectedId) onLayerSelect?.('')
+          }
         }}
       >
         {layers.length === 0 && (
@@ -445,6 +462,7 @@ export default function PlacementCanvasPreview({
                 className={`placement-canvas-text-target placement-canvas-text${
                   isSelected ? ' placement-canvas-art--selected' : ''
                 }`}
+                data-layer-id={layer.id}
                 style={{
                   position: 'absolute',
                   left: leftPrint * ds,
@@ -504,6 +522,7 @@ export default function PlacementCanvasPreview({
               className={`placement-canvas-art-target placement-canvas-art${
                 isSelected ? ' placement-canvas-art--selected' : ''
               }${tileRepeat ? ' placement-canvas-art--repeat' : ''}`}
+              data-layer-id={layer.id}
               style={{
                 position: 'absolute',
                 left: leftPrint * ds,

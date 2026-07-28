@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, type MutableRefObject } from 'react'
-import { Upload, X } from 'lucide-react'
+import { Upload, X, Type } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { buildStandardMockupGallery } from '@/lib/productMockups/canonicalViews'
 import ShoeDesignEditor from './ShoeDesignEditor'
@@ -372,7 +372,7 @@ export default function PreviewWorkspace({
         aria-hidden
       />
 
-      {/* No image: upload hero */}
+      {/* No image: upload hero — with optional text-add shortcut */}
       {!hasImage && !uploading && !showTextPanel && (
         <div
           className={`preview-upload-hero${isDragging ? ' preview-upload-hero--dragging' : ''}`}
@@ -400,6 +400,18 @@ export default function PreviewWorkspace({
           <span className="preview-upload-hero-meta">
             JPG, PNG, WebP · max {MAX_SIZE_MB} MB
           </span>
+          {onAddTextLayer && (
+            <button
+              type="button"
+              className="preview-upload-hero-text-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowTextPanel(true)
+              }}
+            >
+              <Type size={14} aria-hidden /> Or add text only
+            </button>
+          )}
         </div>
       )}
 
@@ -413,7 +425,8 @@ export default function PreviewWorkspace({
       {/* Placement picker: shown after upload when multiple placements exist */}
       {pendingUpload && (
         <div className="preview-text-panel preview-placement-picker">
-          <p className="preview-placement-picker-title">Add image to which views?</p>
+          <fieldset className="preview-placement-picker-fieldset">
+          <legend className="preview-placement-picker-title">Add image to which views?</legend>
           <div className="preview-placement-picker-options">
             {editableTemplateRows.map((row) => (
               <label key={row.placement} className="preview-placement-picker-option">
@@ -433,6 +446,7 @@ export default function PreviewWorkspace({
               </label>
             ))}
           </div>
+          </fieldset>
           <div className="preview-text-panel-actions">
             <button
               type="button"
@@ -495,7 +509,7 @@ export default function PreviewWorkspace({
                     className="preview-image-bar-btn"
                     onClick={() => setShowTextPanel((v) => !v)}
                   >
-                    T Add text
+                    <Type size={13} aria-hidden /> Add text
                   </button>
                 )}
                 <button
@@ -559,8 +573,8 @@ export default function PreviewWorkspace({
         </div>
       )}
 
-      {/* Text layer add panel */}
-      {showTextPanel && onAddTextLayer && viewMode === 'canvas' && !brandingLocked && (
+      {/* Text layer add panel — visible with or without an image */}
+      {showTextPanel && onAddTextLayer && (viewMode === 'canvas' || !hasImage) && !brandingLocked && (
         <div className="preview-text-panel">
           <input
             type="text"
@@ -674,15 +688,22 @@ export default function PreviewWorkspace({
               })}
             </div>
             {onRefreshPrintfulPreview && (
-              <button
-                type="button"
-                className="preview-canvas-header-preview-btn"
-                onClick={() => void handlePreviewClick()}
-                disabled={previewLoading || !hasPatternImage}
-                title={!hasPatternImage ? 'Add a pattern first' : undefined}
-              >
-                {previewLoading ? 'Generating…' : hasMockups && !isDirty ? 'Preview →' : 'Preview →'}
-              </button>
+              <div className="preview-canvas-header-preview-wrap">
+                <button
+                  type="button"
+                  className="preview-canvas-header-preview-btn"
+                  onClick={() => void handlePreviewClick()}
+                  disabled={previewLoading || !hasPatternImage}
+                  title={!hasPatternImage ? 'Add a pattern first' : undefined}
+                >
+                  {previewLoading ? 'Generating…' : 'Preview →'}
+                </button>
+                {!hasPatternImage && (
+                  <span className="preview-canvas-header-preview-hint" aria-live="polite">
+                    Add an image first
+                  </span>
+                )}
+              </div>
             )}
           </div>
           <ShoeDesignEditor
