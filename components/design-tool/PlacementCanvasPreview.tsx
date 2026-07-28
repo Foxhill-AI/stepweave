@@ -181,6 +181,17 @@ export default function PlacementCanvasPreview({
     return () => el.removeEventListener('wheel', handler)
   }, [disabled, areaWidth, areaHeight])
 
+  // Map each layer id → its natural stack index (0=back, n-1=front).
+  // Used to assign z-index so higher-stack layers are always clickable,
+  // even when a lower-stack layer is selected.
+  const layerIndexById = useMemo(() => {
+    const m = new Map<string, number>()
+    layers.forEach((l, i) => m.set(l.id, i))
+    return m
+  }, [layers])
+
+  // Render selected layer last so Moveable's ref stays attached to the right element.
+  // Z-index (not DOM order) is what controls click priority for non-selected layers.
   const orderedLayers = useMemo(() => {
     if (!effectiveSelectedId) return layers
     return [
@@ -396,7 +407,7 @@ export default function PlacementCanvasPreview({
                 backgroundPosition: `${leftPrint * ds}px ${topPrint * ds}px`,
                 opacity: op,
                 pointerEvents: 'none',
-                zIndex: 1,
+                zIndex: (layerIndexById.get(layer.id) ?? 0) * 2 + 1,
               }}
             />
           )
@@ -414,6 +425,10 @@ export default function PlacementCanvasPreview({
               : 1
           const op = isSelected ? baseOp : baseOp * 0.85
           const pointerPassthrough = isSelected && !disabled ? 'none' as const : undefined
+          // z-index: each layer gets 2× its natural stack index so selected (+1) never
+          // rises above a layer that is naturally higher in the stack.
+          const stackIdx = layerIndexById.get(layer.id) ?? 0
+          const stackZ = (stackIdx + 1) * 2 + (isSelected ? 1 : 0)
 
           if (isTextLayer(layer)) {
             const td = clampTextLayerDxDy(areaWidth, areaHeight, layer)
@@ -438,7 +453,7 @@ export default function PlacementCanvasPreview({
                   height: th * ds,
                   transform: `rotate(${rot}deg) scaleX(${fh}) scaleY(${fv})`,
                   transformOrigin: 'center center',
-                  zIndex: isSelected ? 2 : 1,
+                  zIndex: stackZ,
                   cursor: disabled ? 'default' : isSelected ? 'move' : 'pointer',
                   userSelect: 'none',
                   opacity: op,
@@ -497,7 +512,7 @@ export default function PlacementCanvasPreview({
                 height: ih * ds,
                 transform: `rotate(${rot}deg) scaleX(${fh}) scaleY(${fv})`,
                 transformOrigin: 'center center',
-                zIndex: tileRepeat ? 2 : isSelected ? 2 : 1,
+                zIndex: tileRepeat ? (layers.length + 1) * 2 : stackZ,
                 cursor: disabled ? 'default' : isSelected ? 'move' : 'pointer',
                 opacity: tileRepeat && !isSelected ? 0 : op,
               }}
