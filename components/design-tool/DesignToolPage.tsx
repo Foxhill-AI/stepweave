@@ -110,7 +110,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   const designDataRef = useRef(designData)
   designDataRef.current = designData
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [isFlowModalOpen, setIsFlowModalOpen] = useState(false)
 
   // Auto-open modal on publish step when coming from the post-purchase confirmation page.
@@ -331,7 +331,10 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
           setAutoSaveState(ok ? 'saved' : 'idle')
           if (ok) setTimeout(() => setAutoSaveState('idle'), 2000)
         })
-        .catch(() => setAutoSaveState('idle'))
+        .catch(() => {
+          setAutoSaveState('error')
+          setTimeout(() => setAutoSaveState('idle'), 4000)
+        })
     }, 2000)
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
@@ -736,8 +739,11 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
           </button>
         )}
         {autoSaveState !== 'idle' && (
-          <span className="design-tool-autosave" aria-live="polite">
-            {autoSaveState === 'saving' ? 'Saving…' : 'Saved ✓'}
+          <span
+            className={`design-tool-autosave${autoSaveState === 'error' ? ' design-tool-autosave--error' : ''}`}
+            aria-live="polite"
+          >
+            {autoSaveState === 'saving' ? 'Saving…' : autoSaveState === 'error' ? 'Save failed — check connection' : 'Saved ✓'}
           </span>
         )}
       </div>

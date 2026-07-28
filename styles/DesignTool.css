@@ -2430,6 +2430,24 @@
   margin-top: var(--spacing-xs);
 }
 
+.preview-upload-hero-text-btn {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.8125rem;
+  color: var(--color-primary);
+  background: transparent;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.preview-upload-hero-text-btn:hover {
+  background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.06);
+}
+
 /* ─── PreviewWorkspace: compact image bar ───────────────────────────────── */
 
 .preview-image-bar {
@@ -2611,6 +2629,11 @@
   flex-shrink: 0;
   min-width: 60px;
   text-align: right;
+}
+
+.design-tool-autosave--error {
+  color: #c0392b;
+  font-weight: 500;
 }
 
 /* ─── Create product slide-over drawer ──────────────────────────────────── */
@@ -3317,6 +3340,25 @@
 .preview-canvas-header-preview-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.preview-canvas-header-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.preview-canvas-header-preview-hint {
+  font-size: 0.7rem;
+  color: var(--color-text-light);
+  opacity: 0.8;
+}
+
+.preview-placement-picker-fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
 }
 
 .preview-canvas-header-back-btn {

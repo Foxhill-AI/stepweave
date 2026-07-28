@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import '../../styles/Modal.css'
 
@@ -19,6 +20,12 @@ export default function Modal({
   children,
   className = '',
 }: ModalProps) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -47,9 +54,9 @@ export default function Modal({
     }
   }, [isOpen, onClose])
 
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
 
-  return (
+  const content = (
     <div className="modal-overlay" onClick={onClose}>
       <div
         className={`modal-content ${className}`}
@@ -85,4 +92,6 @@ export default function Modal({
       </div>
     </div>
   )
+
+  return createPortal(content, document.body)
 }
