@@ -17,6 +17,7 @@ import {
   PRINTFUL_BASE,
   type MockupResult,
   type PrintfulPrintfilesResult,
+  type CreateMockupTaskOptions,
 } from '@/lib/printful/mockupTask'
 import {
   buildMockupFileEntries,
@@ -47,6 +48,27 @@ import { viewHintFromPrintfulUrl } from '@/lib/productMockups/canonicalViews'
 export const maxDuration = 300
 
 const BUCKET = 'design-patterns'
+
+// ── In-process branding URL cache ──────────────────────────────────────────────
+// The Step Weave mark URL is stable between deploys. Cache it per function instance
+// to avoid a HEAD request (or full Printful file-library round-trip) on every preview call.
+let _brandingUrlCache: string | null = null
+let _brandingUrlCacheExpiresAt = 0
+const BRANDING_CACHE_TTL_MS = 23 * 60 * 60 * 1000 // 23 hours
+
+async function getCachedBrandingUrl(
+  admin: Parameters<typeof resolveFixedBrandingUrlForPrintful>[0]
+): Promise<string | null> {
+  if (_brandingUrlCache && Date.now() < _brandingUrlCacheExpiresAt) {
+    return _brandingUrlCache
+  }
+  const url = await resolveFixedBrandingUrlForPrintful(admin)
+  if (url) {
+    _brandingUrlCache = url
+    _brandingUrlCacheExpiresAt = Date.now() + BRANDING_CACHE_TTL_MS
+  }
+  return url
+}
 /** Long enough for Printful to fetch the pattern image during mockup generation */
 const SIGNED_URL_FOR_PRINTFUL_SEC = 7200
 
@@ -247,6 +269,9 @@ export async function POST(
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
+
+  // Fire branding URL resolution immediately so it can run in parallel with compositing below.
+  const brandingUrlPromise = getCachedBrandingUrl(admin)
 
   // Collect all unique paths that need to be signed (image layers only — text layers have no path)
   const pathsToSign = new Set<string>()
@@ -533,37 +558,8 @@ export async function POST(
     imageUrlByPlacement,
     defaultImageUrl,
     placementTransforms: finalTransforms,
-    fixedBrandingImageUrl: await resolveFixedBrandingUrlForPrintful(admin),
+    fixedBrandingImageUrl: await brandingUrlPromise,
   })
-
-  // Pre-flight: HEAD-request each file URL so we know which one Printful would fail on.
-  // This runs in parallel and does not block task creation — it just logs + returns diagnostics.
-  const preflightResults = await Promise.all(
-    files.map(async (f) => {
-      try {
-        const r = await fetch(f.image_url, { method: 'HEAD', signal: AbortSignal.timeout(8000) })
-        return { placement: f.placement, status: r.status, ok: r.ok, urlPrefix: f.image_url.slice(0, 120) }
-      } catch (e) {
-        return { placement: f.placement, status: 0, ok: false, error: String(e), urlPrefix: f.image_url.slice(0, 120) }
-      }
-    })
-  )
-  const preflightFailed = preflightResults.filter((r) => !r.ok)
-  if (preflightFailed.length > 0) {
-    console.error('[preview-mockups] pre-flight URL check FAILED for', preflightFailed)
-  } else {
-    console.log('[preview-mockups] pre-flight URL check passed for all', preflightResults.length, 'files')
-  }
-
-  console.log(
-    '[preview-mockups] files',
-    files.map((f) => ({
-      placement: f.placement,
-      urlPresent: f.image_url.trim().length > 0,
-      urlLength: f.image_url.length,
-      position: f.position,
-    }))
-  )
 
   if (files.length === 0) {
     return NextResponse.json({
@@ -587,15 +583,48 @@ export async function POST(
     )
   }
 
-  let batch: Awaited<ReturnType<typeof createTaskAndPoll>>
-  /** Extra Printful tasks — one per missing canonical view (batched options fail on some shoe types). */
-  const extraViewTasks: Array<{ requestedView: string; mockups: MockupResult[] }> = []
-  try {
-    batch = await createTaskAndPoll(productId, variantId, files, headers)
+  // Build extra view task specs from Printful's available options/option_groups.
+  // We determine these upfront (before calling Printful) so we can submit ALL tasks
+  // in parallel with the main task, eliminating a full extra Printful polling cycle.
+  const athleticLayout = isAthleticShoeLayout(placementKeys)
+  const productOptionGroups = printfilesResult.option_groups ?? []
+  const productOptions = printfilesResult.options ?? []
 
-    // Default task often returns only Front (or duplicates the same URL on every
-    // placement). Request each missing Top/Left/Right/Back view in its own task —
-    // Printful rejects batched options on athletic shoes and drops Back when mixed.
+  type ExtraViewSpec = { view: string; taskOptions: CreateMockupTaskOptions }
+  const extraViewSpecs: ExtraViewSpec[] = []
+  if (athleticLayout) {
+    for (const { view, groups } of ATHLETIC_VIEW_OPTION_GROUPS) {
+      const groupName = groups.find((g) => productOptionGroups.includes(g))
+      if (groupName) extraViewSpecs.push({ view, taskOptions: { option_groups: [groupName] } })
+    }
+  } else {
+    for (const { view, names } of VIEW_OPTION_CANDIDATES) {
+      const optionName = names.find((n) => productOptions.includes(n))
+      if (optionName) extraViewSpecs.push({ view, taskOptions: { options: [optionName] } })
+    }
+  }
+
+  let batch: Awaited<ReturnType<typeof createTaskAndPoll>>
+  const extraViewTasks: Array<{ requestedView: string; mockups: MockupResult[] }> = []
+
+  try {
+    // Submit main task + all extra view tasks simultaneously.
+    // Previously serial: main task → wait → extra tasks (doubled total polling time).
+    // Now parallel: all tasks start at once; total time = max(slowest task) not sum.
+    const [mainResult, ...rawExtraResults] = await Promise.all([
+      createTaskAndPoll(productId, variantId, files, headers),
+      ...extraViewSpecs.map(({ view, taskOptions }) =>
+        createTaskAndPoll(productId, variantId, files, headers, taskOptions)
+          .then((result) => ({ view, result }))
+          .catch((err: unknown) => {
+            console.warn('[preview-mockups] extra view task error', { view, err: String(err) })
+            return null
+          })
+      ),
+    ])
+
+    batch = mainResult
+
     if (batch.ok) {
       const presentViews = new Set<string>()
       const noteViewsFromMockups = (mockups: MockupResult[]) => {
@@ -611,74 +640,21 @@ export async function POST(
       }
       noteViewsFromMockups(batch.mockups)
 
-      const athleticLayout = isAthleticShoeLayout(placementKeys)
       if (athleticLayout && presentViews.has('front')) {
         // Gallery uses front as the top slot when no true top-down shot exists.
         presentViews.add('top')
       }
 
-      if (athleticLayout) {
-        const productOptionGroups = printfilesResult.option_groups ?? []
-        const viewsToFetch = ATHLETIC_VIEW_OPTION_GROUPS
-          .filter(({ view, groups }) => {
-            if (presentViews.has(view)) return false
-            return groups.some((g) => productOptionGroups.includes(g))
-          })
-
-        const athleticResults = await Promise.all(
-          viewsToFetch.map(async ({ view, groups }) => {
-            const groupName = groups.find((g) => productOptionGroups.includes(g))!
-            const viewBatch = await createTaskAndPoll(productId, variantId, files, headers, {
-              option_groups: [groupName],
-            })
-            if (!viewBatch.ok) {
-              console.warn('[preview-mockups] athletic view task failed', {
-                view,
-                groupName,
-                reason: viewBatch.reason,
-              })
-              return null
-            }
-            return { requestedView: view, mockups: viewBatch.mockups }
-          })
-        )
-        for (const result of athleticResults) {
-          if (!result) continue
-          noteViewsFromMockups(result.mockups)
-          presentViews.add(result.requestedView)
-          extraViewTasks.push(result)
+      for (const item of rawExtraResults) {
+        if (!item) continue
+        const { view, result } = item
+        if (!result.ok) {
+          console.warn('[preview-mockups] extra view task failed', { view, reason: result.reason })
+          continue
         }
-      } else {
-        const productOptions = printfilesResult.options ?? []
-        const viewsToFetch = VIEW_OPTION_CANDIDATES
-          .filter(({ view, names }) => {
-            if (presentViews.has(view)) return false
-            return names.some((n) => productOptions.includes(n))
-          })
-
-        const viewResults = await Promise.all(
-          viewsToFetch.map(async ({ view, names }) => {
-            const optionName = names.find((n) => productOptions.includes(n))!
-            const viewBatch = await createTaskAndPoll(productId, variantId, files, headers, {
-              options: [optionName],
-            })
-            if (!viewBatch.ok) {
-              console.warn('[preview-mockups] view task failed', {
-                view,
-                optionName,
-                reason: viewBatch.reason,
-              })
-              return null
-            }
-            return { requestedView: view, mockups: viewBatch.mockups }
-          })
-        )
-        for (const result of viewResults) {
-          if (!result) continue
-          noteViewsFromMockups(result.mockups)
-          presentViews.add(result.requestedView)
-          extraViewTasks.push(result)
-        }
+        noteViewsFromMockups(result.mockups)
+        presentViews.add(view)
+        extraViewTasks.push({ requestedView: view, mockups: result.mockups })
       }
     }
   } finally {
@@ -845,8 +821,5 @@ export async function POST(
     ...(mockupErrorReason ? { mockup_error: mockupErrorReason } : {}),
     ...(printfulErrorCode != null ? { printful_error_code: printfulErrorCode } : {}),
     ...(printfulErrorMessage ? { printful_error_message: printfulErrorMessage } : {}),
-    // Debug fields — preflight check + file positions (remove once root cause identified)
-    _debug_preflight: preflightResults,
-    _debug_files: files.map((f) => ({ placement: f.placement, position: f.position, urlPrefix: f.image_url.slice(0, 120) })),
   })
 }
