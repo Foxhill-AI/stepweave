@@ -246,12 +246,23 @@ export async function POST(
     }
   }
 
-  console.log('[preview-mockups]', {
+  // Log the full layer breakdown so we can diagnose whether text layers are visible
+  // to the server at read time (catches the auto-save race condition).
+  console.log('[preview-mockups] layer breakdown', {
     draftId,
     productId,
     variantId,
     globalPatternPath: globalPatternPath || null,
-    patternImagePlacements: Object.keys(perPlacementPaths),
+    perPlacementPaths: Object.fromEntries(
+      Object.entries(perPlacementPaths).map(([placement, layers]) => [
+        placement,
+        layers.map((l) => ({
+          id: l.id,
+          type: 'type' in l && l.type === 'text' ? 'text' : 'image',
+          ...(('type' in l && l.type === 'text') ? { text: (l as { text: string }).text } : { path: (l as { path: string }).path }),
+        })),
+      ])
+    ),
   })
 
   const placementTransforms = parsePrintfulPlacements(designState)
@@ -512,6 +523,17 @@ export async function POST(
             imageUrlByPlacement[placement] = fallbackUrlByPlacement[placement]
             compositeFallbackPlacements.add(placement)
             console.warn('[preview-mockups] using fallback direct URL after render error for', placement)
+          } else {
+            // No fallback available (e.g. text-only placement) — placement will be silently
+            // omitted from the Printful task. Text will not appear in the mockup.
+            console.error('[preview-mockups] composite render failed AND no fallback URL — placement will be DROPPED from mockup task', {
+              placement,
+              layers: perPlacementPaths[placement]?.map((l) => ({
+                type: 'type' in l && l.type === 'text' ? 'text' : 'image',
+                ...('type' in l && l.type === 'text' ? { text: (l as { text: string }).text } : {}),
+              })),
+              err: String(err),
+            })
           }
         }
       })
