@@ -367,10 +367,10 @@ export async function compositeLayersToBuffer(
     })
   )
 
-  return sharp({
+  const result = await sharp({
     create: {
-      width: areaWidth,
-      height: areaHeight,
+      width: Math.round(areaWidth),
+      height: Math.round(areaHeight),
       channels: 4,
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     },
@@ -378,4 +378,37 @@ export async function compositeLayersToBuffer(
     .composite(compositeInputs)
     .png()
     .toBuffer()
+
+  // Pixel-level diagnostic: verify text pixels survived the Sharp composite.
+  // Log RGBA at each text anchor so we can confirm alpha > 0 in production.
+  const textLayers = layers.filter((l): l is CompositeTextInput => l.kind === 'text')
+  if (textLayers.length > 0) {
+    try {
+      const { data: px, info } = await sharp(result).raw().toBuffer({ resolveWithObject: true })
+      for (const tl of textLayers) {
+        const cx = Math.max(0, Math.min(info.width - 1, Math.round(info.width / 2 + tl.dx)))
+        const cy = Math.max(0, Math.min(info.height - 1, Math.round(info.height / 2 + tl.dy)))
+        const off = (cy * info.width + cx) * info.channels
+        const rgba = [px[off], px[off + 1], px[off + 2], px[off + 3]]
+        // Also sample a small band of pixels around the anchor to catch slight offsets
+        const bandSamples: number[] = []
+        for (let bx = cx - 50; bx <= cx + 50; bx += 10) {
+          const bo = (cy * info.width + Math.max(0, Math.min(info.width - 1, bx))) * info.channels
+          bandSamples.push(px[bo + 3]) // alpha only
+        }
+        const maxAlphaInBand = Math.max(...bandSamples)
+        console.log('[compositeImages] text pixel check ' + JSON.stringify({
+          text: tl.text,
+          anchor: { cx, cy },
+          rgba,
+          maxAlphaInBand,
+          hasVisiblePixels: maxAlphaInBand > 0,
+        }))
+      }
+    } catch (diagErr) {
+      console.warn('[compositeImages] pixel check failed', String(diagErr))
+    }
+  }
+
+  return result
 }
