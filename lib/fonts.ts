@@ -88,7 +88,11 @@ export const FONTS: FontDefinition[] = [
     value: 'Impact',
     googleFamily: '',
     serverFamily: 'Impact, Charcoal, sans-serif',
-    serverCanvasFamily: null,
+    // Impact is a proprietary system font — no free TTF to bundle.
+    // Anton is the closest open-source equivalent (same condensed bold style).
+    // serverCanvasFontFile is null so registration is skipped (Anton already registered);
+    // serverCanvasFamily points at Anton's registered family so it renders correctly.
+    serverCanvasFamily: 'StepweaveAnton',
     serverCanvasFontFile: null,
   },
   {
