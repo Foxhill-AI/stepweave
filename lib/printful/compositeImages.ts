@@ -268,17 +268,29 @@ function renderTextToBuffer(areaWidth: number, areaHeight: number, input: Compos
     : notoKind === 'mono'
       ? 'StepweaveNotoMono'
       : 'StepweaveNotoSans'
-  const family = registeredFamilies.has(preferredFamily) ? preferredFamily : notoFamily
+  const preferredAvailable = registeredFamilies.has(preferredFamily)
+  const family = preferredAvailable ? preferredFamily : notoFamily
+  console.log('[compositeImages] renderText ' + JSON.stringify({
+    text: input.text,
+    requestedFont: input.fontFamily,
+    preferredFamily,
+    preferredAvailable,
+    usingFamily: family,
+    fontSize: input.fontSize,
+    color: input.color,
+    printfile: { w, h },
+    registeredFamilies: Array.from(registeredFamilies),
+  }))
   const size = Math.max(1, Math.round(input.fontSize))
   let x = w / 2 + input.dx
   let y = h / 2 + input.dy
   const clamped = clampTextAnchorInPrintfile(w, h, x, y, size)
   if (clamped.x !== x || clamped.y !== y) {
-    console.warn('[compositeImages] text anchor clamped to print area', {
+    console.warn('[compositeImages] text anchor clamped ' + JSON.stringify({
       before: { x, y },
       after: clamped,
       printfile: { w, h },
-    })
+    }))
   }
   x = clamped.x
   y = clamped.y
@@ -297,6 +309,15 @@ function renderTextToBuffer(areaWidth: number, areaHeight: number, input: Compos
   if (fsx !== 1 || fsy !== 1) ctx.scale(fsx, fsy)
   ctx.fillText(input.text, 0, 0)
   ctx.restore()
+  // Measure actual rendered text to verify it's not zero-width (happens when font fails to load)
+  const metrics = ctx.measureText(input.text)
+  console.log('[compositeImages] renderText result ' + JSON.stringify({
+    text: input.text,
+    measuredWidth: Math.round(metrics.width),
+    canvasSize: { w, h },
+    fontString: `${size}px ${family}`,
+    position: { x: Math.round(x), y: Math.round(y) },
+  }))
   return canvas.toBuffer('image/png')
 }
 
