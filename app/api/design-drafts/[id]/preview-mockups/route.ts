@@ -248,7 +248,8 @@ export async function POST(
 
   // Log the full layer breakdown so we can diagnose whether text layers are visible
   // to the server at read time (catches the auto-save race condition).
-  console.log('[preview-mockups] layer breakdown', {
+  // JSON.stringify forces full output — Vercel truncates nested objects with console.log.
+  console.log('[preview-mockups] layer breakdown ' + JSON.stringify({
     draftId,
     productId,
     variantId,
@@ -263,7 +264,7 @@ export async function POST(
         })),
       ])
     ),
-  })
+  }))
 
   const placementTransforms = parsePrintfulPlacements(designState)
 
