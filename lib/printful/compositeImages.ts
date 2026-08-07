@@ -189,7 +189,22 @@ async function renderImageLayerToFullCanvas(
 
   const res = await fetch(input.signedUrl)
   if (!res.ok) throw new Error(`Failed to fetch layer image: ${res.status}`)
-  const buf = Buffer.from(await res.arrayBuffer())
+  const rawBuf = Buffer.from(await res.arrayBuffer())
+  // Normalize to raw RGBA via Sharp before passing to @napi-rs/canvas.
+  // loadImage throws "Invalid SVG image" when it receives anything that starts
+  // with '<' (HTML error pages, SVG files stored with .png extension, etc.).
+  // Sharp decodes any format and outputs clean pixels that loadImage always accepts.
+  const buf = await sharp(rawBuf)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+    .then(({ data, info }) =>
+      sharp(data, {
+        raw: { width: info.width, height: info.height, channels: 4 },
+      })
+        .png()
+        .toBuffer()
+    )
   const img = await loadImage(buf)
 
   const w = Math.max(1, Math.round(input.width))
