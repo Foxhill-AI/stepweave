@@ -492,6 +492,7 @@ export async function POST(
             throw new Error(`Canvas produced invalid PNG (${compositedBuffer.length} bytes, magic: ${compositedBuffer.subarray(0, 4).toString('hex')})`)
           }
           const compositePath = `${authUserId}/${draftId}/composites/${placement}-${Date.now()}.png`
+          console.log('[preview-mockups] uploading composite', { placement, compositePath, bucket: BUCKET, bufferBytes: compositedBuffer.length })
           const { error: uploadErr } = await admin.storage
             .from(BUCKET)
             .upload(compositePath, compositedBuffer, { contentType: 'image/png', upsert: true })
