@@ -603,14 +603,12 @@ export default function PlacementCanvasPreview({
                 )
                 const dx = leftPrint - (areaWidth - iw) / 2
                 const dy = topPrint - (areaHeight - ih) / 2
-                const c = clampImageLayerDxDy(areaWidth, areaHeight, {
-                  ...selectedLayer,
-                  dx,
-                  dy,
-                })
+                // No clamp during drag — let the user position freely.
+                // Server-side compositing handles overflow; route.ts re-routes to composite
+                // when Printful's position API would crop the image.
                 const patch: PlacementLayerPatch = {}
-                if (Math.abs(c.dx - selectedLayer.dx) > 0.25) patch.dx = c.dx
-                if (Math.abs(c.dy - selectedLayer.dy) > 0.25) patch.dy = c.dy
+                if (Math.abs(dx - selectedLayer.dx) > 0.25) patch.dx = dx
+                if (Math.abs(dy - selectedLayer.dy) > 0.25) patch.dy = dy
                 if (Object.keys(patch).length > 0) {
                   onLayerChange(selectedLayer.id, patch)
                 }
