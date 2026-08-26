@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Heart, Share2, Bookmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Clock, Eye, Star } from 'lucide-react'
+import { Heart, Share2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Clock, Eye, Star } from 'lucide-react'
 import ItemCard from './ItemCard'
 import Carousel from './Carousel'
 import { useAuth } from '@/components/AuthProvider'
@@ -675,17 +675,6 @@ export default function Product({
                 <Heart size={20} fill={isLiked ? 'currentColor' : 'none'} />
                 <span>{productData.likes}</span>
               </button>
-              {onSaveToggle && (
-                <button
-                  type="button"
-                  className={`product-action-button ${isSaved ? 'saved' : ''}`}
-                  onClick={handleSaveClick}
-                  aria-label={isSaved ? 'Remove from My Saves' : 'Save to My Saves'}
-                >
-                  <Bookmark size={20} fill={isSaved ? 'currentColor' : 'none'} />
-                  <span>{isSaved ? 'Saved' : 'Save'}</span>
-                </button>
-              )}
               <button
                 type="button"
                 className="product-action-button"
@@ -992,13 +981,6 @@ export default function Product({
             </div>
           )}
 
-          {/* Copyright Info */}
-          <div className="product-copyright">
-            <p>
-              <strong>Copyright and Commercial Use:</strong> This design is under copyright and cannot be sold commercially 
-              without joining a membership tier for commercial resale. Digital files are not to be re-sold, shared, or given away.
-            </p>
-          </div>
 
           {/* Printing Settings Details */}
           {productData.printingSettings && (
