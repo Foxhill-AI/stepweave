@@ -591,11 +591,6 @@ export default function Product({
                   </div>
                 )}
                 
-                {/* Title Overlay */}
-                <div className="product-title-overlay">
-                  <h1 className="product-title-overlay-text">{productData.title}</h1>
-                </div>
-
                 {/* Badge Overlay */}
                 {productData.badge && (
                   <div className="product-badge-overlay">
@@ -623,12 +618,6 @@ export default function Product({
                   </>
                 )}
 
-                {/* Image Counter */}
-                {totalImages > 1 && (
-                  <div className="product-image-counter">
-                    {productData.author || 'Creator'} Image {selectedImageIndex + 1} of {totalImages}
-                  </div>
-                )}
               </div>
             </div>
           </div>
