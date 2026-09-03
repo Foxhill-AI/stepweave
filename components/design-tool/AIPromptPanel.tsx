@@ -27,6 +27,8 @@ type GenerationTurn = {
   variants: AiGeneratedVariant[]
   /** true when this turn used a reference image */
   usedReference: boolean
+  /** 0-based index of the variant the user applied to their design, or null */
+  selectedVariantIndex: number | null
 }
 
 function buildTurnsFromDbMessages(rows: DesignDraftAiMessageRow[]): GenerationTurn[] {
@@ -61,12 +63,14 @@ function buildTurnsFromDbMessages(rows: DesignDraftAiMessageRow[]): GenerationTu
     }
     if (variants.length === 0) continue
     const styleSummary = typeof ac.styleSummary === 'string' ? ac.styleSummary : null
+    const selectedVariantIndex = typeof ac.selectedVariantIndex === 'number' ? ac.selectedVariantIndex : null
     turns.push({
       id: `db-${row.id}-${next.id}`,
       prompt: uc.prompt,
       styleSummary,
       variants,
       usedReference: Boolean(uc.usedReference),
+      selectedVariantIndex,
     })
     i++
   }
@@ -298,6 +302,12 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
 
     const isI2I = Boolean(referenceStoragePath)
     try {
+      // Build history snapshot for conversational context (last 4 turns)
+      const historySnapshot = history.slice(-4).map((t) => ({
+        userPrompt: t.prompt,
+        styleSummary: t.styleSummary,
+        selectedVariantIndex: t.selectedVariantIndex,
+      }))
       const res = await fetch(`/api/design-drafts/${draftId}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -305,6 +315,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
           mode: isI2I ? 'image-to-image' : 'text-to-image',
           prompt: trimmed,
           variationCount: 3,
+          history: historySnapshot,
           ...(isI2I ? { referenceImagePath: referenceStoragePath } : {}),
         }),
       })
@@ -338,6 +349,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
         styleSummary: body.style_summary ?? null,
         variants: body.variants!,
         usedReference: isI2I,
+        selectedVariantIndex: null,
       }
       setHistory((prev) => [...prev, newTurn])
       setPrompt('')
@@ -357,6 +369,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
             v: AI_MSG_V,
             kind: KIND_ASSISTANT,
             styleSummary: body.style_summary ?? null,
+            selectedVariantIndex: null,
             variants: body.variants!.map((v) => ({
               id: v.id,
               storagePath: v.storagePath,
@@ -458,7 +471,19 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
                       key={v.id}
                       type="button"
                       className={`ai-prompt-variant-card${isSelected ? ' ai-prompt-variant-card--selected' : ''}`}
-                      onClick={() => setSelectedVariant(v)}
+                      onClick={() => {
+                        setSelectedVariant(v)
+                        // Record which variant index was selected on this turn so
+                        // conversational context can tell GPT "you picked variation B"
+                        const variantIndex = turn.variants.findIndex((tv) => tv.id === v.id)
+                        setHistory((prev) =>
+                          prev.map((t) =>
+                            t.id === turn.id
+                              ? { ...t, selectedVariantIndex: variantIndex >= 0 ? variantIndex : null }
+                              : t
+                          )
+                        )
+                      }}
                       aria-label={isSelected ? 'Selected pattern' : 'Select this pattern'}
                       aria-pressed={isSelected}
                     >
