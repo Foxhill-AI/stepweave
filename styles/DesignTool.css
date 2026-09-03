@@ -3602,6 +3602,11 @@
   margin-top: var(--spacing-sm);
 }
 
+.ai-prompt-inline-create-btn {
+  width: 100%;
+  margin-top: var(--spacing-sm);
+}
+
 /* ─── Customize step: full-width canvas layout ───────────────────────────── */
 
 .design-customize-layout {
