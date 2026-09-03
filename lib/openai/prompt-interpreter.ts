@@ -7,6 +7,14 @@ export type InterpretedPrompt = {
   style_summary: string
 }
 
+/** One prior generation turn passed for conversational context. */
+export type ConversationHistoryTurn = {
+  userPrompt: string
+  styleSummary: string | null
+  /** Index (0-based) of the variant the user selected, or null if none was applied. */
+  selectedVariantIndex: number | null
+}
+
 const SYSTEM = `You are a prompt engineer specialising in designs for print-on-demand shoe panels.
 
 ## STEP 1 — Read the user's intent
@@ -50,9 +58,11 @@ Do not include markdown, code fences, or extra keys.`
 
 /**
  * Expands the user's short idea into 3 varied prompts for Fal / SDXL.
+ * @param history Up to the last 4 prior turns for conversational context.
  */
 export async function interpretDesignPrompt(
-  userPrompt: string
+  userPrompt: string,
+  history: ConversationHistoryTurn[] = []
 ): Promise<InterpretedPrompt> {
   const apiKey = process.env.OPENAI_API_KEY?.trim()
   if (!apiKey) {
@@ -62,10 +72,29 @@ export async function interpretDesignPrompt(
   const model = process.env.OPENAI_CHAT_MODEL?.trim() || 'gpt-4o-mini'
   const openai = new OpenAI({ apiKey })
 
+  // Build prior turns as alternating user/assistant messages so GPT understands
+  // what was generated before and which variant the user preferred.
+  type ChatMessage = { role: 'user' | 'assistant'; content: string }
+  const historyMessages: ChatMessage[] = []
+  for (const turn of history) {
+    const variantNote = turn.selectedVariantIndex !== null
+      ? ` The user selected variation ${['A', 'B', 'C', 'D'][turn.selectedVariantIndex] ?? turn.selectedVariantIndex + 1}.`
+      : ' The user did not apply any variation from this turn.'
+    historyMessages.push({
+      role: 'user',
+      content: `User request:\n${turn.userPrompt}`,
+    })
+    historyMessages.push({
+      role: 'assistant',
+      content: `Generated design direction: "${turn.styleSummary ?? 'no summary'}".${variantNote}`,
+    })
+  }
+
   const completion = await openai.chat.completions.create({
     model,
     messages: [
       { role: 'system', content: SYSTEM },
+      ...historyMessages,
       { role: 'user', content: `User request:\n${userPrompt.trim()}` },
     ],
     response_format: { type: 'json_object' },

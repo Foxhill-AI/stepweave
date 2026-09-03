@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { moderateText, moderateImageUrl } from '@/lib/openai/moderation'
-import { interpretDesignPrompt } from '@/lib/openai/prompt-interpreter'
+import { interpretDesignPrompt, type ConversationHistoryTurn } from '@/lib/openai/prompt-interpreter'
 import { generateTextToImageBatch, generateImageToImageBatch } from '@/lib/fal/generate'
 
 const BUCKET = 'design-patterns'
@@ -26,6 +26,8 @@ type GenerateBody = {
   variationCount?: number
   /** Storage path of the reference image (required for image-to-image). */
   referenceImagePath?: string
+  /** Last few generation turns for conversational context (capped at 4 on server). */
+  history?: ConversationHistoryTurn[]
 }
 
 /**
@@ -163,9 +165,14 @@ export async function POST(
     }
   }
 
+  // Cap history at the last 4 turns to keep token usage bounded
+  const history: ConversationHistoryTurn[] = Array.isArray(body.history)
+    ? (body.history as ConversationHistoryTurn[]).slice(-4)
+    : []
+
   let interpreted: Awaited<ReturnType<typeof interpretDesignPrompt>>
   try {
-    interpreted = await interpretDesignPrompt(prompt)
+    interpreted = await interpretDesignPrompt(prompt, history)
   } catch (e) {
     console.error('[generate] interpretDesignPrompt', e)
     interpreted = {
