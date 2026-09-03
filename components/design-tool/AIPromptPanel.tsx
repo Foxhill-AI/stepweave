@@ -352,6 +352,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
         selectedVariantIndex: null,
       }
       setHistory((prev) => [...prev, newTurn])
+      setSelectedVariant(null)
       setPrompt('')
       const persistOk = await appendDesignDraftAiMessages(draftId, [
         {
@@ -388,27 +389,21 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
     }
   }, [draftId, prompt, referenceStoragePath, referencePreviewUrl, referenceUploading])
 
-  const handleApplyToShoe = useCallback(async () => {
-    if (!selectedVariant || !onPatternApplied) return
-    setApplying(true)
-    setError(null)
-    try {
-      await onPatternApplied(selectedVariant.storagePath, selectedVariant.previewUrl)
-    } catch {
-      setError('Could not apply pattern. Try again.')
-    } finally {
-      setApplying(false)
-    }
-  }, [selectedVariant, onPatternApplied])
-
   const handleNext = useCallback(async () => {
     setApplying(true)
     setError(null)
     try {
       if (photoMode === 'direct' && referenceStoragePath && onUseDirectly) {
         await onUseDirectly(referenceStoragePath)
-      } else if (selectedVariant && onPatternApplied) {
-        await onPatternApplied(selectedVariant.storagePath, selectedVariant.previewUrl)
+      } else if (onPatternApplied) {
+        // Use the selected variant, or fall back to the first variant of the latest turn
+        const variantToApply =
+          selectedVariant ??
+          history[history.length - 1]?.variants[0] ??
+          null
+        if (variantToApply) {
+          await onPatternApplied(variantToApply.storagePath, variantToApply.previewUrl)
+        }
       }
       onNext?.()
     } catch {
@@ -416,11 +411,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
     } finally {
       setApplying(false)
     }
-  }, [photoMode, referenceStoragePath, selectedVariant, onPatternApplied, onUseDirectly, onNext])
-
-  const canGoNext =
-    (photoMode === 'direct' && Boolean(referenceStoragePath) && !referenceUploading) ||
-    (selectedVariant !== null && photoMode !== 'direct')
+  }, [photoMode, referenceStoragePath, selectedVariant, history, onPatternApplied, onUseDirectly, onNext])
 
   const noDraft = !draftId
 
@@ -511,19 +502,6 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
 
         <div ref={messagesEndRef} aria-hidden />
       </div>
-
-      {/* ── Selected pattern preview (no apply button — Next handles it) ── */}
-      {selectedVariant && photoMode !== 'direct' && (
-        <div className="ai-prompt-selected-panel">
-          <p className="ai-prompt-selected-label">Selected pattern</p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={selectedVariant.previewUrl}
-            alt="Selected pattern preview"
-            className="ai-prompt-selected-img"
-          />
-        </div>
-      )}
 
       {/* ── Credit banners ── */}
       {creditsRemaining !== null && creditLimit !== null && creditsRemaining === 0 && (
@@ -714,15 +692,15 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
           <p className="ai-prompt-shortcut-hint">Tip: ⌘ Enter to generate</p>
         )}
 
-        {/* Continue button — appears when ready to advance to customize step */}
-        {canGoNext && onNext && (
+        {/* Create Shoes — always visible once there are generations or a direct photo */}
+        {onPatternApplied && (history.length > 0 || (photoMode === 'direct' && referenceStoragePath)) && (
           <button
             type="button"
             className="ai-prompt-btn primary ai-prompt-next-btn"
             onClick={() => void handleNext()}
-            disabled={applying}
+            disabled={applying || loading}
           >
-            {applying ? 'Saving…' : 'Continue to customize →'}
+            {applying ? 'Saving…' : 'Create Shoes →'}
           </button>
         )}
       </div>
