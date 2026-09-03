@@ -464,8 +464,6 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
                       className={`ai-prompt-variant-card${isSelected ? ' ai-prompt-variant-card--selected' : ''}`}
                       onClick={() => {
                         setSelectedVariant(v)
-                        // Record which variant index was selected on this turn so
-                        // conversational context can tell GPT "you picked variation B"
                         const variantIndex = turn.variants.findIndex((tv) => tv.id === v.id)
                         setHistory((prev) =>
                           prev.map((t) =>
@@ -487,6 +485,17 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
                   )
                 })}
               </div>
+              {/* Inline action — appears below the grid when a variant from this turn is selected */}
+              {selectedVariant && turn.variants.some((v) => v.id === selectedVariant.id) && onPatternApplied && (
+                <button
+                  type="button"
+                  className="ai-prompt-btn primary ai-prompt-inline-create-btn"
+                  onClick={() => void handleNext()}
+                  disabled={applying || loading}
+                >
+                  {applying ? 'Saving…' : 'Create Shoes →'}
+                </button>
+              )}
             </div>
           </div>
         ))}
