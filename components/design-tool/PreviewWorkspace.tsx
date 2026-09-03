@@ -81,6 +81,8 @@ interface PreviewWorkspaceProps {
   hasPatternImage?: boolean
   /** True after the user has generated at least one preview — changes button label. */
   hasGeneratedMockups?: boolean
+  /** When true, hides all editing controls and shows only the mockup viewer. */
+  previewOnly?: boolean
 }
 
 function getExtension(filename: string): string {
@@ -120,6 +122,7 @@ export default function PreviewWorkspace({
   previewLoading = false,
   hasPatternImage = false,
   hasGeneratedMockups = false,
+  previewOnly = false,
 }: PreviewWorkspaceProps) {
   const tabs = placementMockups?.length ? placementMockups : null
   // Index into the unified photo gallery (0 = first photo)
@@ -357,8 +360,8 @@ export default function PreviewWorkspace({
     ? (activeLayers.find((l) => l.id === selectedLayerId && isTextLayer(l)) as (ResolvedPlacementLayer & { type: 'text'; text: string; fontFamily: string; fontSize: number; color: string }) | undefined)
     : undefined
 
-  const showShoeCanvas = useShoeCanvas && viewMode === 'canvas' && !mockupImagesLoading
-  const showMockupsView = (viewMode === 'mockups' || !useShoeCanvas) && !mockupImagesLoading
+  const showShoeCanvas = !previewOnly && useShoeCanvas && viewMode === 'canvas' && !mockupImagesLoading
+  const showMockupsView = (previewOnly || viewMode === 'mockups' || !useShoeCanvas) && !mockupImagesLoading
 
   return (
     <div className="preview-workspace">
@@ -373,7 +376,7 @@ export default function PreviewWorkspace({
       />
 
       {/* No image: upload hero — with optional text-add shortcut */}
-      {!hasImage && !uploading && !showTextPanel && (
+      {!previewOnly && !hasImage && !uploading && !showTextPanel && (
         <div
           className={`preview-upload-hero${isDragging ? ' preview-upload-hero--dragging' : ''}`}
           role="button"
@@ -476,7 +479,7 @@ export default function PreviewWorkspace({
       )}
 
       {/* Has image: compact action bar */}
-      {hasImage && viewMode === 'canvas' && (
+      {!previewOnly && hasImage && viewMode === 'canvas' && (
         <div className="preview-image-bar">
           {(() => {
             const imgLayer = activeLayers.find((l): l is (typeof l & { signedUrl?: string | null }) => 'signedUrl' in l)
@@ -528,7 +531,7 @@ export default function PreviewWorkspace({
       )}
 
       {/* Text layer edit panel — shown when a text layer is selected */}
-      {selectedTextLayer && onLayerChange && viewMode === 'canvas' && !showTextPanel && !brandingLocked && (
+      {!previewOnly && selectedTextLayer && onLayerChange && viewMode === 'canvas' && !showTextPanel && !brandingLocked && (
         <div className="preview-text-panel">
           <input
             type="text"
@@ -574,7 +577,7 @@ export default function PreviewWorkspace({
       )}
 
       {/* Text layer add panel — visible with or without an image */}
-      {showTextPanel && onAddTextLayer && (viewMode === 'canvas' || !hasImage) && !brandingLocked && (
+      {!previewOnly && showTextPanel && onAddTextLayer && (viewMode === 'canvas' || !hasImage) && !brandingLocked && (
         <div className="preview-text-panel">
           <input
             type="text"
@@ -687,7 +690,7 @@ export default function PreviewWorkspace({
                 )
               })}
             </div>
-            {onRefreshPrintfulPreview && (
+            {!previewOnly && onRefreshPrintfulPreview && (
               <div className="preview-canvas-header-preview-wrap">
                 <button
                   type="button"

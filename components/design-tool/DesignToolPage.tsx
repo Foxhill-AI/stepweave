@@ -112,6 +112,8 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [isFlowModalOpen, setIsFlowModalOpen] = useState(false)
+  /** True when the user arrived at the preview step via AI generation (skips customize editor). */
+  const [arrivedViaAI, setArrivedViaAI] = useState(false)
 
   // Auto-open modal on publish step when coming from the post-purchase confirmation page.
   useEffect(() => {
@@ -121,6 +123,15 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // When the user arrives via AI generation, auto-trigger the Printful preview.
+  useEffect(() => {
+    if (arrivedViaAI && editorStep === 'customize') {
+      void handleRefreshPrintfulPreview()
+    }
+  // Only fire once when arrivedViaAI flips to true
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrivedViaAI])
   /** Temporary object URLs for layers uploaded in this session (before server signed URL arrives). */
   const [localLayerUrls, setLocalLayerUrls] = useState<Record<string, string>>({})
   /** Clipboard for Cmd/Ctrl+C / V in template canvas (layer payload without signed URLs). */
@@ -426,12 +437,17 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
     async (storagePath: string, previewUrl?: string) => {
       if (!draftId) return
 
-      // One image layer per Printful placement so template tabs + mockups all show the pattern.
+      // Replace all existing user layers with a single new layer per placement.
       // Branding/label stays the fixed Step Weave mark (not the user pattern).
       const placementsList = excludeFixedBrandingPlacements(uniqueTemplatePlacements(templateRows))
       let nextDesignState = designDataRef.current
       if (placementsList.length > 0) {
+        // Start fresh — clear any prior layers from previous AI generations
         let current = parsePlacementImages(nextDesignState)
+        for (const placement of placementsList) {
+          current = { ...current, [placement]: [] }
+        }
+
         const selectedPatch: Record<string, string> = {}
         const localPatch: Record<string, string> = {}
 
@@ -476,7 +492,9 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
               }
             : null
         )
-        // Preview is generated on-demand in the customize step, not automatically here
+        // Jump straight to preview — skip the customize editor entirely
+        setArrivedViaAI(true)
+        setEditorStep('customize')
       } else {
         throw new Error('update failed')
       }
@@ -712,17 +730,19 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
           type="button"
           className={`design-tool-step${editorStep === 'design' ? ' design-tool-step--active' : ' design-tool-step--btn'}`}
           aria-current={editorStep === 'design' ? 'step' : undefined}
-          onClick={() => setEditorStep('design')}
+          onClick={() => { setEditorStep('design'); setArrivedViaAI(false) }}
         >
           Design
         </button>
         <span className="design-tool-step-sep" aria-hidden="true">›</span>
-        <span
-          className={`design-tool-step${editorStep === 'customize' ? ' design-tool-step--active' : ''}`}
+        <button
+          type="button"
+          className={`design-tool-step${editorStep === 'customize' ? ' design-tool-step--active' : ' design-tool-step--btn'}`}
           aria-current={editorStep === 'customize' ? 'step' : undefined}
+          onClick={() => setEditorStep('customize')}
         >
-          Customize
-        </span>
+          Preview
+        </button>
         <span className="design-tool-step-sep" aria-hidden="true">›</span>
         <span className="design-tool-step">
           {isEditingPublishedProduct ? 'Published' : 'Publish'}
@@ -761,7 +781,6 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
               draftId={draftId}
               onPatternApplied={handleAiPatternApplied}
               onUseDirectly={handleUseDirectly}
-              onNext={isDraftEditor ? () => setEditorStep('customize') : undefined}
             />
           </div>
         </div>
@@ -769,8 +788,8 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
     )
   }
 
-  // ── CUSTOMIZE STEP: canvas + optional mobile sliders ─────────────────────
-  const placementEditorNode = isDraftEditor &&
+  // ── CUSTOMIZE/PREVIEW STEP ───────────────────────────────────────────────
+  const placementEditorNode = !arrivedViaAI && isDraftEditor &&
     localDraft?.base_model_id &&
     typeof localDraft.base_model_id === 'string' &&
     printfulVariantId != null ? (
@@ -832,6 +851,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
           <PreviewWorkspace
             draftId={draftId}
             authUserId={user?.id ?? null}
+            previewOnly={arrivedViaAI}
             placementMockups={placementMockups.length > 0 ? placementMockups : null}
             catalogFallbackUrl={catalogFallbackUrl || null}
             catalogOnlyReference={mockupCatalogOnly}
