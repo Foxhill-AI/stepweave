@@ -216,8 +216,8 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, placementImagesJson])
 
-  // Load product info: name, variants, catalog fallback image.
-  // Mockup generation is NOT triggered automatically — user clicks "See preview" instead.
+  // Clear stale mockups only when the base product/color changes — not when the
+  // in-memory variant id is merely re-applied after a preview finishes.
   useEffect(() => {
     const baseModelId = localDraft?.base_model_id
     if (!baseModelId || typeof baseModelId !== 'string' || baseModelId.trim() === '') {
@@ -231,7 +231,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
       return
     }
     let cancelled = false
-    // Clear stale mockups and reset generation state when model/color changes
+    // Clear stale mockups when model/color changes (variant-only updates keep current preview)
     setPlacementMockups([])
     setHasGeneratedMockups(false)
 
@@ -292,11 +292,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
     return () => {
       cancelled = true
     }
-  }, [
-    localDraft?.base_model_id,
-    localDraft?.structural_color,
-    designData.printful_variant_id,
-  ])
+  }, [localDraft?.base_model_id, localDraft?.structural_color])
 
   // Fetch Printful placement templates lifted to page level so both panel and canvas share them
   useEffect(() => {
@@ -355,6 +351,10 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   const handlePrintfulVariantChange = useCallback(
     async (nextId: number) => {
       setPrintfulVariantId(nextId)
+      setPlacementMockups([])
+      setHasGeneratedMockups(false)
+      const vrow = variantOptions.find((v) => v.id === nextId)
+      if (vrow?.image?.trim()) setCatalogFallbackUrl(vrow.image.trim())
       const nextState: Record<string, unknown> = {
         ...designDataRef.current,
         printful_variant_id: nextId,
@@ -365,7 +365,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
         setLocalDraft((prev) => (prev ? { ...prev, design_state: nextState } : null))
       }
     },
-    [draftId]
+    [draftId, variantOptions]
   )
 
   const handlePlacementsStateChange = useCallback(
@@ -852,6 +852,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
             draftId={draftId}
             authUserId={user?.id ?? null}
             previewOnly={arrivedViaAI}
+            onExitPreviewOnly={() => setArrivedViaAI(false)}
             placementMockups={placementMockups.length > 0 ? placementMockups : null}
             catalogFallbackUrl={catalogFallbackUrl || null}
             catalogOnlyReference={mockupCatalogOnly}

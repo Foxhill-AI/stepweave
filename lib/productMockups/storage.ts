@@ -55,10 +55,23 @@ export function mockupStoragePath(
 export function isExternalPrintfulMockupUrl(url: string): boolean {
   const u = url.trim().toLowerCase()
   if (!u.startsWith('http')) return false
+  // Printful CDN hosts change; keep this broad so we still persist mockups.
   return (
-    u.includes('printful-upload.') ||
-    u.includes('printful.com') ||
-    u.includes('/tmp/')
+    u.includes('printful') ||
+    u.includes('/tmp/') ||
+    u.includes('amazonaws.com') ||
+    u.includes('cloudfront.net')
+  )
+}
+
+/** True when a placement row has a displayable main URL or any extra mockup URL. */
+export function mockupPlacementHasDisplayUrl(p: {
+  mockup_url?: string | null
+  extra_mockups?: Array<{ mockup_url?: string | null }> | null
+}): boolean {
+  if (typeof p.mockup_url === 'string' && p.mockup_url.trim()) return true
+  return (p.extra_mockups ?? []).some(
+    (e) => typeof e.mockup_url === 'string' && Boolean(e.mockup_url.trim())
   )
 }
 
@@ -239,14 +252,22 @@ export async function resolveMockupPlacementsForDisplay(
 
   const signedByPath = new Map<string, string>()
   if (pathsToSign.size > 0) {
+    // Zip by request index — some supabase-js versions omit `entry.path` on success.
+    const paths = Array.from(pathsToSign)
     const { data: signed, error } = await admin.storage
       .from(MOCKUP_BUCKET)
-      .createSignedUrls(Array.from(pathsToSign), expiresInSec)
+      .createSignedUrls(paths, expiresInSec)
     if (error || !signed) {
       console.error('[mockup-storage] createSignedUrls', error?.message)
     } else {
-      for (const entry of signed) {
-        if (entry.path && entry.signedUrl) signedByPath.set(entry.path, entry.signedUrl)
+      for (let i = 0; i < paths.length; i++) {
+        const entry = signed[i]
+        const url = entry?.signedUrl?.trim()
+        if (!url) continue
+        signedByPath.set(paths[i], url)
+        if (entry.path?.trim() && entry.path.trim() !== paths[i]) {
+          signedByPath.set(entry.path.trim(), url)
+        }
       }
     }
   }

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, type MutableRefObject } from 'react'
 import { Upload, X, Type } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { buildStandardMockupGallery } from '@/lib/productMockups/canonicalViews'
+import { mockupPlacementHasDisplayUrl } from '@/lib/productMockups/storage'
 import ShoeDesignEditor from './ShoeDesignEditor'
 import type { PlacementTemplateRow } from '@/lib/printful/placementTemplate'
 import { excludeFixedBrandingPlacements, isFixedBrandingPlacement } from '@/lib/printful/fixedBranding'
@@ -83,6 +84,8 @@ interface PreviewWorkspaceProps {
   hasGeneratedMockups?: boolean
   /** When true, hides all editing controls and shows only the mockup viewer. */
   previewOnly?: boolean
+  /** Leave preview-only mode (e.g. AI auto-preview → edit template). */
+  onExitPreviewOnly?: () => void
 }
 
 function getExtension(filename: string): string {
@@ -123,6 +126,7 @@ export default function PreviewWorkspace({
   hasPatternImage = false,
   hasGeneratedMockups = false,
   previewOnly = false,
+  onExitPreviewOnly,
 }: PreviewWorkspaceProps) {
   const tabs = placementMockups?.length ? placementMockups : null
   // Index into the unified photo gallery (0 = first photo)
@@ -160,7 +164,7 @@ export default function PreviewWorkspace({
 
   // Smart preview button: show existing mockups if clean, regenerate if dirty or none exist
   const handlePreviewClick = async () => {
-    const hasMockups = Boolean(tabs?.some((t) => t.mockup_url?.trim()))
+    const hasMockups = Boolean(tabs?.some(mockupPlacementHasDisplayUrl))
     if (hasMockups && !isDirty) {
       setViewMode('mockups')
     } else {
@@ -199,7 +203,8 @@ export default function PreviewWorkspace({
     const wasLoading = prevPreviewLoadingRef.current
     prevPreviewLoadingRef.current = previewLoading
     if (wasLoading && !previewLoading) {
-      const hasRealMockups = placementMockups?.some((t) => t.mockup_url?.trim())
+      // Product views often live only in extra_mockups (empty main mockup_url).
+      const hasRealMockups = placementMockups?.some(mockupPlacementHasDisplayUrl)
       if (hasRealMockups) {
         setViewMode('mockups')
         setIsDirty(false)
@@ -348,12 +353,17 @@ export default function PreviewWorkspace({
     : []
   const clampedIndex = Math.min(activeGalleryIndex, Math.max(0, allPhotos.length - 1))
   const selectedMockupUrl = allPhotos[clampedIndex]?.mockup_url ?? ''
-  const referenceUrl = selectedMockupUrl || catalogFallbackUrl || ''
+  // Never silently substitute blank catalog shoes when Printful returned placement
+  // rows — that masks a failed gallery pick and looks like "design missing on shoes".
+  const referenceUrl =
+    selectedMockupUrl ||
+    ((!tabs || catalogOnlyReference) && catalogFallbackUrl ? catalogFallbackUrl : '') ||
+    ''
 
   const hasImage =
     activeLayers.length > 0 || Boolean(imageUrl?.trim()) || Boolean(hasPatternImage)
   const layerCount = activeLayers.length
-  const hasMockups = Boolean(tabs?.some((t) => t.mockup_url?.trim()))
+  const hasMockups = Boolean(tabs?.some(mockupPlacementHasDisplayUrl))
 
   // Selected text layer — drives the inline edit panel
   const selectedTextLayer = selectedLayerId
@@ -662,7 +672,7 @@ export default function PreviewWorkspace({
           </span>
           {loadingPhase >= 3 && (
             <span className="preview-loading-timeout-hint">
-              Taking longer than expected — you can keep editing and check back soon.
+              still working…
             </span>
           )}
         </div>
@@ -736,7 +746,10 @@ export default function PreviewWorkspace({
               <button
                 type="button"
                 className="preview-canvas-header-back-btn"
-                onClick={() => setViewMode('canvas')}
+                onClick={() => {
+                  onExitPreviewOnly?.()
+                  setViewMode('canvas')
+                }}
               >
                 ← Edit template
               </button>
