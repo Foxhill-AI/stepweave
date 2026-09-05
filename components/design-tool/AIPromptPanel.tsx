@@ -174,6 +174,15 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
         }
         if (cancelled) return
         setHistory(turns)
+        // Restore the most recently selected variant so the design stays visible.
+        for (let i = turns.length - 1; i >= 0; i--) {
+          const turn = turns[i]
+          const idx = turn.selectedVariantIndex
+          if (idx != null && turn.variants[idx]) {
+            setSelectedVariant(turn.variants[idx])
+            break
+          }
+        }
       } finally {
         if (!cancelled) setChatLoading(false)
       }
@@ -485,7 +494,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
                   )
                 })}
               </div>
-              {/* Inline action — appears below the grid when a variant from this turn is selected */}
+              {/* Inline create — only under the turn that owns the selection */}
               {selectedVariant && turn.variants.some((v) => v.id === selectedVariant.id) && onPatternApplied && (
                 <button
                   type="button"
@@ -501,16 +510,32 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
         ))}
 
         {loading && (
-          <div className="ai-prompt-generating" role="status" aria-label="Generating patterns">
+          <div className="ai-prompt-generating" role="status" aria-label="Generating image">
             <span className="ai-prompt-generating-dots" aria-hidden>
               <span /><span /><span />
             </span>
-            Generating patterns…
+            Generating image…
           </div>
         )}
 
         <div ref={messagesEndRef} aria-hidden />
       </div>
+
+      {/* Selected design — stay on chat; refine with AI or create shoes */}
+      {selectedVariant && photoMode !== 'direct' && (
+        <div className="ai-prompt-selected-panel" aria-live="polite">
+          <p className="ai-prompt-selected-label">Selected design</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={selectedVariant.previewUrl}
+            alt="Selected design"
+            className="ai-prompt-selected-img"
+          />
+          <p className="ai-prompt-selected-hint">
+            Keep chatting to generate a new image, or create shoes with this design.
+          </p>
+        </div>
+      )}
 
       {/* ── Credit banners ── */}
       {creditsRemaining !== null && creditLimit !== null && creditsRemaining === 0 && (
@@ -670,7 +695,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
             onClick={() => void handleGenerate()}
             disabled={loading || chatLoading || noDraft || !prompt.trim() || referenceUploading || creditsRemaining === 0}
           >
-            {loading ? 'Generating…' : 'Generate'}
+            {loading ? 'Generating image…' : 'Generate image'}
           </button>
           {history.length > 0 && (
           <button
@@ -698,7 +723,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
         </div>
         )}
         {history.length > 0 && photoMode !== 'direct' && (
-          <p className="ai-prompt-shortcut-hint">Tip: ⌘ Enter to generate</p>
+          <p className="ai-prompt-shortcut-hint">Tip: ⌘ Enter to generate image</p>
         )}
 
         {/* Create Shoes — always visible once there are generations or a direct photo */}

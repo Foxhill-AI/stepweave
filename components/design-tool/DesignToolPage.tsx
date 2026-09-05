@@ -41,6 +41,13 @@ import PublishFlowModal from './PublishFlowModal'
 import { fetchPreviewMockupsWithRetry } from '@/lib/design-tool/previewMockupsFetch'
 import '../../styles/DesignTool.css'
 
+/**
+ * Shoe layout-map / placement template editor.
+ * Kept in the codebase for a possible return; off the product path for now.
+ * When false: Design → Create Shoes goes straight to mockup preview (no template maps).
+ */
+const ENABLE_LAYOUT_MAP_EDITOR = false
+
 interface DesignToolPageProps {
   /** When set, we are editing this design draft (from /design-tool/[id]). */
   draftId?: number
@@ -112,7 +119,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [isFlowModalOpen, setIsFlowModalOpen] = useState(false)
-  /** True when the user arrived at the preview step via AI generation (skips customize editor). */
+  /** True when the user arrived at shoe preview via Create Shoes (skips layout-map editor). */
   const [arrivedViaAI, setArrivedViaAI] = useState(false)
 
   // Auto-open modal on publish step when coming from the post-purchase confirmation page.
@@ -124,7 +131,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // When the user arrives via AI generation, auto-trigger the Printful preview.
+  // When the user creates shoes from AI/design, auto-trigger the Printful preview.
   useEffect(() => {
     if (arrivedViaAI && editorStep === 'customize') {
       void handleRefreshPrintfulPreview()
@@ -136,10 +143,11 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   const [localLayerUrls, setLocalLayerUrls] = useState<Record<string, string>>({})
   /** Clipboard for Cmd/Ctrl+C / V in template canvas (layer payload without signed URLs). */
   const layerClipboardRef = useRef<PlacementLayer | null>(null)
-  /** Current step within the editor: chat → customize. Skip to customize only if the draft already has a pattern (i.e. prior AI work). */
-  const [editorStep, setEditorStep] = useState<'design' | 'customize'>(
-    draft?.pattern_image_url ? 'customize' : 'design'
-  )
+  /**
+   * Design (chat) → Preview (shoe mockups). Stay on Design until Create Shoes.
+   * Layout-map customize UI is gated by ENABLE_LAYOUT_MAP_EDITOR (not deleted).
+   */
+  const [editorStep, setEditorStep] = useState<'design' | 'customize'>('design')
   /** Mobile-only: collapsible adjustment panel open */
   const [showMobileTools, setShowMobileTools] = useState(false)
 
@@ -492,7 +500,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
               }
             : null
         )
-        // Jump straight to preview — skip the customize editor entirely
+        // Create Shoes → mockup preview (layout-map editor stays off unless re-enabled).
         setArrivedViaAI(true)
         setEditorStep('customize')
       } else {
@@ -535,6 +543,8 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
                 ...(placementsList.length > 0 ? { design_state: nextDesignState } : {}) }
             : null
         )
+        setArrivedViaAI(true)
+        setEditorStep('customize')
       } else {
         throw new Error('update failed')
       }
@@ -739,7 +749,11 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
           type="button"
           className={`design-tool-step${editorStep === 'customize' ? ' design-tool-step--active' : ' design-tool-step--btn'}`}
           aria-current={editorStep === 'customize' ? 'step' : undefined}
-          onClick={() => setEditorStep('customize')}
+          onClick={() => {
+            // Preview step = shoe mockups only (layout maps gated off).
+            setEditorStep('customize')
+            if (!ENABLE_LAYOUT_MAP_EDITOR) setArrivedViaAI(true)
+          }}
         >
           Preview
         </button>
@@ -789,7 +803,9 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
   }
 
   // ── CUSTOMIZE/PREVIEW STEP ───────────────────────────────────────────────
-  const placementEditorNode = !arrivedViaAI && isDraftEditor &&
+  // Layout-map panel retained behind the flag; current product path is mockup-only.
+  const showLayoutMapEditor = ENABLE_LAYOUT_MAP_EDITOR && !arrivedViaAI
+  const placementEditorNode = showLayoutMapEditor && isDraftEditor &&
     localDraft?.base_model_id &&
     typeof localDraft.base_model_id === 'string' &&
     printfulVariantId != null ? (
@@ -827,11 +843,13 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
     />
   ) : null
 
+  const previewOnly = !ENABLE_LAYOUT_MAP_EDITOR || arrivedViaAI
+
   return (
     <div className="design-tool-page">
       {stepBar}
       <div className="design-customize-layout">
-        {/* Mobile: collapsible position slider panel */}
+        {/* Mobile: collapsible position slider panel (layout-map editor only) */}
         {placementEditorNode && !brandingPlacementLocked && (
           <div className="design-customize-tools-mobile">
             <button
@@ -851,8 +869,10 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
           <PreviewWorkspace
             draftId={draftId}
             authUserId={user?.id ?? null}
-            previewOnly={arrivedViaAI}
-            onExitPreviewOnly={() => setArrivedViaAI(false)}
+            previewOnly={previewOnly}
+            onExitPreviewOnly={
+              ENABLE_LAYOUT_MAP_EDITOR ? () => setArrivedViaAI(false) : undefined
+            }
             placementMockups={placementMockups.length > 0 ? placementMockups : null}
             catalogFallbackUrl={catalogFallbackUrl || null}
             catalogOnlyReference={mockupCatalogOnly}
