@@ -36,6 +36,7 @@ import {
   releasePrintfulMockupSlot,
 } from '@/lib/printful/mockupSlot'
 import {
+  countMockupDisplayUrls,
   mockupPlacementHasDisplayUrl,
   mockupPlacementsForDatabase,
   persistPrintfulMockupsToStorage,
@@ -230,18 +231,23 @@ export async function POST(
       const resolved = await resolveMockupPlacementsForDisplay(admin, storedMockups)
       const anyUrl = resolved.some(mockupPlacementHasDisplayUrl)
       if (anyUrl) {
+        const placements = resolved.map((p) => ({
+          placement: p.placement,
+          label: p.label,
+          mockup_url: p.mockup_url,
+          ...(p.view ? { view: p.view } : {}),
+          ...(p.extra_mockups?.length ? { extra_mockups: p.extra_mockups } : {}),
+        }))
+        const displayUrlCount = countMockupDisplayUrls(placements)
+        console.log('[preview-mockups] cache hit response', { draftId, displayUrlCount })
         return NextResponse.json({
           product_id: productId,
           variant_id: variantId,
-          placements: resolved.map((p) => ({
-            placement: p.placement,
-            label: p.label,
-            mockup_url: p.mockup_url,
-            ...(p.view ? { view: p.view } : {}),
-            ...(p.extra_mockups?.length ? { extra_mockups: p.extra_mockups } : {}),
-          })),
+          placements,
           mockups_persisted: true,
           from_cache: true,
+          display_url_count: displayUrlCount,
+          mockup_generation_unavailable: displayUrlCount === 0,
         })
       }
     }
@@ -833,7 +839,23 @@ export async function POST(
           .eq('id', draftId)
       }
 
-      const resolved = await resolveMockupPlacementsForDisplay(admin, stored)
+      // Prefer freshly signed Storage URLs (same as marketplace). If signing fails,
+      // re-read the draft and try again; last resort keep Printful temp URLs.
+      let resolved = await resolveMockupPlacementsForDisplay(admin, stored)
+      if (!resolved.some(mockupPlacementHasDisplayUrl) && mockupsPersisted) {
+        const { data: draftAgain } = await admin
+          .from('design_draft')
+          .select('mockup_urls')
+          .eq('id', draftId)
+          .maybeSingle()
+        const rawAgain = (Array.isArray(draftAgain?.mockup_urls)
+          ? draftAgain!.mockup_urls
+          : []) as StoredMockupPlacement[]
+        if (rawAgain.length > 0) {
+          resolved = await resolveMockupPlacementsForDisplay(admin, rawAgain)
+        }
+      }
+
       if (resolved.some(mockupPlacementHasDisplayUrl)) {
         responsePlacements = resolved.map((p) => ({
           placement: p.placement,
@@ -843,8 +865,6 @@ export async function POST(
           ...(p.extra_mockups?.length ? { extra_mockups: p.extra_mockups } : {}),
         }))
       } else {
-        // Storage paths saved for marketplace, but signing failed here — still return
-        // the fresh Printful URLs so the design-tool preview is not blank catalog shoes.
         console.warn(
           '[preview-mockups] stored mockups but resolve returned no display URLs; returning Printful URLs'
         )
@@ -854,12 +874,24 @@ export async function POST(
     }
   }
 
+  const displayUrlCount = countMockupDisplayUrls(responsePlacements)
+  console.log('[preview-mockups] response summary', {
+    draftId,
+    anyUrl,
+    mockupsPersisted,
+    displayUrlCount,
+    placementCount: responsePlacements.length,
+    mockupErrorReason: mockupErrorReason ?? null,
+  })
+
   return NextResponse.json({
     product_id: productId,
     variant_id: variantId,
     placements: responsePlacements,
-    mockup_generation_unavailable: !anyUrl,
+    // Only "unavailable" when we truly have nothing to show (avoids white catalog on soft failures).
+    mockup_generation_unavailable: displayUrlCount === 0,
     mockups_persisted: mockupsPersisted,
+    display_url_count: displayUrlCount,
     ...(mockupErrorReason ? { mockup_error: mockupErrorReason } : {}),
     ...(printfulErrorCode != null ? { printful_error_code: printfulErrorCode } : {}),
     ...(printfulErrorMessage ? { printful_error_message: printfulErrorMessage } : {}),

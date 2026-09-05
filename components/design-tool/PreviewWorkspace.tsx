@@ -353,11 +353,11 @@ export default function PreviewWorkspace({
     : []
   const clampedIndex = Math.min(activeGalleryIndex, Math.max(0, allPhotos.length - 1))
   const selectedMockupUrl = allPhotos[clampedIndex]?.mockup_url ?? ''
-  // Never silently substitute blank catalog shoes when Printful returned placement
-  // rows — that masks a failed gallery pick and looks like "design missing on shoes".
+  // Never show blank catalog shoes unless the API explicitly said mockups are unavailable.
+  // Catalog whites looked like a "successful" preview with no design on the shoes.
   const referenceUrl =
     selectedMockupUrl ||
-    ((!tabs || catalogOnlyReference) && catalogFallbackUrl ? catalogFallbackUrl : '') ||
+    (catalogOnlyReference && catalogFallbackUrl ? catalogFallbackUrl : '') ||
     ''
 
   const hasImage =
@@ -372,6 +372,7 @@ export default function PreviewWorkspace({
 
   const showShoeCanvas = !previewOnly && useShoeCanvas && viewMode === 'canvas' && !mockupImagesLoading
   const showMockupsView = (previewOnly || viewMode === 'mockups' || !useShoeCanvas) && !mockupImagesLoading
+  const previewFailedEmpty = showMockupsView && !referenceUrl && !hasMockups
 
   return (
     <div className="preview-workspace">
@@ -738,7 +739,7 @@ export default function PreviewWorkspace({
       )}
 
       {/* MOCKUPS VIEW: full-height mockup image */}
-      {showMockupsView && (referenceUrl || (tabs && tabs.length > 0)) && (
+      {showMockupsView && (referenceUrl || hasMockups || previewFailedEmpty || catalogOnlyReference) && (
         <div className="preview-mockups-section">
           {/* Mockups header: back to layout editor only when that path is enabled */}
           {useShoeCanvas && onExitPreviewOnly && (
@@ -758,6 +759,11 @@ export default function PreviewWorkspace({
           {catalogOnlyReference && (
             <p className="preview-reference-catalog-note" role="status" style={{ padding: '0 1rem' }}>
               Using catalog photos — Printful mockups are not available for this product.
+            </p>
+          )}
+          {previewFailedEmpty && !catalogOnlyReference && (
+            <p className="preview-reference-catalog-note" role="alert" style={{ padding: '0 1rem' }}>
+              Shoe preview photos didn&apos;t load. Go back to Design and try Create Shoes again.
             </p>
           )}
           {referenceUrl && (
