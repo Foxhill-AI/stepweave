@@ -36,6 +36,7 @@ import {
   releasePrintfulMockupSlot,
 } from '@/lib/printful/mockupSlot'
 import {
+  mockupPlacementHasDisplayUrl,
   mockupPlacementsForDatabase,
   persistPrintfulMockupsToStorage,
   resolveMockupPlacementsForDisplay,
@@ -227,7 +228,7 @@ export async function POST(
     if (supabaseUrl && serviceRoleKey) {
       const admin = createClient(supabaseUrl, serviceRoleKey)
       const resolved = await resolveMockupPlacementsForDisplay(admin, storedMockups)
-      const anyUrl = resolved.some((p) => p.mockup_url)
+      const anyUrl = resolved.some(mockupPlacementHasDisplayUrl)
       if (anyUrl) {
         return NextResponse.json({
           product_id: productId,
@@ -303,9 +304,16 @@ export async function POST(
     return NextResponse.json({ error: 'Could not sign pattern image URL' }, { status: 500 })
   }
 
+  const pathsSigned = Array.from(pathsToSign)
   const signedByPath = new Map<string, string>()
-  for (const entry of signed) {
-    if (entry.signedUrl && entry.path) signedByPath.set(entry.path, entry.signedUrl)
+  for (let i = 0; i < pathsSigned.length; i++) {
+    const entry = signed[i]
+    const url = entry?.signedUrl?.trim()
+    if (!url) continue
+    signedByPath.set(pathsSigned[i], url)
+    if (entry.path?.trim() && entry.path.trim() !== pathsSigned[i]) {
+      signedByPath.set(entry.path.trim(), url)
+    }
   }
 
   const defaultImageUrl = globalPatternPath ? signedByPath.get(globalPatternPath) : undefined
@@ -786,7 +794,9 @@ export async function POST(
     })
   }
 
-  const anyUrl = placements.some((p) => p.mockup_url)
+  // Product-angle shots often live only on `_product_views.extra_mockups` with an
+  // empty main `mockup_url` — those still count as a successful preview.
+  const anyUrl = placements.some(mockupPlacementHasDisplayUrl)
 
   let responsePlacements: PreviewMockupPlacement[] = placements
   let mockupsPersisted = false
@@ -824,13 +834,21 @@ export async function POST(
       }
 
       const resolved = await resolveMockupPlacementsForDisplay(admin, stored)
-      responsePlacements = resolved.map((p) => ({
-        placement: p.placement,
-        label: p.label,
-        mockup_url: p.mockup_url,
-        ...(p.view ? { view: p.view } : {}),
-        ...(p.extra_mockups?.length ? { extra_mockups: p.extra_mockups } : {}),
-      }))
+      if (resolved.some(mockupPlacementHasDisplayUrl)) {
+        responsePlacements = resolved.map((p) => ({
+          placement: p.placement,
+          label: p.label,
+          mockup_url: p.mockup_url,
+          ...(p.view ? { view: p.view } : {}),
+          ...(p.extra_mockups?.length ? { extra_mockups: p.extra_mockups } : {}),
+        }))
+      } else {
+        // Storage paths saved for marketplace, but signing failed here — still return
+        // the fresh Printful URLs so the design-tool preview is not blank catalog shoes.
+        console.warn(
+          '[preview-mockups] stored mockups but resolve returned no display URLs; returning Printful URLs'
+        )
+      }
     } else {
       console.warn('[preview-mockups] Printful mockups generated but storage upload failed')
     }
