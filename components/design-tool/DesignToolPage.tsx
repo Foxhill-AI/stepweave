@@ -38,7 +38,7 @@ import {
 } from '@/lib/supabaseClient'
 import type { DesignDraftRow } from '@/lib/supabaseClient'
 import PublishFlowModal from './PublishFlowModal'
-import { fetchPreviewMockupsWithRetry } from '@/lib/design-tool/previewMockupsFetch'
+import { fetchPreviewMockupsWithRetry, resolvePreviewPlacementsForClient } from '@/lib/design-tool/previewMockupsFetch'
 import '../../styles/DesignTool.css'
 
 /**
@@ -426,6 +426,17 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
       const { ok, status, body } = await fetchPreviewMockupsWithRetry(draftId)
       if (!ok) {
         console.warn('[preview-mockups]', body.error ?? status)
+        // Persisted mockups may still be on the draft from this or a prior run.
+        const recovered = await resolvePreviewPlacementsForClient(draftId, {
+          ...body,
+          mockups_persisted: true,
+        })
+        if (recovered.placements.length > 0) {
+          setPlacementMockups(recovered.placements)
+          setMockupCatalogOnly(false)
+          setHasGeneratedMockups(true)
+          return
+        }
         setPlacementMockups([])
         setMockupCatalogOnly(true)
         return
@@ -433,9 +444,16 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
       if (body.mockup_error) {
         console.error('[preview-mockups] Printful task error:', body.mockup_error, body)
       }
-      setMockupCatalogOnly(Boolean(body.mockup_generation_unavailable))
-      setPlacementMockups(body.placements?.length ? body.placements : [])
+      const { placements, catalogOnly } = await resolvePreviewPlacementsForClient(draftId, body)
+      setMockupCatalogOnly(catalogOnly)
+      setPlacementMockups(placements)
       setHasGeneratedMockups(true)
+      if (catalogOnly) {
+        console.warn('[preview-mockups] no display URLs after preview', {
+          display_url_count: body.display_url_count,
+          mockups_persisted: body.mockups_persisted,
+        })
+      }
     } finally {
       setPrintfulPreviewLoading(false)
     }

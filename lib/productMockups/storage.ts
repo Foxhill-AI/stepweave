@@ -75,6 +75,23 @@ export function mockupPlacementHasDisplayUrl(p: {
   )
 }
 
+/** Count of displayable image URLs across main + extras (for API/client diagnostics). */
+export function countMockupDisplayUrls(
+  placements: Array<{
+    mockup_url?: string | null
+    extra_mockups?: Array<{ mockup_url?: string | null }> | null
+  }>
+): number {
+  let n = 0
+  for (const p of placements) {
+    if (typeof p.mockup_url === 'string' && p.mockup_url.trim()) n++
+    for (const e of p.extra_mockups ?? []) {
+      if (typeof e.mockup_url === 'string' && e.mockup_url.trim()) n++
+    }
+  }
+  return n
+}
+
 export function isMockupStoragePath(value: string): boolean {
   const v = value.trim()
   if (!v || v.startsWith('http')) return false

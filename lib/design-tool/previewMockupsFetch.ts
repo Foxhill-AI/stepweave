@@ -1,15 +1,24 @@
 import { PRINTFUL_SLOT_BUSY_CODE } from '@/lib/printful/mockupSlot'
+import {
+  countMockupDisplayUrls,
+} from '@/lib/productMockups/storage'
+
+export type PreviewMockupPlacement = {
+  placement: string
+  label: string
+  mockup_url: string
+  view?: string
+  extra_mockups?: Array<{ title: string; mockup_url: string; view?: string }>
+}
 
 export type PreviewMockupsResponseBody = {
   product_id?: string
   variant_id?: number
-  placements?: Array<{
-    placement: string
-    label: string
-    mockup_url: string
-    extra_mockups?: Array<{ title: string; mockup_url: string }>
-  }>
+  placements?: PreviewMockupPlacement[]
   mockup_generation_unavailable?: boolean
+  mockups_persisted?: boolean
+  from_cache?: boolean
+  display_url_count?: number
   mockup_error?: string
   error?: string
   code?: string
@@ -17,6 +26,51 @@ export type PreviewMockupsResponseBody = {
 }
 
 const DEFAULT_MAX_ATTEMPTS = 18
+
+function placementsHaveDisplayUrls(placements: PreviewMockupPlacement[] | undefined): boolean {
+  if (!placements?.length) return false
+  return countMockupDisplayUrls(placements) > 0
+}
+
+/**
+ * When the preview POST returns empty display URLs but mockups were persisted,
+ * reload signed URLs the same way the marketplace does.
+ */
+export async function fetchDraftMockupsForDisplay(
+  draftId: number,
+  signal?: AbortSignal
+): Promise<PreviewMockupPlacement[]> {
+  const res = await fetch(`/api/design-drafts/${draftId}/mockups`, { signal })
+  if (!res.ok) return []
+  const body = (await res.json().catch(() => ({}))) as {
+    placements?: PreviewMockupPlacement[]
+  }
+  return Array.isArray(body.placements) ? body.placements : []
+}
+
+/**
+ * Normalize preview API result: prefer response placements; if empty but persisted, reload from draft.
+ */
+export async function resolvePreviewPlacementsForClient(
+  draftId: number,
+  body: PreviewMockupsResponseBody,
+  signal?: AbortSignal
+): Promise<{ placements: PreviewMockupPlacement[]; catalogOnly: boolean }> {
+  const fromBody = Array.isArray(body.placements) ? body.placements : []
+  if (placementsHaveDisplayUrls(fromBody)) {
+    return { placements: fromBody, catalogOnly: false }
+  }
+  if (body.mockups_persisted) {
+    const reloaded = await fetchDraftMockupsForDisplay(draftId, signal)
+    if (placementsHaveDisplayUrls(reloaded)) {
+      return { placements: reloaded, catalogOnly: false }
+    }
+  }
+  return {
+    placements: [],
+    catalogOnly: Boolean(body.mockup_generation_unavailable) || !body.mockups_persisted,
+  }
+}
 
 /**
  * POST preview-mockups with retries when the server returns PRINTFUL_SLOT_BUSY (serialized Printful usage).
