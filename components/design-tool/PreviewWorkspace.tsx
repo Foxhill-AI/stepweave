@@ -740,14 +740,14 @@ export default function PreviewWorkspace({
       {/* MOCKUPS VIEW: full-height mockup image */}
       {showMockupsView && (referenceUrl || (tabs && tabs.length > 0)) && (
         <div className="preview-mockups-section">
-          {/* Mockups header: back button only */}
-          {useShoeCanvas && (
+          {/* Mockups header: back to layout editor only when that path is enabled */}
+          {useShoeCanvas && onExitPreviewOnly && (
             <div className="preview-canvas-header">
               <button
                 type="button"
                 className="preview-canvas-header-back-btn"
                 onClick={() => {
-                  onExitPreviewOnly?.()
+                  onExitPreviewOnly()
                   setViewMode('canvas')
                 }}
               >
