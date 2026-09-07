@@ -309,7 +309,17 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
     setLoading(true)
     setError(null)
 
-    const isI2I = Boolean(referenceStoragePath)
+    // Uploaded inspo is one-shot. After the first generate it is cleared; later
+    // edits use the selected AI variant as the image-to-image base (if any).
+    const uploadedInspoPath =
+      photoMode === 'ai-reference' && referenceStoragePath ? referenceStoragePath : null
+    const iterateFromPath =
+      !uploadedInspoPath && selectedVariant?.storagePath
+        ? selectedVariant.storagePath
+        : null
+    const referenceImagePath = uploadedInspoPath ?? iterateFromPath ?? null
+    const isI2I = Boolean(referenceImagePath)
+
     try {
       // Build history snapshot for conversational context (last 4 turns)
       const historySnapshot = history.slice(-4).map((t) => ({
@@ -325,7 +335,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
           prompt: trimmed,
           variationCount: 3,
           history: historySnapshot,
-          ...(isI2I ? { referenceImagePath: referenceStoragePath } : {}),
+          ...(referenceImagePath ? { referenceImagePath } : {}),
         }),
       })
       const body = (await res.json().catch(() => ({}))) as {
@@ -363,6 +373,16 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
       setHistory((prev) => [...prev, newTurn])
       setSelectedVariant(null)
       setPrompt('')
+      // Drop uploaded inspo after first successful use so it can't silently stick.
+      if (uploadedInspoPath) {
+        if (blobUrlRef.current) {
+          URL.revokeObjectURL(blobUrlRef.current)
+          blobUrlRef.current = null
+        }
+        setReferencePreviewUrl(null)
+        setReferenceStoragePath(null)
+        setPhotoMode(null)
+      }
       const persistOk = await appendDesignDraftAiMessages(draftId, [
         {
           role: 'user',
@@ -396,7 +416,16 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
     } finally {
       setLoading(false)
     }
-  }, [draftId, prompt, referenceStoragePath, referencePreviewUrl, referenceUploading])
+  }, [
+    draftId,
+    prompt,
+    referenceStoragePath,
+    referencePreviewUrl,
+    referenceUploading,
+    photoMode,
+    selectedVariant,
+    history,
+  ])
 
   const handleNext = useCallback(async () => {
     setApplying(true)
@@ -532,7 +561,7 @@ export default function AIPromptPanel({ draftId, onPatternApplied, onUseDirectly
             className="ai-prompt-selected-img"
           />
           <p className="ai-prompt-selected-hint">
-            Keep chatting to generate a new image, or create shoes with this design.
+            Further edits use this selected image as the base — or create shoes with it.
           </p>
         </div>
       )}
