@@ -38,7 +38,11 @@ import {
 } from '@/lib/supabaseClient'
 import type { DesignDraftRow } from '@/lib/supabaseClient'
 import PublishFlowModal from './PublishFlowModal'
-import { fetchPreviewMockupsWithRetry, resolvePreviewPlacementsForClient } from '@/lib/design-tool/previewMockupsFetch'
+import {
+  fetchPreviewMockupsWithRetry,
+  pollDraftMockupsForDisplay,
+  resolvePreviewPlacementsForClient,
+} from '@/lib/design-tool/previewMockupsFetch'
 import '../../styles/DesignTool.css'
 
 /**
@@ -423,14 +427,46 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
       setLocalDraft((prev) =>
         prev ? { ...prev, design_state: designDataRef.current } : null
       )
-      const { ok, status, body } = await fetchPreviewMockupsWithRetry(draftId)
+
+      let ok = false
+      let status = 0
+      let body: Awaited<ReturnType<typeof fetchPreviewMockupsWithRetry>>['body'] = {}
+      try {
+        ;({ ok, status, body } = await fetchPreviewMockupsWithRetry(draftId))
+      } catch (err) {
+        // Browser/proxy timeout or network drop — server may still finish and persist.
+        console.warn('[preview-mockups] request failed, polling for saved mockups', err)
+        const polled = await pollDraftMockupsForDisplay(draftId, {
+          maxWaitMs: 180_000,
+          intervalMs: 4_000,
+        })
+        if (polled.length > 0) {
+          setPlacementMockups(polled)
+          setMockupCatalogOnly(false)
+          setHasGeneratedMockups(true)
+          return
+        }
+        setPlacementMockups([])
+        setMockupCatalogOnly(false)
+        return
+      }
+
       if (!ok) {
         console.warn('[preview-mockups]', body.error ?? status)
-        // Persisted mockups may still be on the draft from this or a prior run.
-        const recovered = await resolvePreviewPlacementsForClient(draftId, {
+        // Immediate recover, then poll — covers gateway timeouts while Vercel still writes.
+        let recovered = await resolvePreviewPlacementsForClient(draftId, {
           ...body,
           mockups_persisted: true,
         })
+        if (recovered.placements.length === 0) {
+          const polled = await pollDraftMockupsForDisplay(draftId, {
+            maxWaitMs: 120_000,
+            intervalMs: 4_000,
+          })
+          if (polled.length > 0) {
+            recovered = { placements: polled, catalogOnly: false }
+          }
+        }
         if (recovered.placements.length > 0) {
           setPlacementMockups(recovered.placements)
           setMockupCatalogOnly(false)
@@ -438,7 +474,7 @@ export default function DesignToolPage({ draftId, draft, autoPublish }: DesignTo
           return
         }
         setPlacementMockups([])
-        setMockupCatalogOnly(true)
+        setMockupCatalogOnly(false)
         return
       }
       if (body.mockup_error) {

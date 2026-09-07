@@ -232,20 +232,23 @@ export default function PreviewWorkspace({
       return
     }
     setLoadingPhase(0)
-    const t1 = setTimeout(() => setLoadingPhase(1), 10000)
-    const t2 = setTimeout(() => setLoadingPhase(2), 20000)
-    const t3 = setTimeout(() => setLoadingPhase(3), 30000)
+    const t1 = setTimeout(() => setLoadingPhase(1), 12_000)
+    const t2 = setTimeout(() => setLoadingPhase(2), 30_000)
+    const t3 = setTimeout(() => setLoadingPhase(3), 60_000)
+    const t4 = setTimeout(() => setLoadingPhase(4), 90_000)
     return () => {
       clearTimeout(t1)
       clearTimeout(t2)
       clearTimeout(t3)
+      clearTimeout(t4)
     }
   }, [mockupImagesLoading])
 
   const LOADING_MESSAGES = [
     'Working on your mockups…',
     'Almost there…',
-    'Just a moment more…',
+    'Printful is busy — still generating…',
+    'Still working — hang tight…',
   ]
 
   const useStorageUpload = Boolean(draftId && authUserId && onPatternUploaded)
@@ -671,9 +674,9 @@ export default function PreviewWorkspace({
           <span className="preview-loading-message">
             {LOADING_MESSAGES[Math.min(loadingPhase, LOADING_MESSAGES.length - 1)]}
           </span>
-          {loadingPhase >= 3 && (
+          {loadingPhase >= 4 && (
             <span className="preview-loading-timeout-hint">
-              still working…
+              This can take a few minutes when Printful is busy…
             </span>
           )}
         </div>

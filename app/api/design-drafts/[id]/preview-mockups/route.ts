@@ -15,6 +15,7 @@ import {
   createTaskAndPoll,
   mergeMockups,
   PRINTFUL_BASE,
+  PRINTFUL_RATE_LIMITED_CODE,
   type MockupResult,
   type PrintfulPrintfilesResult,
   type CreateMockupTaskOptions,
@@ -759,6 +760,27 @@ export async function POST(
     if (!batch.ok && 'printful_error_code' in batch) {
       printfulErrorCode = batch.printful_error_code
       printfulErrorMessage = batch.printful_error
+    }
+    // Let the client wait and retry — do not burn the rest of maxDuration sleeping on 429.
+    if (batch.reason === 'rate_limited' || batch.status === 429) {
+      const retryAfterMs =
+        typeof batch.retry_after_ms === 'number' && batch.retry_after_ms > 0
+          ? batch.retry_after_ms
+          : 65_000
+      console.warn('[preview-mockups] Printful rate limited — returning retryable 429', {
+        draftId,
+        productId,
+        variantId,
+        retry_after_ms: retryAfterMs,
+      })
+      return NextResponse.json(
+        {
+          error: 'Printful is rate limiting mockup generation. Please wait and try again.',
+          code: PRINTFUL_RATE_LIMITED_CODE,
+          retry_after_ms: retryAfterMs,
+        },
+        { status: 429 }
+      )
     }
     console.error('[preview-mockups] Printful task failed —', {
       reason: batch.reason,

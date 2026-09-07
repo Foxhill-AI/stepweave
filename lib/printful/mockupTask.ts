@@ -5,7 +5,8 @@ export const PRINTFUL_BASE = 'https://api.printful.com'
 export const POLL_INTERVAL_MS = 1500
 export const FIRST_WAIT_MS = 3000
 export const PER_TASK_MAX_MS = 75000
-export const MAX_429_RETRIES = 8
+/** Client/API code when Printful create-task returns 429 — do not sleep in serverless. */
+export const PRINTFUL_RATE_LIMITED_CODE = 'PRINTFUL_RATE_LIMITED'
 
 export type PrintfulPrintfilesResult = {
   printfiles?: Array<{
@@ -76,11 +77,15 @@ export async function createTaskAndPoll(
   options?: CreateMockupTaskOptions
 ): Promise<
   | { ok: true; mockups: MockupResult[] }
-  | { ok: false; reason: string; status?: number; printful_error?: string; printful_error_code?: number }
+  | {
+      ok: false
+      reason: string
+      status?: number
+      retry_after_ms?: number
+      printful_error?: string
+      printful_error_code?: number
+    }
 > {
-  let createRes: Response | null = null
-  let bodyText = ''
-
   const taskRequestBody: Record<string, unknown> = {
     variant_ids: [variantId],
     format: 'png',
@@ -93,26 +98,29 @@ export async function createTaskAndPoll(
     taskRequestBody.options = options.options
   }
 
-  for (let r = 0; r < MAX_429_RETRIES; r++) {
-    createRes = await fetch(`${PRINTFUL_BASE}/mockup-generator/create-task/${productId}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(taskRequestBody),
-    })
-    bodyText = await createRes.text()
+  // Fail fast on 429 — sleeping ~60s inside Vercel burns maxDuration and drops the client.
+  // Callers return retry_after_ms so the browser can wait and POST again.
+  const createRes = await fetch(`${PRINTFUL_BASE}/mockup-generator/create-task/${productId}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(taskRequestBody),
+  })
+  const bodyText = await createRes.text()
 
-    if (createRes.status === 429) {
-      const wait = parse429WaitMs(bodyText)
-      console.warn('[printful mockup] 429 create-task, waiting ms', wait)
-      await sleep(wait)
-      continue
+  if (createRes.status === 429) {
+    const retryAfterMs = parse429WaitMs(bodyText)
+    console.warn('[printful mockup] 429 create-task, fail-fast retry_after_ms', retryAfterMs)
+    return {
+      ok: false,
+      reason: 'rate_limited',
+      status: 429,
+      retry_after_ms: retryAfterMs,
     }
-    break
   }
 
-  if (!createRes?.ok) {
-    console.error('[printful mockup] create-task', createRes?.status, bodyText)
-    return { ok: false, reason: 'create-task failed', status: createRes?.status }
+  if (!createRes.ok) {
+    console.error('[printful mockup] create-task', createRes.status, bodyText)
+    return { ok: false, reason: 'create-task failed', status: createRes.status }
   }
 
   let parsedCreate: { result?: { task_key?: string } }

@@ -4,6 +4,7 @@ import {
   createTaskAndPoll,
   mergeMockups,
   PRINTFUL_BASE,
+  PRINTFUL_RATE_LIMITED_CODE,
   type PrintfulPrintfilesResult,
 } from '@/lib/printful/mockupTask'
 import {
@@ -174,6 +175,23 @@ export async function GET(
 
     if (batch.ok) {
       mergeMockups(urlByPlacement, batch.mockups)
+    } else if (batch.reason === 'rate_limited' || batch.status === 429) {
+      const retryAfterMs =
+        typeof batch.retry_after_ms === 'number' && batch.retry_after_ms > 0
+          ? batch.retry_after_ms
+          : 65_000
+      return NextResponse.json(
+        {
+          error: 'Printful is rate limiting mockup generation. Please wait and try again.',
+          code: PRINTFUL_RATE_LIMITED_CODE,
+          retry_after_ms: retryAfterMs,
+          product_id: productId,
+          variant_id: variantId,
+          placements: [] as PlacementMockup[],
+          mockup_generation_unavailable: true,
+        },
+        { status: 429 }
+      )
     } else {
       console.warn('[mockup-images] batch failed:', batch.reason)
     }
