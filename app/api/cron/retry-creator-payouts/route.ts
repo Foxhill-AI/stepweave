@@ -103,8 +103,8 @@ export async function GET(request: NextRequest) {
           { idempotencyKey: `order-${orderId}-seller-${sellerUserAccountId}` }
         )
 
-        // Record in order_connect_transfer
-        await admin.from('order_connect_transfer').upsert(
+        // Record in order_connect_transfer — only mark resolved if this write succeeds
+        const { error: upsertErr } = await admin.from('order_connect_transfer').upsert(
           {
             user_order_id: orderId,
             seller_user_account_id: sellerUserAccountId,
@@ -116,10 +116,20 @@ export async function GET(request: NextRequest) {
           { onConflict: 'user_order_id,seller_user_account_id', ignoreDuplicates: true }
         )
 
-        // Mark pending payout resolved
+        if (upsertErr) {
+          console.error('[cron/retry-creator-payouts] order_connect_transfer upsert failed', orderId, sellerUserAccountId, upsertErr)
+          await admin
+            .from('pending_creator_payout')
+            .update({ last_retry_at: new Date().toISOString() })
+            .eq('id', pendingId)
+          skipped++
+          continue
+        }
+
+        // Mark pending payout resolved only after DB write confirmed
         await admin
           .from('pending_creator_payout')
-          .update({ resolved_at: new Date().toISOString(), last_retry_at: new Date().toISOString(), retry_count: (row as { retry_count?: number }).retry_count ?? 0 + 1 })
+          .update({ resolved_at: new Date().toISOString(), last_retry_at: new Date().toISOString(), retry_count: ((row as { retry_count?: number }).retry_count ?? 0) + 1 })
           .eq('id', pendingId)
 
         console.info('[cron/retry-creator-payouts] transfer succeeded', { orderId, sellerUserAccountId, transferId: transfer.id })
@@ -160,11 +170,15 @@ export async function GET(request: NextRequest) {
             emailType: 'day3',
           })
           if (result.ok) {
-            await admin.from('pending_payout_email').insert({
-              seller_user_account_id: sellerUserAccountId,
-              user_order_id: orderId,
-              email_type: 'day3',
-            })
+            // upsert so concurrent cron runs can't send a second email
+            await admin.from('pending_payout_email').upsert(
+              {
+                seller_user_account_id: sellerUserAccountId,
+                user_order_id: orderId,
+                email_type: 'day3',
+              },
+              { onConflict: 'user_order_id,seller_user_account_id,email_type', ignoreDuplicates: true }
+            )
             emailed++
           }
         }
