@@ -195,6 +195,62 @@ export async function sendOrderConfirmationEmail(
 }
 
 /**
+ * Send an alert to the platform admin when a Printful order submission fails.
+ * Recipient is controlled by ADMIN_ALERT_EMAIL env var.
+ * No-op if RESEND_API_KEY or ADMIN_ALERT_EMAIL is not set.
+ */
+export async function sendFulfillmentFailureAlert(params: {
+  orderId: number
+  reason: string
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!resend) return { ok: true }
+
+  const adminEmailRaw = process.env.ADMIN_ALERT_EMAIL?.trim()
+  if (!adminEmailRaw) return { ok: true }
+  const adminEmail = adminEmailRaw.split(',').map((e) => e.trim()).filter(Boolean)
+  if (adminEmail.length === 0) return { ok: true }
+
+  const { orderId, reason } = params
+  const origin = defaultOrigin.replace(/\/$/, '')
+  const retryUrl = `${origin}/api/admin/retry-fulfillment`
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111;">
+  <h1 style="font-size:1.25rem;margin:0 0 8px;color:#cc0000;">Fulfillment failed — Order #${orderId}</h1>
+  <p style="margin:0 0 16px;color:#555;">A Printful order submission failed after payment was received.</p>
+  <p style="margin:0 0 4px;"><strong>Order ID:</strong> ${orderId}</p>
+  <p style="margin:0 0 16px;"><strong>Error:</strong> ${escapeHtml(reason)}</p>
+  <p style="margin:0 0 24px;color:#555;">Fix the underlying issue (e.g. update your Printful payment method), then retry:</p>
+  <pre style="background:#f5f5f5;padding:12px;border-radius:4px;font-size:0.85rem;overflow-x:auto;">curl -X POST ${retryUrl} \\
+  -H "Content-Type: application/json" \\
+  -H "x-admin-secret: YOUR_ADMIN_SECRET" \\
+  -d '{"orderId": ${orderId}}'</pre>
+</body>
+</html>`.trim()
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: adminEmail,
+      subject: `[Step Weave] Fulfillment failed — Order #${orderId}`,
+      html,
+    })
+    if (error) {
+      console.error('Resend sendFulfillmentFailureAlert:', error)
+      return { ok: false, error: error.message }
+    }
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Resend sendFulfillmentFailureAlert exception:', message)
+    return { ok: false, error: message }
+  }
+}
+
+/**
  * Send welcome email to a newly created account.
  * No-op if RESEND_API_KEY is not set.
  */

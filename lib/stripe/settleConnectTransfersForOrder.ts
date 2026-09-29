@@ -103,7 +103,7 @@ export async function settleConnectTransfersForOrder(
       )
 
       // Upsert a pending payout row so the retry cron can pick it up
-      await client.from('pending_creator_payout').upsert(
+      const { error: pendingErr } = await client.from('pending_creator_payout').upsert(
         {
           user_order_id: orderId,
           seller_user_account_id: sellerUserAccountId,
@@ -113,6 +113,9 @@ export async function settleConnectTransfersForOrder(
         },
         { onConflict: 'user_order_id,seller_user_account_id', ignoreDuplicates: true }
       )
+      if (pendingErr) {
+        console.error('[connect-settlement] upsert pending_creator_payout failed', orderId, sellerUserAccountId, pendingErr)
+      }
 
       // Send day-0 email if not already sent
       const { data: existingEmail } = await client
@@ -148,11 +151,15 @@ export async function settleConnectTransfersForOrder(
                 emailType: 'day0',
               })
               if (result.ok) {
-                await client.from('pending_payout_email').insert({
-                  seller_user_account_id: sellerUserAccountId,
-                  user_order_id: orderId,
-                  email_type: 'day0',
-                })
+                // upsert so a concurrent duplicate webhook can't send a second email
+                await client.from('pending_payout_email').upsert(
+                  {
+                    seller_user_account_id: sellerUserAccountId,
+                    user_order_id: orderId,
+                    email_type: 'day0',
+                  },
+                  { onConflict: 'user_order_id,seller_user_account_id,email_type', ignoreDuplicates: true }
+                )
               }
             }
           } catch (e) {
@@ -181,18 +188,32 @@ export async function settleConnectTransfersForOrder(
         }
       )
 
-      const { error: insErr } = await client.from('order_connect_transfer').insert({
-        user_order_id: orderId,
-        seller_user_account_id: sellerUserAccountId,
-        amount_cents: amountCents,
-        currency,
-        stripe_transfer_id: transfer.id,
-        stripe_charge_id: chargeId,
-      })
+      // Upsert so that if the transfer succeeded but the DB write failed on a
+      // prior attempt, the retry can record it without hitting the unique constraint.
+      const { error: insErr } = await client.from('order_connect_transfer').upsert(
+        {
+          user_order_id: orderId,
+          seller_user_account_id: sellerUserAccountId,
+          amount_cents: amountCents,
+          currency,
+          stripe_transfer_id: transfer.id,
+          stripe_charge_id: chargeId,
+        },
+        { onConflict: 'user_order_id,seller_user_account_id', ignoreDuplicates: true }
+      )
 
       if (insErr) {
-        console.error('[connect-settlement] insert order_connect_transfer', orderId, sellerUserAccountId, insErr)
+        console.error('[connect-settlement] upsert order_connect_transfer', orderId, sellerUserAccountId, insErr)
       }
+
+      // If a pending payout row exists for this order+seller (from a prior attempt
+      // that found the seller unready), mark it resolved now that the transfer went through.
+      await client
+        .from('pending_creator_payout')
+        .update({ resolved_at: new Date().toISOString() })
+        .eq('user_order_id', orderId)
+        .eq('seller_user_account_id', sellerUserAccountId)
+        .is('resolved_at', null)
     } catch (e) {
       console.error('[connect-settlement] transfers.create failed', orderId, sellerUserAccountId, e)
     }

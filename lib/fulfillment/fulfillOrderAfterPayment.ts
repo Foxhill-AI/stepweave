@@ -10,6 +10,7 @@ import {
   type PrintfulSubmitRecipient,
   type PrintfulOrderLineItem,
 } from '@/lib/printful/submitPrintfulOrder'
+import { sendFulfillmentFailureAlert } from '@/lib/email'
 
 function isDesignSnapshotPayload(raw: unknown): raw is DesignDraftSnapshotPayload {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
@@ -183,4 +184,9 @@ async function persistFulfillmentFailure(
   if (error) {
     console.error('persistFulfillmentFailure:', error)
   }
+
+  // Alert admin — fire and forget, don't block the caller
+  sendFulfillmentFailureAlert({ orderId, reason: message }).catch((e) =>
+    console.error('persistFulfillmentFailure: alert email failed', e)
+  )
 }
