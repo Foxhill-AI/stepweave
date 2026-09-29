@@ -312,6 +312,85 @@ export async function sendOrderShippedEmail(params: {
 }
 
 /**
+ * Send a 7-day post performance summary to a creator.
+ * No-op if RESEND_API_KEY is not set.
+ */
+export async function sendCreatorStatsEmail(params: {
+  to: string
+  username: string
+  productName: string
+  productId: number
+  views: number
+  likes: number
+  orders: number
+  revenueEarned: number
+  currency: string
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!resend) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Resend] RESEND_API_KEY not set; skipping creator stats email to', params.to)
+    }
+    return { ok: true }
+  }
+
+  const { to, username, productName, productId, views, likes, orders, revenueEarned, currency } = params
+  const origin = defaultOrigin.replace(/\/$/, '')
+  const productUrl = `${origin}/item/${productId}`
+
+  const revenueBlock = revenueEarned > 0
+    ? `<tr><td style="padding:10px 0;color:#555;border-bottom:1px solid #eee;">Revenue earned</td><td style="padding:10px 0;text-align:right;font-weight:600;border-bottom:1px solid #eee;">${formatCurrency(revenueEarned, currency)}</td></tr>`
+    : ''
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111;">
+  <h1 style="font-size:1.5rem;margin:0 0 4px;">Your first week on Step Weave</h1>
+  <p style="color:#555;margin:0 0 24px;">Here's how <strong>${escapeHtml(productName)}</strong> performed in its first 7 days.</p>
+
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+    <tr>
+      <td style="padding:10px 0;color:#555;border-bottom:1px solid #eee;">Views</td>
+      <td style="padding:10px 0;text-align:right;font-weight:600;border-bottom:1px solid #eee;">${views.toLocaleString()}</td>
+    </tr>
+    <tr>
+      <td style="padding:10px 0;color:#555;border-bottom:1px solid #eee;">Likes</td>
+      <td style="padding:10px 0;text-align:right;font-weight:600;border-bottom:1px solid #eee;">${likes.toLocaleString()}</td>
+    </tr>
+    <tr>
+      <td style="padding:10px 0;color:#555;border-bottom:1px solid #eee;">Orders</td>
+      <td style="padding:10px 0;text-align:right;font-weight:600;border-bottom:1px solid #eee;">${orders.toLocaleString()}</td>
+    </tr>
+    ${revenueBlock}
+  </table>
+
+  <p style="margin:0 0 24px;"><a href="${productUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">View your listing</a></p>
+
+  <p style="color:#999;font-size:0.875rem;margin:0;">Keep designing — the Step Weave team</p>
+</body>
+</html>`.trim()
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: to.trim(),
+      subject: `How did ${productName} do this week?`,
+      html,
+    })
+    if (error) {
+      console.error('Resend sendCreatorStatsEmail:', error)
+      return { ok: false, error: error.message }
+    }
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Resend sendCreatorStatsEmail exception:', message)
+    return { ok: false, error: message }
+  }
+}
+
+/**
  * Send "Subscription ended" email when a subscription is canceled at period end.
  * No-op if RESEND_API_KEY is not set.
  */
