@@ -391,6 +391,74 @@ export async function sendCreatorStatsEmail(params: {
 }
 
 /**
+ * Send "you have money waiting — set up Stripe" email to a creator whose Connect
+ * account isn't ready yet. email_type: 'day0' or 'day3'.
+ */
+export async function sendPendingPayoutEmail(params: {
+  to: string
+  username: string
+  amountDollars: number
+  currency: string
+  emailType: 'day0' | 'day3'
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!resend) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Resend] RESEND_API_KEY not set; skipping pending payout email to', params.to)
+    }
+    return { ok: true }
+  }
+
+  const { to, username, amountDollars, currency, emailType } = params
+  const origin = defaultOrigin.replace(/\/$/, '')
+  const stripeSetupUrl = `${origin}/profile?tab=earnings`
+  const formattedAmount = formatCurrency(amountDollars, currency)
+
+  const subject = emailType === 'day0'
+    ? `You earned ${formattedAmount} on Step Weave — claim it now`
+    : `Reminder: ${formattedAmount} is still waiting for you on Step Weave`
+
+  const headline = emailType === 'day0'
+    ? `Someone bought your design!`
+    : `Your earnings are still unclaimed`
+
+  const body = emailType === 'day0'
+    ? `Great news — someone just purchased your shoe design and you earned <strong>${formattedAmount}</strong>. To receive your payout, you just need to connect your Stripe account. It takes about 2 minutes.`
+    : `Just a reminder that you have <strong>${formattedAmount}</strong> waiting for you from a recent sale. Connect your Stripe account to get paid.`
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111;">
+  <h1 style="font-size:1.5rem;margin:0 0 8px;">${headline}</h1>
+  <p style="color:#333;margin:0 0 24px;">${body}</p>
+  <p style="margin:0 0 24px;">
+    <a href="${escapeHtml(stripeSetupUrl)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">Connect Stripe &amp; get paid</a>
+  </p>
+  <p style="color:#999;font-size:0.875rem;margin:0;">Once connected, your earnings will be transferred automatically for this and all future sales.</p>
+</body>
+</html>`.trim()
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: to.trim(),
+      subject,
+      html,
+    })
+    if (error) {
+      console.error('Resend sendPendingPayoutEmail:', error)
+      return { ok: false, error: error.message }
+    }
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Resend sendPendingPayoutEmail exception:', message)
+    return { ok: false, error: message }
+  }
+}
+
+/**
  * Send "Subscription ended" email when a subscription is canceled at period end.
  * No-op if RESEND_API_KEY is not set.
  */
