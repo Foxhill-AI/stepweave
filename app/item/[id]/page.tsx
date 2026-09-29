@@ -451,7 +451,7 @@ export default function ProductPage() {
           These shoes tend to run a little small.
         </p>
         <p style={{ margin: '0 0 24px', color: 'var(--color-text-light)', fontSize: '0.95rem' }}>
-          We recommend sizing up half a size if you're between sizes. Are you confident in your selection?
+          We recommend sizing up one full size above your typical size. Are you confident in your selection?
         </p>
         <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
           <button
