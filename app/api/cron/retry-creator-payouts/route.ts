@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
-import { sendPendingPayoutEmail } from '@/lib/email'
+import { sendPendingPayoutEmail, sendAdminAlert } from '@/lib/email'
 
 /**
  * GET /api/cron/retry-creator-payouts
@@ -13,6 +13,22 @@ import { sendPendingPayoutEmail } from '@/lib/email'
  *    - If still not ready: sends the day-3 follow-up email if 3+ days have passed and not yet sent.
  */
 export async function GET(request: NextRequest) {
+  try {
+    return await handler(request)
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e)
+    console.error('[cron/retry-creator-payouts] top-level crash', e)
+    sendAdminAlert({
+      subject: 'Cron crashed: retry-creator-payouts',
+      title: 'retry-creator-payouts cron crashed',
+      body: 'The creator payout retry cron threw an unexpected error and did not complete. Pending creator payouts were not retried.',
+      detail: `Error: ${reason}`,
+    }).catch(() => {})
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+async function handler(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET?.trim()
   if (cronSecret) {
     const auth = request.headers.get('authorization')
@@ -136,10 +152,18 @@ export async function GET(request: NextRequest) {
         retried++
       } catch (e) {
         console.error('[cron/retry-creator-payouts] transfer failed', orderId, sellerUserAccountId, e)
+        const reason = e instanceof Error ? e.message : String(e)
+        const retryCount = ((row as { retry_count?: number }).retry_count ?? 0) + 1
         await admin
           .from('pending_creator_payout')
-          .update({ last_retry_at: new Date().toISOString() })
+          .update({ last_retry_at: new Date().toISOString(), retry_count: retryCount })
           .eq('id', pendingId)
+        sendAdminAlert({
+          subject: `Creator payout retry failed — Order #${orderId} (attempt ${retryCount})`,
+          title: `Creator payout retry failed — Order #${orderId}`,
+          body: `Stripe transfer to seller <strong>#${sellerUserAccountId}</strong> failed again (attempt <strong>${retryCount}</strong>). The creator has not been paid. Investigate and retry manually if needed.`,
+          detail: `Error: ${reason}`,
+        }).catch(() => {})
         skipped++
       }
       continue

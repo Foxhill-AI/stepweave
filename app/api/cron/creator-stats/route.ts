@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendCreatorStatsEmail } from '@/lib/email'
+import { sendCreatorStatsEmail, sendAdminAlert } from '@/lib/email'
 
 /**
  * GET /api/cron/creator-stats
@@ -12,6 +12,22 @@ import { sendCreatorStatsEmail } from '@/lib/email'
  * Protected by CRON_SECRET header (set in Vercel env vars).
  */
 export async function GET(request: NextRequest) {
+  try {
+    return await handler(request)
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e)
+    console.error('[cron/creator-stats] top-level crash', e)
+    sendAdminAlert({
+      subject: 'Cron crashed: creator-stats',
+      title: 'creator-stats cron crashed',
+      body: 'The creator stats email cron threw an unexpected error and did not complete. Some creators may not have received their 7-day stats email.',
+      detail: `Error: ${reason}`,
+    }).catch(() => {})
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+async function handler(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET?.trim()
   if (cronSecret) {
     const auth = request.headers.get('authorization')

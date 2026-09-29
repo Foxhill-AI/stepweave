@@ -195,13 +195,15 @@ export async function sendOrderConfirmationEmail(
 }
 
 /**
- * Send an alert to the platform admin when a Printful order submission fails.
- * Recipient is controlled by ADMIN_ALERT_EMAIL env var.
+ * Send a generic alert to all admin emails (ADMIN_ALERT_EMAIL, comma-separated).
  * No-op if RESEND_API_KEY or ADMIN_ALERT_EMAIL is not set.
  */
-export async function sendFulfillmentFailureAlert(params: {
-  orderId: number
-  reason: string
+export async function sendAdminAlert(params: {
+  subject: string
+  title: string
+  body: string
+  /** Optional extra detail block rendered as <pre> */
+  detail?: string
 }): Promise<{ ok: boolean; error?: string }> {
   if (!resend) return { ok: true }
 
@@ -210,24 +212,20 @@ export async function sendFulfillmentFailureAlert(params: {
   const adminEmail = adminEmailRaw.split(',').map((e) => e.trim()).filter(Boolean)
   if (adminEmail.length === 0) return { ok: true }
 
-  const { orderId, reason } = params
-  const origin = defaultOrigin.replace(/\/$/, '')
-  const retryUrl = `${origin}/api/admin/retry-fulfillment`
+  const { subject, title, body, detail } = params
+
+  const detailBlock = detail
+    ? `<pre style="background:#f5f5f5;padding:12px;border-radius:4px;font-size:0.85rem;overflow-x:auto;margin-top:16px;">${escapeHtml(detail)}</pre>`
+    : ''
 
   const html = `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111;">
-  <h1 style="font-size:1.25rem;margin:0 0 8px;color:#cc0000;">Fulfillment failed — Order #${orderId}</h1>
-  <p style="margin:0 0 16px;color:#555;">A Printful order submission failed after payment was received.</p>
-  <p style="margin:0 0 4px;"><strong>Order ID:</strong> ${orderId}</p>
-  <p style="margin:0 0 16px;"><strong>Error:</strong> ${escapeHtml(reason)}</p>
-  <p style="margin:0 0 24px;color:#555;">Fix the underlying issue (e.g. update your Printful payment method), then retry:</p>
-  <pre style="background:#f5f5f5;padding:12px;border-radius:4px;font-size:0.85rem;overflow-x:auto;">curl -X POST ${retryUrl} \\
-  -H "Content-Type: application/json" \\
-  -H "x-admin-secret: YOUR_ADMIN_SECRET" \\
-  -d '{"orderId": ${orderId}}'</pre>
+  <h1 style="font-size:1.25rem;margin:0 0 12px;color:#cc0000;">${escapeHtml(title)}</h1>
+  <p style="margin:0 0 8px;color:#333;">${body}</p>
+  ${detailBlock}
 </body>
 </html>`.trim()
 
@@ -235,19 +233,33 @@ export async function sendFulfillmentFailureAlert(params: {
     const { error } = await resend.emails.send({
       from: FROM_EMAIL,
       to: adminEmail,
-      subject: `[Step Weave] Fulfillment failed — Order #${orderId}`,
+      subject: `[Step Weave] ${subject}`,
       html,
     })
     if (error) {
-      console.error('Resend sendFulfillmentFailureAlert:', error)
+      console.error('Resend sendAdminAlert:', error)
       return { ok: false, error: error.message }
     }
     return { ok: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error('Resend sendFulfillmentFailureAlert exception:', message)
+    console.error('Resend sendAdminAlert exception:', message)
     return { ok: false, error: message }
   }
+}
+
+/** Convenience wrapper for fulfillment failures — keeps existing call sites simple. */
+export function sendFulfillmentFailureAlert(params: {
+  orderId: number
+  reason: string
+}): Promise<{ ok: boolean; error?: string }> {
+  const origin = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.stepweave.com').replace(/\/$/, '')
+  return sendAdminAlert({
+    subject: `Fulfillment failed — Order #${params.orderId}`,
+    title: `Fulfillment failed — Order #${params.orderId}`,
+    body: `A Printful order submission failed after payment was received. Error: <strong>${escapeHtml(params.reason)}</strong>`,
+    detail: `curl -X POST ${origin}/api/admin/retry-fulfillment \\\n  -H "Content-Type: application/json" \\\n  -H "x-admin-secret: YOUR_ADMIN_SECRET" \\\n  -d '{"orderId": ${params.orderId}}'`,
+  })
 }
 
 /**

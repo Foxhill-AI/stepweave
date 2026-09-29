@@ -9,7 +9,7 @@ import {
   isStripeWebhookEventFullyProcessed,
   type ShippingAddressRow,
 } from '@/lib/supabaseClient'
-import { sendOrderConfirmationEmail, sendSubscriptionEndedEmail } from '@/lib/email'
+import { sendOrderConfirmationEmail, sendSubscriptionEndedEmail, sendAdminAlert } from '@/lib/email'
 import { fulfillOrderAfterPayment } from '@/lib/fulfillment/fulfillOrderAfterPayment'
 import { settleConnectTransfersForOrder } from '@/lib/stripe/settleConnectTransfersForOrder'
 
@@ -328,6 +328,12 @@ export async function POST(request: NextRequest) {
       )
     if (upsertSubError) {
       console.error('Stripe webhook: upsert user_subscription failed', upsertSubError)
+      sendAdminAlert({
+        subject: `Subscription record failed to save — user #${userAccountId}`,
+        title: `Subscription DB write failed — user #${userAccountId}`,
+        body: `The subscription tier was updated for user <strong>#${userAccountId}</strong> but the <code>user_subscription</code> record failed to save. The user's tier may be inconsistent.`,
+        detail: `Error: ${upsertSubError.message}`,
+      }).catch(() => {})
     }
     await markStripeWebhookEventProcessed(event.id, client, null)
     return NextResponse.json(
@@ -395,12 +401,26 @@ export async function POST(request: NextRequest) {
     await settleConnectTransfersForOrder(orderId, stripeForConnect, client, paymentIntentId)
   } catch (e) {
     console.error('Stripe webhook: settleConnectTransfersForOrder', e)
+    const reason = e instanceof Error ? e.message : String(e)
+    sendAdminAlert({
+      subject: `Creator payout crashed — Order #${orderId}`,
+      title: `Creator payout function crashed — Order #${orderId}`,
+      body: `<code>settleConnectTransfersForOrder</code> threw an unexpected error for order <strong>#${orderId}</strong>. Creators may not have been paid. Manual investigation required.`,
+      detail: `Error: ${reason}`,
+    }).catch(() => {})
   }
 
   try {
     await fulfillOrderAfterPayment(orderId, client)
   } catch (e) {
     console.error('Stripe webhook: fulfillOrderAfterPayment', e)
+    const reason = e instanceof Error ? e.message : String(e)
+    sendAdminAlert({
+      subject: `Fulfillment function crashed — Order #${orderId}`,
+      title: `Fulfillment function crashed — Order #${orderId}`,
+      body: `<code>fulfillOrderAfterPayment</code> threw an unexpected error for order <strong>#${orderId}</strong>. The order may not have been sent to Printful. The retry cron will attempt recovery.`,
+      detail: `Error: ${reason}`,
+    }).catch(() => {})
   }
 
   const customerEmail =
