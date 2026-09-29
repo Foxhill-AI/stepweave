@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 import { getOrderById } from '@/lib/supabaseClient'
-import { sendPendingPayoutEmail } from '@/lib/email'
+import { sendPendingPayoutEmail, sendAdminAlert } from '@/lib/email'
 
 /**
  * After a platform Checkout payment succeeds, transfer each seller's net (Phase 2 snapshot)
@@ -115,6 +115,12 @@ export async function settleConnectTransfersForOrder(
       )
       if (pendingErr) {
         console.error('[connect-settlement] upsert pending_creator_payout failed', orderId, sellerUserAccountId, pendingErr)
+        sendAdminAlert({
+          subject: `Payout retry state lost — Order #${orderId}`,
+          title: `Payout retry state lost — Order #${orderId}`,
+          body: `Failed to save pending payout record for seller <strong>${sellerUserAccountId}</strong> on order <strong>#${orderId}</strong>. The retry cron will not find this payout — manual intervention required.`,
+          detail: `Error: ${pendingErr.message}`,
+        }).catch(() => {})
       }
 
       // Send day-0 email if not already sent
@@ -204,6 +210,12 @@ export async function settleConnectTransfersForOrder(
 
       if (insErr) {
         console.error('[connect-settlement] upsert order_connect_transfer', orderId, sellerUserAccountId, insErr)
+        sendAdminAlert({
+          subject: `Transfer recorded in Stripe but not in DB — Order #${orderId}`,
+          title: `Transfer audit trail missing — Order #${orderId}`,
+          body: `Stripe transfer to seller <strong>${sellerUserAccountId}</strong> succeeded but the database record failed to save. The creator has been paid but there is no audit trail. Manual DB insert may be required.`,
+          detail: `Error: ${insErr.message}`,
+        }).catch(() => {})
       }
 
       // If a pending payout row exists for this order+seller (from a prior attempt
@@ -216,6 +228,13 @@ export async function settleConnectTransfersForOrder(
         .is('resolved_at', null)
     } catch (e) {
       console.error('[connect-settlement] transfers.create failed', orderId, sellerUserAccountId, e)
+      const reason = e instanceof Error ? e.message : String(e)
+      sendAdminAlert({
+        subject: `Stripe transfer failed — Order #${orderId}`,
+        title: `Stripe transfer failed — Order #${orderId}`,
+        body: `Failed to transfer funds to seller <strong>${sellerUserAccountId}</strong> for order <strong>#${orderId}</strong>. The creator has not been paid. The retry cron will not catch this automatically — manual retry may be required.`,
+        detail: `Error: ${reason}`,
+      }).catch(() => {})
     }
   }
 }
