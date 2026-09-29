@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 import { getOrderById } from '@/lib/supabaseClient'
+import { sendPendingPayoutEmail } from '@/lib/email'
 
 /**
  * After a platform Checkout payment succeeds, transfer each seller's net (Phase 2 snapshot)
@@ -96,10 +97,70 @@ export async function settleConnectTransfersForOrder(
 
     if (!canReceive) {
       console.warn(
-        '[connect-settlement] seller not ready for transfers; skipping',
+        '[connect-settlement] seller not ready for transfers; recording pending payout',
         orderId,
         sellerUserAccountId
       )
+
+      // Upsert a pending payout row so the retry cron can pick it up
+      await client.from('pending_creator_payout').upsert(
+        {
+          user_order_id: orderId,
+          seller_user_account_id: sellerUserAccountId,
+          amount_cents: amountCents,
+          currency,
+          stripe_charge_id: chargeId,
+        },
+        { onConflict: 'user_order_id,seller_user_account_id', ignoreDuplicates: true }
+      )
+
+      // Send day-0 email if not already sent
+      const { data: existingEmail } = await client
+        .from('pending_payout_email')
+        .select('id')
+        .eq('user_order_id', orderId)
+        .eq('seller_user_account_id', sellerUserAccountId)
+        .eq('email_type', 'day0')
+        .maybeSingle()
+
+      if (!existingEmail) {
+        const { data: authData } = await client
+          .from('user_account')
+          .select('auth_user_id, username')
+          .eq('id', sellerUserAccountId)
+          .maybeSingle()
+
+        if (authData?.auth_user_id) {
+          // We need service role to get the email — caller passes client which may be admin
+          // so attempt getUserById; if it fails (anon client), skip silently
+          try {
+            const adminClient = client as unknown as {
+              auth: { admin: { getUserById: (id: string) => Promise<{ data: { user: { email?: string } | null } }> } }
+            }
+            const { data: authUser } = await adminClient.auth.admin.getUserById(authData.auth_user_id)
+            const email = authUser?.user?.email
+            if (email) {
+              const result = await sendPendingPayoutEmail({
+                to: email,
+                username: (authData.username as string | null) ?? 'there',
+                amountDollars: amountCents / 100,
+                currency,
+                emailType: 'day0',
+              })
+              if (result.ok) {
+                await client.from('pending_payout_email').insert({
+                  seller_user_account_id: sellerUserAccountId,
+                  user_order_id: orderId,
+                  email_type: 'day0',
+                })
+              }
+            }
+          } catch (e) {
+            console.warn('[connect-settlement] could not send pending payout email', e)
+          }
+        }
+      }
+
       continue
     }
 
