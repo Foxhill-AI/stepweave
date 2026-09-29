@@ -195,6 +195,123 @@ export async function sendOrderConfirmationEmail(
 }
 
 /**
+ * Send welcome email to a newly created account.
+ * No-op if RESEND_API_KEY is not set.
+ */
+export async function sendWelcomeEmail(params: {
+  to: string
+  username: string
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!resend) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Resend] RESEND_API_KEY not set; skipping welcome email to', params.to)
+    }
+    return { ok: true }
+  }
+
+  const { to, username } = params
+  const origin = defaultOrigin.replace(/\/$/, '')
+  const exploreUrl = `${origin}/explore`
+  const designUrl = `${origin}/design`
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111;">
+  <h1 style="font-size:1.5rem;margin:0 0 8px;">Welcome to Step Weave, ${escapeHtml(username)}!</h1>
+  <p style="color:#555;margin:0 0 24px;">You're all set. Here's what you can do:</p>
+  <ul style="padding-left:20px;color:#333;line-height:2;">
+    <li>Browse unique shoe designs from independent creators</li>
+    <li>Design your own custom shoes with our AI design tool</li>
+    <li>Order your design — printed and shipped directly to you</li>
+  </ul>
+  <p style="margin-top:24px;">
+    <a href="${exploreUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;margin-right:12px;">Explore designs</a>
+    <a href="${designUrl}" style="display:inline-block;color:#0066cc;font-weight:600;padding:12px 0;">Create your own →</a>
+  </p>
+</body>
+</html>`.trim()
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: to.trim(),
+      subject: `Welcome to Step Weave, ${username}!`,
+      html,
+    })
+    if (error) {
+      console.error('Resend sendWelcomeEmail:', error)
+      return { ok: false, error: error.message }
+    }
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Resend sendWelcomeEmail exception:', message)
+    return { ok: false, error: message }
+  }
+}
+
+/**
+ * Send order shipped email with tracking info.
+ * No-op if RESEND_API_KEY is not set.
+ */
+export async function sendOrderShippedEmail(params: {
+  to: string
+  orderNumber: number
+  trackingNumber: string | null
+  trackingUrl: string | null
+  carrier: string | null
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!resend) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Resend] RESEND_API_KEY not set; skipping order shipped email to', params.to)
+    }
+    return { ok: true }
+  }
+
+  const { to, orderNumber, trackingNumber, trackingUrl, carrier } = params
+  const origin = defaultOrigin.replace(/\/$/, '')
+  const profileUrl = `${origin}/profile`
+
+  const trackingBlock = trackingUrl
+    ? `<p style="margin:16px 0;"><a href="${escapeHtml(trackingUrl)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">Track your package</a></p>`
+    : trackingNumber
+    ? `<p style="margin:16px 0;color:#333;">Tracking number: <strong>${escapeHtml(trackingNumber)}</strong>${carrier ? ` (${escapeHtml(carrier)})` : ''}</p>`
+    : ''
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111;">
+  <h1 style="font-size:1.5rem;margin:0 0 8px;">Your order is on its way!</h1>
+  <p style="color:#555;margin:0 0 16px;">Order <strong>#${orderNumber}</strong> has shipped and is heading to you.</p>
+  ${trackingBlock}
+  <p style="margin-top:24px;"><a href="${profileUrl}" style="color:#0066cc;font-weight:600;">View your orders</a></p>
+</body>
+</html>`.trim()
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: to.trim(),
+      subject: `Your Step Weave order #${orderNumber} has shipped!`,
+      html,
+    })
+    if (error) {
+      console.error('Resend sendOrderShippedEmail:', error)
+      return { ok: false, error: error.message }
+    }
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Resend sendOrderShippedEmail exception:', message)
+    return { ok: false, error: message }
+  }
+}
+
+/**
  * Send "Subscription ended" email when a subscription is canceled at period end.
  * No-op if RESEND_API_KEY is not set.
  */
