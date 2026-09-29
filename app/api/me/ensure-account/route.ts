@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { sendWelcomeEmail } from '@/lib/email'
 
 /**
  * POST /api/me/ensure-account
@@ -85,6 +86,17 @@ export async function POST(request: Request) {
 
   if (insErr) {
     return NextResponse.json({ error: insErr.message }, { status: 400 })
+  }
+
+  if (user.email) {
+    const finalUsername =
+      (typeof body.username === 'string' ? body.username.trim() : '') ||
+      fromMeta ||
+      emailLocal ||
+      'there'
+    sendWelcomeEmail({ to: user.email, username: finalUsername }).catch((e) =>
+      console.error('[ensure-account] welcome email failed', e)
+    )
   }
 
   return NextResponse.json({ ok: true, created: true })
