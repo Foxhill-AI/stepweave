@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar'
 import Subnavbar from '@/components/Subnavbar'
 import Footer from '@/components/Footer'
 import Product from '@/components/Product'
+import Modal from '@/components/ui/Modal'
 import { useAuth } from '@/components/AuthProvider'
 import { showCartToast } from '@/components/ui/Toast'
 import {
@@ -262,6 +263,13 @@ export default function ProductPage() {
   const [addToCartError, setAddToCartError] = useState<string | null>(null)
   const [isLiked, setIsLiked] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [sizeConfirmOpen, setSizeConfirmOpen] = useState(false)
+  const [pendingCartArgs, setPendingCartArgs] = useState<{
+    variantId: number
+    quantity: number
+    unitPrice: number
+    variantLabel: string | undefined
+  } | null>(null)
 
   useEffect(() => {
     if (!itemId) {
@@ -424,6 +432,35 @@ export default function ProductPage() {
                 setAddToCartError('Sign in to add items to your cart.')
                 return
               }
+              // Show size confirmation before adding to cart
+              setPendingCartArgs({ variantId, quantity, unitPrice, variantLabel })
+              setSizeConfirmOpen(true)
+            }}
+          />
+        )}
+      </main>
+      
+      <Footer />
+
+      <Modal
+        isOpen={sizeConfirmOpen}
+        onClose={() => { setSizeConfirmOpen(false); setPendingCartArgs(null) }}
+        title="Double-check your size"
+      >
+        <p style={{ margin: '0 0 8px', color: 'var(--color-text)' }}>
+          These shoes tend to run a little small.
+        </p>
+        <p style={{ margin: '0 0 24px', color: 'var(--color-text-light)', fontSize: '0.95rem' }}>
+          We recommend sizing up half a size if you're between sizes. Are you confident in your selection?
+        </p>
+        <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
+          <button
+            style={{ padding: '12px 24px', borderRadius: 'var(--border-radius)', background: 'var(--color-primary, #111)', color: '#fff', border: 'none', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
+            onClick={async () => {
+              setSizeConfirmOpen(false)
+              if (!pendingCartArgs || !userAccount?.id) return
+              const { variantId, quantity, unitPrice, variantLabel } = pendingCartArgs
+              setPendingCartArgs(null)
               const cart = await getOrCreateCart(userAccount.id)
               if (!cart) {
                 setAddToCartError('Could not load your cart.')
@@ -437,11 +474,17 @@ export default function ProductPage() {
                 setAddToCartError('Could not add item to cart.')
               }
             }}
-          />
-        )}
-      </main>
-      
-      <Footer />
+          >
+            Yes, this is my size
+          </button>
+          <button
+            style={{ padding: '12px 24px', borderRadius: 'var(--border-radius)', background: 'transparent', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
+            onClick={() => { setSizeConfirmOpen(false); setPendingCartArgs(null) }}
+          >
+            Let me double-check
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }
