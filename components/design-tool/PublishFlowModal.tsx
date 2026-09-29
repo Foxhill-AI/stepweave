@@ -239,7 +239,7 @@ export default function PublishFlowModal({
                 <span className="pf-modal-price-value">
                   {formatPricingMoney(buyEstimate.minimumViablePrice, buyEstimate.currency)}
                 </span>
-                <span className="pf-modal-price-note">Includes fulfillment, shipping &amp; payment processing</span>
+                <span className="pf-modal-price-note">Free shipping!</span>
               </div>
             )}
 

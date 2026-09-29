@@ -158,8 +158,7 @@ export async function estimatePrintfulListingCosts(params: {
     },
   ]
 
-  const note =
-    'Estimates from Printful. Final fulfillment costs may vary by design complexity. Sales tax is collected from buyers at checkout.'
+  const note = ''
 
   return {
     ok: true,
