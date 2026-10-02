@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PricingEstimatePanel, { formatPricingMoney } from './PricingEstimatePanel'
 import type { PricingEstimateOk } from '@/lib/printful/pricingEstimate'
+import { getModelPricing } from '@/lib/printful/modelPricing'
 import type { DesignDraftRow } from '@/lib/supabaseClient'
 import { updateDesignDraft, updateProduct, getProductById } from '@/lib/supabaseClient'
 
@@ -46,21 +47,21 @@ export default function PublishFlowModal({
 
   // Publish step state
   const [name, setName] = useState('')
-  const [price, setPrice] = useState('')
-  const [publishEstimate, setPublishEstimate] = useState<PricingEstimateOk | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createLoading, setCreateLoading] = useState(false)
 
-  // Pre-fill listing fields when editing an already-published product.
+  // Fixed price from platform config
+  const modelPricing = getModelPricing(localDraft?.base_model_id ?? null)
+
+  // Pre-fill product name when editing an already-published product.
   useEffect(() => {
     const pid = localDraft?.final_product_id
     if (pid == null || typeof pid !== 'number') return
     let cancelled = false
     getProductById(pid).then((p) => {
       if (cancelled || !p) return
-      const row = p as { name?: string; price?: number }
+      const row = p as { name?: string }
       if (typeof row.name === 'string' && row.name.trim()) setName(row.name)
-      if (row.price != null && Number.isFinite(Number(row.price))) setPrice(String(row.price))
     })
     return () => { cancelled = true }
   }, [localDraft?.final_product_id])
@@ -118,15 +119,8 @@ export default function PublishFlowModal({
       setCreateError('Please enter a product name.')
       return
     }
-    const priceNum = parseFloat(price)
-    if (Number.isNaN(priceNum) || priceNum < 0) {
-      setCreateError('Please enter a valid price.')
-      return
-    }
-    if (publishEstimate && priceNum + 1e-9 < publishEstimate.minimumViablePrice) {
-      setCreateError(
-        `Price must be at least ${formatPricingMoney(publishEstimate.minimumViablePrice, publishEstimate.currency)}.`
-      )
+    if (!modelPricing) {
+      setCreateError('This shoe model does not have a configured price. Please contact support.')
       return
     }
     setCreateError(null)
@@ -138,7 +132,7 @@ export default function PublishFlowModal({
         if (!okDraft) { setCreateError('Failed to save design. Please try again.'); return }
         const okProduct = await updateProduct(existingProductId, {
           name: trimmedName,
-          price: priceNum,
+          price: modelPricing.fixedPrice,
           design_data: { source: 'design_draft' },
         })
         if (!okProduct) { setCreateError('Failed to update product. Please try again.'); return }
@@ -149,11 +143,7 @@ export default function PublishFlowModal({
       const res = await fetch(`/api/design-drafts/${draftId}/create-product`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: trimmedName,
-          price: priceNum,
-          baseCost: publishEstimate?.baseCosts ?? undefined,
-        }),
+        body: JSON.stringify({ name: trimmedName }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.productId) {
@@ -167,11 +157,6 @@ export default function PublishFlowModal({
       setCreateLoading(false)
     }
   }
-
-  const priceNum = parseFloat(price)
-  const priceBelowMin = Boolean(
-    publishEstimate && Number.isFinite(priceNum) && priceNum < publishEstimate.minimumViablePrice
-  )
 
   return (
     <>
@@ -292,7 +277,7 @@ export default function PublishFlowModal({
             </h3>
             <p className="pf-modal-desc">
               {isEditingPublishedProduct
-                ? 'Update your product name or price.'
+                ? 'Update your product name.'
                 : 'Share your design and earn money each time someone buys a pair.'}
             </p>
 
@@ -307,35 +292,12 @@ export default function PublishFlowModal({
               aria-required
             />
 
-            <label htmlFor="pf-price" className="design-tool-label">Listing price ($)</label>
-            <input
-              id="pf-price"
-              type="number"
-              min={publishEstimate ? publishEstimate.minimumViablePrice : 0}
-              step={0.01}
-              className={`design-tool-input${priceBelowMin ? ' design-tool-input--error' : ''}`}
-              placeholder="0.00"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              aria-required
-            />
-            {priceBelowMin && publishEstimate && (
-              <p className="design-tool-form-error">
-                Minimum {formatPricingMoney(publishEstimate.minimumViablePrice, publishEstimate.currency)}
-              </p>
-            )}
-
-            {hasVariant && (
-              <PricingEstimatePanel
-                productId={productId!}
-                variantId={printfulVariantId!}
-                quantity={1}
-                listPriceInput={price}
-                onEstimate={setPublishEstimate}
-                returnPath={`/design-tool/${draftId}`}
-                className="pf-modal-estimate"
-              />
-            )}
+            <div className="pf-modal-fixed-price">
+              <span className="pf-modal-fixed-price-label">Listing price</span>
+              <span className="pf-modal-fixed-price-value">
+                {modelPricing ? formatPricingMoney(modelPricing.fixedPrice, 'USD') : '—'}
+              </span>
+            </div>
 
             {createError && (
               <p className="design-tool-form-error" role="alert">{createError}</p>
@@ -346,13 +308,11 @@ export default function PublishFlowModal({
                 type="button"
                 className="pf-modal-btn-primary"
                 onClick={handlePublish}
-                disabled={createLoading || priceBelowMin || (hasVariant && !publishEstimate)}
+                disabled={createLoading || !modelPricing}
               >
                 {createLoading
                   ? (isEditingPublishedProduct ? 'Saving…' : 'Publishing…')
-                  : (hasVariant && !publishEstimate)
-                    ? 'Loading costs…'
-                    : (isEditingPublishedProduct ? 'Save changes' : 'Publish')}
+                  : (isEditingPublishedProduct ? 'Save changes' : 'Publish')}
               </button>
               <button
                 type="button"

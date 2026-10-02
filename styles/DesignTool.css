@@ -4027,6 +4027,30 @@
   color: #6b7280;
 }
 
+/* Fixed price display (publish step) */
+.pf-modal-fixed-price {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.pf-modal-fixed-price-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #15803d;
+}
+
+.pf-modal-fixed-price-value {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #15803d;
+}
+
 /* Estimate wrapper spacing */
 .pf-modal-estimate {
   margin-top: 0.25rem;

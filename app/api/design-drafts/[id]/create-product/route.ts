@@ -6,6 +6,7 @@ import {
   persistPrintfulMockupsToStorage,
   type StoredMockupPlacement,
 } from '@/lib/productMockups/storage'
+import { getModelPricing } from '@/lib/printful/modelPricing'
 
 /**
  * POST /api/design-drafts/[id]/create-product
@@ -56,26 +57,32 @@ export async function POST(
     return NextResponse.json({ error: 'Not allowed to use this draft' }, { status: 403 })
   }
 
-  let body: { name?: string; price?: number; baseCost?: number; categoryId?: number }
+  let body: { name?: string; categoryId?: number }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
   const name = typeof body.name === 'string' ? body.name.trim() : ''
-  const price = Number(body.price)
-  const baseCost = typeof body.baseCost === 'number' && body.baseCost >= 0 ? body.baseCost : null
   const categoryId = typeof body.categoryId === 'number' && body.categoryId > 0 ? body.categoryId : null
   if (!name) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
-  }
-  if (Number.isNaN(price) || price < 0) {
-    return NextResponse.json({ error: 'Valid price is required' }, { status: 400 })
   }
 
   // Fetch Printful variants for the base model to create per-size product variants.
   const baseModelId = typeof draft.base_model_id === 'string' ? draft.base_model_id.trim() : ''
   const structuralColor = typeof draft.structural_color === 'string' ? draft.structural_color.trim().toLowerCase() : 'white'
+
+  // Look up fixed price from platform config. All publishable models must be in this config.
+  const modelPricing = getModelPricing(baseModelId)
+  if (!modelPricing) {
+    return NextResponse.json(
+      { error: 'This shoe model does not have a configured price. Please contact support.' },
+      { status: 422 }
+    )
+  }
+  const price = modelPricing.fixedPrice
+  const baseCost = modelPricing.baseCosts
   const printfulApiKey = process.env.PRINTFUL_API_KEY?.trim()
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -112,7 +119,7 @@ export async function POST(
       user_account_id: userAccountId,
       name,
       price,
-      ...(baseCost !== null ? { base_cost: baseCost } : {}),
+      base_cost: baseCost,
       status: 'active',
       design_data: {
         source: 'design_draft',
