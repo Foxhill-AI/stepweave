@@ -95,8 +95,6 @@ export default function HomePage() {
               items={trendingItems}
               pagedGrid
               sectionSlug="trending-now"
-              initialVisibleCount={3}
-              loadMoreCount={6}
             />
           )}
           {!loading && popularItems.length > 0 && (
@@ -105,8 +103,6 @@ export default function HomePage() {
               items={popularItems}
               pagedGrid
               sectionSlug="most-popular"
-              initialVisibleCount={3}
-              loadMoreCount={6}
             />
           )}
           {!loading && brandNewItems.length > 0 && (
@@ -115,8 +111,6 @@ export default function HomePage() {
               items={brandNewItems}
               pagedGrid
               sectionSlug="brand-new"
-              initialVisibleCount={3}
-              loadMoreCount={6}
             />
           )}
         </div>
