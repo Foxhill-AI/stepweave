@@ -21,6 +21,8 @@ export type StoredMockupPlacement = {
   /** Canonical camera view of the main mockup */
   view?: string
   extra_mockups?: StoredMockupExtra[]
+  /** Which gender these mockup images were generated for. Absence = mens (legacy). */
+  gender?: 'mens' | 'womens'
 }
 
 /** Placement row with resolved `mockup_url` for display (signed or legacy http). */
@@ -43,9 +45,13 @@ export function mockupStoragePath(
   draftId: number,
   placement: string,
   label: string,
-  extraTitle?: string
+  extraTitle?: string,
+  /** Optional subdirectory inside …/mockups/, e.g. 'womens' */
+  subdir?: string
 ): string {
-  const base = `${authUserId}/${draftId}/mockups`
+  const base = subdir?.trim()
+    ? `${authUserId}/${draftId}/mockups/${slugSegment(subdir)}`
+    : `${authUserId}/${draftId}/mockups`
   if (extraTitle?.trim()) {
     return `${base}/${slugSegment(placement)}--extra--${slugSegment(extraTitle)}.png`
   }
@@ -111,6 +117,7 @@ export function mockupPlacementsForDatabase(
     }
     if (p.mockup_path?.trim()) row.mockup_path = p.mockup_path.trim()
     if (p.view?.trim()) row.view = p.view.trim()
+    if (p.gender) row.gender = p.gender
     const extras = (p.extra_mockups ?? [])
       .map((ex) => {
         const extra: StoredMockupExtra = { title: ex.title }
@@ -133,6 +140,7 @@ export async function downloadAndUploadMockup(
     label: string
     extraTitle?: string
     sourceUrl: string
+    storageSubdir?: string
   }
 ): Promise<{ path: string } | null> {
   const sourceUrl = params.sourceUrl.trim()
@@ -156,7 +164,8 @@ export async function downloadAndUploadMockup(
     params.draftId,
     params.placement,
     params.label,
-    params.extraTitle
+    params.extraTitle,
+    params.storageSubdir
   )
 
   const { error: uploadErr } = await admin.storage.from(MOCKUP_BUCKET).upload(path, buffer, {
@@ -179,7 +188,8 @@ export async function persistPrintfulMockupsToStorage(
   admin: SupabaseClient,
   authUserId: string,
   draftId: number,
-  placements: StoredMockupPlacement[]
+  placements: StoredMockupPlacement[],
+  options?: { storageSubdir?: string }
 ): Promise<StoredMockupPlacement[]> {
   const stored: StoredMockupPlacement[] = []
   const pathBySourceUrl = new Map<string, string>()
@@ -195,6 +205,7 @@ export async function persistPrintfulMockupsToStorage(
     const uploaded = await downloadAndUploadMockup(admin, {
       authUserId,
       draftId,
+      storageSubdir: options?.storageSubdir,
       ...params,
     })
     if (!uploaded) return null
@@ -207,6 +218,7 @@ export async function persistPrintfulMockupsToStorage(
       placement: p.placement,
       label: p.label,
       ...(p.view?.trim() ? { view: p.view.trim() } : {}),
+      ...(p.gender ? { gender: p.gender } : {}),
     }
 
     const mainUrl = p.mockup_url?.trim() ?? ''
@@ -325,6 +337,7 @@ export async function resolveMockupPlacementsForDisplay(
       mockup_path: p.mockup_path,
       mockup_url: displayUrl,
       ...(p.view?.trim() ? { view: p.view.trim() } : {}),
+      ...(p.gender ? { gender: p.gender } : {}),
       ...(extras.length ? { extra_mockups: extras } : {}),
     })
   }
