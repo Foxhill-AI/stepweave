@@ -4211,6 +4211,42 @@
   cursor: not-allowed;
 }
 
+/* Gender toggle in buy step */
+.pf-modal-gender-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
+}
+.pf-modal-gender-toggle {
+  display: flex;
+  border: 1.5px solid #d1d5db;
+  border-radius: 6px;
+  overflow: hidden;
+  width: fit-content;
+}
+.pf-modal-gender-btn {
+  padding: 0.4rem 1rem;
+  background: #fff;
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.pf-modal-gender-btn:not(:last-child) {
+  border-right: 1.5px solid #d1d5db;
+}
+.pf-modal-gender-btn:hover {
+  background: #f3f4f6;
+  color: #2563eb;
+}
+.pf-modal-gender-btn--active {
+  background: #2563eb;
+  color: #fff;
+}
+
 /* Size picker in buy step */
 .pf-modal-size-grid {
   display: flex;

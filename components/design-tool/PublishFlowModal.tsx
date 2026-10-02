@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatPricingMoney } from './PricingEstimatePanel'
 import { STRIPE_RATE, PLATFORM_BUFFER_RATE } from '@/lib/printful/pricingEstimate'
-import { getModelPricing } from '@/lib/printful/modelPricing'
+import { getModelPricing, getUnifiedModelPricingByMensId } from '@/lib/printful/modelPricing'
 import type { DesignDraftRow } from '@/lib/supabaseClient'
 import { updateDesignDraft, updateProduct, getProductById } from '@/lib/supabaseClient'
 
@@ -55,6 +55,9 @@ export default function PublishFlowModal({
   const [buyLoading, setBuyLoading] = useState(false)
   const [buyError, setBuyError] = useState<string | null>(null)
   const [showSizeConfirm, setShowSizeConfirm] = useState(false)
+  const [buyGender, setBuyGender] = useState<'mens' | 'womens'>('mens')
+  const [womensVariants, setWomensVariants] = useState<VariantOption[]>([])
+  const [womensVariantsLoading, setWomensVariantsLoading] = useState(false)
 
   // Publish step state
   const [name, setName] = useState('')
@@ -67,6 +70,24 @@ export default function PublishFlowModal({
 
   // Fixed price from platform config
   const modelPricing = getModelPricing(localDraft?.base_model_id ?? null)
+
+  // Womens partner product ID (null if this model has no womens pair)
+  const productIdWomens = getUnifiedModelPricingByMensId(localDraft?.base_model_id ?? null)?.productIdWomens ?? null
+
+  // Fetch womens variants when the user first switches to Women's
+  useEffect(() => {
+    if (buyGender !== 'womens' || !productIdWomens || womensVariants.length > 0) return
+    let cancelled = false
+    setWomensVariantsLoading(true)
+    fetch(`/api/printful/products/${encodeURIComponent(productIdWomens)}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data: { variants?: VariantOption[] }) => {
+        if (!cancelled) setWomensVariants(data.variants ?? [])
+      })
+      .catch(() => { /* leave empty */ })
+      .finally(() => { if (!cancelled) setWomensVariantsLoading(false) })
+    return () => { cancelled = true }
+  }, [buyGender, productIdWomens, womensVariants.length])
 
   useEffect(() => {
     if (!open) return
@@ -102,11 +123,18 @@ export default function PublishFlowModal({
 
   // Derive size options: filter variantOptions to the same color as the draft's current variant.
   const currentVariant = variantOptions.find((v) => v.id === printfulVariantId)
-  const draftColor = currentVariant?.color?.toLowerCase() ?? ''
+  const draftColor = (
+    typeof localDraft?.structural_color === 'string'
+      ? localDraft.structural_color
+      : currentVariant?.color
+  )?.toLowerCase() ?? ''
+
+  const activeVariantPool = buyGender === 'womens' ? womensVariants : variantOptions
   const sameColorVariants = draftColor
-    ? variantOptions.filter((v) => v.color.toLowerCase() === draftColor)
-    : variantOptions
-  const hasSizeOptions = sameColorVariants.length > 1
+    ? activeVariantPool.filter((v) => v.color.toLowerCase().includes(draftColor))
+    : activeVariantPool
+  const displayVariants = sameColorVariants.length > 0 ? sameColorVariants : activeVariantPool
+  const hasSizeOptions = activeVariantPool.length > 0
 
   const effectiveBuyVariantId = selectedBuyVariantId ?? printfulVariantId
   const hasVariant = productId !== null && effectiveBuyVariantId != null
@@ -287,25 +315,51 @@ export default function PublishFlowModal({
               Order the exact shoes you just designed, shipped directly to you.
             </p>
 
+            {productIdWomens && (
+              <div className="pf-modal-gender-row">
+                <label className="design-tool-label">Gender</label>
+                <div className="pf-modal-gender-toggle">
+                  <button
+                    type="button"
+                    className={`pf-modal-gender-btn${buyGender === 'mens' ? ' pf-modal-gender-btn--active' : ''}`}
+                    onClick={() => { setBuyGender('mens'); setSelectedBuyVariantId(null) }}
+                  >
+                    Men&apos;s
+                  </button>
+                  <button
+                    type="button"
+                    className={`pf-modal-gender-btn${buyGender === 'womens' ? ' pf-modal-gender-btn--active' : ''}`}
+                    onClick={() => { setBuyGender('womens'); setSelectedBuyVariantId(null) }}
+                  >
+                    Women&apos;s
+                  </button>
+                </div>
+              </div>
+            )}
+
             {hasSizeOptions && (
               <div>
                 <label className="design-tool-label">Your size</label>
-                <div className="pf-modal-size-grid">
-                  {[...sameColorVariants].sort((a, b) => {
-                    const na = parseFloat(a.size), nb = parseFloat(b.size)
-                    if (!isNaN(na) && !isNaN(nb)) return na - nb
-                    return a.size.localeCompare(b.size)
-                  }).map((v) => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      className={`pf-modal-size-btn${effectiveBuyVariantId === v.id ? ' pf-modal-size-btn--active' : ''}`}
-                      onClick={() => setSelectedBuyVariantId(v.id)}
-                    >
-                      {v.size}
-                    </button>
-                  ))}
-                </div>
+                {womensVariantsLoading ? (
+                  <p className="pf-modal-size-tip">Loading sizes…</p>
+                ) : (
+                  <div className="pf-modal-size-grid">
+                    {[...displayVariants].sort((a, b) => {
+                      const na = parseFloat(a.size), nb = parseFloat(b.size)
+                      if (!isNaN(na) && !isNaN(nb)) return na - nb
+                      return a.size.localeCompare(b.size)
+                    }).map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        className={`pf-modal-size-btn${effectiveBuyVariantId === v.id ? ' pf-modal-size-btn--active' : ''}`}
+                        onClick={() => setSelectedBuyVariantId(v.id)}
+                      >
+                        {v.size}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <p className="pf-modal-size-tip">These shoes run small — we recommend ordering one size up from your usual.</p>
               </div>
             )}
