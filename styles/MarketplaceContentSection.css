@@ -42,3 +42,21 @@
   align-items: center;
   gap: var(--spacing-xs);
 }
+
+/* ── Mobile: 2-column grid instead of horizontal scroll ───────────────── */
+@media (max-width: 639px) {
+  .marketplace-content-section .carousel-container {
+    flex-wrap: wrap;
+    overflow-x: hidden;
+    scroll-snap-type: none;
+    gap: 10px;
+    padding: 2px 0 4px;
+  }
+
+  .marketplace-content-section .carousel-container > * {
+    min-width: calc(50% - 5px);
+    max-width: calc(50% - 5px);
+    width: calc(50% - 5px);
+    flex-shrink: 0;
+  }
+}

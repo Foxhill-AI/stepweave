@@ -252,6 +252,53 @@
   flex-shrink: 0;
 }
 
+/* ── Mobile 2-column compact layout ───────────────────────────────────── */
+@media (max-width: 639px) {
+  .marketplace-content-section .marketplace-item-card {
+    height: auto;
+  }
+
+  .marketplace-content-section .marketplace-item-image-wrapper {
+    aspect-ratio: 1 / 1;
+  }
+
+  .marketplace-content-section .marketplace-item-content {
+    padding: 8px;
+    gap: 4px;
+  }
+
+  .marketplace-content-section .marketplace-item-title {
+    font-size: 0.75rem;
+    min-height: 0;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .marketplace-content-section .marketplace-item-author {
+    display: none;
+  }
+
+  .marketplace-content-section .marketplace-item-price-section {
+    padding: 4px 0;
+    margin: 2px 0;
+    gap: 2px;
+  }
+
+  .marketplace-content-section .marketplace-item-price {
+    font-size: 0.9375rem;
+  }
+
+  .marketplace-content-section .marketplace-item-shipping,
+  .marketplace-content-section .marketplace-item-meta {
+    display: none;
+  }
+
+  .marketplace-content-section .marketplace-item-buy-button {
+    padding: 6px 8px;
+    font-size: 0.75rem;
+  }
+}
+
 /* Buy Button */
 .marketplace-item-buy-button {
   margin-top: auto;
