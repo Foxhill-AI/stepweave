@@ -4051,6 +4051,39 @@
   color: #15803d;
 }
 
+/* Buy step — pro saved badge */
+.pf-modal-buy-saved {
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #15803d;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: -0.25rem 0 0.75rem;
+  text-align: center;
+}
+
+/* Buy step — upgrade nudge link */
+.pf-modal-buy-upgrade-nudge {
+  display: block;
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  margin: -0.25rem 0 0.75rem;
+  text-decoration: none;
+  text-align: center;
+  transition: background 0.15s;
+}
+
+.pf-modal-buy-upgrade-nudge:hover {
+  background: #dbeafe;
+}
+
 /* Earnings breakdown (publish step) */
 .pf-modal-earnings {
   border: 1px solid #e5e7eb;

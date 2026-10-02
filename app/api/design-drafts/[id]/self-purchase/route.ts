@@ -2,17 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { estimatePrintfulListingCosts } from '@/lib/printful/pricingEstimate'
+import { getModelPricing } from '@/lib/printful/modelPricing'
+import { getCreatorShareRate } from '@/lib/platformFee'
+import { STRIPE_RATE, PLATFORM_BUFFER_RATE } from '@/lib/printful/pricingEstimate'
 
 /**
  * POST /api/design-drafts/[id]/self-purchase
- * Creates a Stripe Checkout session for the designer to buy their own custom shoes at cost.
- * No storefront product is created — order goes directly to Printful after payment.
+ * Creates a Stripe Checkout session for the designer to buy their own custom shoes.
  *
- * Requires DB migration:
- *   ALTER TABLE user_order ADD COLUMN IF NOT EXISTS order_type text NOT NULL DEFAULT 'storefront';
- *   ALTER TABLE order_item ALTER COLUMN product_id DROP NOT NULL;
- *   ALTER TABLE order_item ALTER COLUMN product_variant_id DROP NOT NULL;
+ * Pricing by tier:
+ *   free    → fixedPrice (full listing price)
+ *   starter → fixedPrice − (margin × 50%)
+ *   pro     → fixedPrice − (margin × 90%)
+ *
+ * margin = fixedPrice × (1 − STRIPE_RATE − PLATFORM_BUFFER_RATE) − baseCosts
  */
 export async function POST(
   request: NextRequest,
@@ -35,7 +38,7 @@ export async function POST(
 
   const { data: userAccount } = await supabase
     .from('user_account')
-    .select('id')
+    .select('id, subscription_tier')
     .eq('auth_user_id', authUser.id)
     .maybeSingle()
   if (!userAccount?.id) {
@@ -83,42 +86,33 @@ export async function POST(
     return NextResponse.json({ error: 'Draft has no base model.' }, { status: 400 })
   }
 
-  const stripeKey = process.env.STRIPE_SECRET_KEY
-  const printfulApiKey = process.env.PRINTFUL_API_KEY?.trim()
-  const printfulStoreId = process.env.PRINTFUL_STORE_ID?.trim()
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!stripeKey || !printfulApiKey || !printfulStoreId || !supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
-  }
-
-  // Get pricing estimate to determine the cost price
-  const estimate = await estimatePrintfulListingCosts({
-    apiKey: printfulApiKey,
-    storeId: printfulStoreId,
-    productId,
-    variantId,
-    quantity: 1,
-    recipient: {
-      address1: process.env.PRINTFUL_PRICING_SHIP_ADDRESS1?.trim() || '100 Main St',
-      city: process.env.PRINTFUL_PRICING_SHIP_CITY?.trim() || 'Los Angeles',
-      state_code: process.env.PRINTFUL_PRICING_SHIP_STATE?.trim() || 'CA',
-      country_code: process.env.PRINTFUL_PRICING_SHIP_COUNTRY?.trim() || 'US',
-      zip: process.env.PRINTFUL_PRICING_SHIP_ZIP?.trim() || '90001',
-    },
-  })
-
-  if (!estimate.ok) {
+  // Look up fixed pricing from platform config
+  const modelPricing = getModelPricing(productId)
+  if (!modelPricing) {
     return NextResponse.json(
-      { error: `Could not estimate price: ${estimate.error}` },
+      { error: 'This shoe model does not have a configured price. Please contact support.' },
       { status: 422 }
     )
   }
 
-  // DB stores prices in dollars (consistent with storefront orders); Stripe needs cents.
-  const unitAmountDollars = estimate.minimumViablePrice
+  // Compute tier-discounted price
+  const tier = String(userAccount.subscription_tier ?? 'free')
+  const shareRate = tier === 'free' ? 0 : getCreatorShareRate(tier)
+  const margin = Math.max(
+    0,
+    modelPricing.fixedPrice * (1 - STRIPE_RATE - PLATFORM_BUFFER_RATE) - modelPricing.baseCosts
+  )
+  const discount = Math.round(margin * shareRate * 100) / 100
+  const unitAmountDollars = Math.round((modelPricing.fixedPrice - discount) * 100) / 100
   const unitAmountCents = Math.round(unitAmountDollars * 100)
+
+  const stripeKey = process.env.STRIPE_SECRET_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!stripeKey || !supabaseUrl || !serviceRoleKey) {
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  }
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
 
@@ -142,7 +136,6 @@ export async function POST(
 
   const orderId = order.id as number
 
-  // Freeze the design state as a snapshot (same format fulfillment engine reads)
   const designSnapshot = {
     design_state: draft.design_state,
     pattern_image_url: draft.pattern_image_url,
@@ -151,10 +144,9 @@ export async function POST(
     captured_at: new Date().toISOString(),
   }
 
-  // Create order item — product_id/variant_id are null for self-purchase (no storefront product)
   const { error: itemError } = await admin.from('order_item').insert({
     order_id: orderId,
-    product_name: 'Custom Shoe Design',
+    product_name: modelPricing.name,
     variant_label: null,
     quantity: 1,
     unit_price: unitAmountDollars,
@@ -169,12 +161,15 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to create order item.' }, { status: 500 })
   }
 
-  // Create Stripe Checkout session — Stripe collects shipping address
   const stripe = new Stripe(stripeKey)
   const origin =
     request.headers.get('origin') ||
     process.env.NEXT_PUBLIC_APP_URL ||
     'http://localhost:3000'
+
+  const lineItemName = discount > 0
+    ? `${modelPricing.name} — Your Pair (${tier} member price)`
+    : `${modelPricing.name} — Your Pair`
 
   let session: Stripe.Checkout.Session
   try {
@@ -184,7 +179,7 @@ export async function POST(
         {
           price_data: {
             currency: 'usd',
-            product_data: { name: 'Custom Shoe Design — Your Pair' },
+            product_data: { name: lineItemName },
             unit_amount: unitAmountCents,
           },
           quantity: 1,
@@ -204,15 +199,10 @@ export async function POST(
     return NextResponse.json({ error: 'Could not create checkout session.' }, { status: 502 })
   }
 
-  // Link Stripe session to order
   await admin
     .from('user_order')
     .update({ stripe_checkout_session_id: session.id })
     .eq('id', orderId)
 
-  return NextResponse.json({
-    url: session.url,
-    minimumViablePrice: estimate.minimumViablePrice,
-    currency: estimate.currency,
-  })
+  return NextResponse.json({ url: session.url })
 }
