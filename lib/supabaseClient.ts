@@ -854,6 +854,7 @@ export const supabase =
     updates: {
       name?: string
       price?: number
+      base_cost?: number
       status?: 'draft' | 'active' | 'archived'
       design_data?: Record<string, unknown>
     }

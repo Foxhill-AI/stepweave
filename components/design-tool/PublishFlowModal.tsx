@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import PricingEstimatePanel, { formatPricingMoney } from './PricingEstimatePanel'
-import type { PricingEstimateOk } from '@/lib/printful/pricingEstimate'
+import { formatPricingMoney } from './PricingEstimatePanel'
 import { STRIPE_RATE, PLATFORM_BUFFER_RATE } from '@/lib/printful/pricingEstimate'
 import { getModelPricing } from '@/lib/printful/modelPricing'
 import type { DesignDraftRow } from '@/lib/supabaseClient'
@@ -55,7 +54,6 @@ export default function PublishFlowModal({
   const [selectedBuyVariantId, setSelectedBuyVariantId] = useState<number | null>(printfulVariantId)
   const [buyLoading, setBuyLoading] = useState(false)
   const [buyError, setBuyError] = useState<string | null>(null)
-  const [buyEstimate, setBuyEstimate] = useState<PricingEstimateOk | null>(null)
   const [showSizeConfirm, setShowSizeConfirm] = useState(false)
 
   // Publish step state
@@ -65,6 +63,7 @@ export default function PublishFlowModal({
 
   // Creator tier (fetched once on open)
   const [creatorTier, setCreatorTier] = useState<string>('free')
+  const [tierLoaded, setTierLoaded] = useState(false)
 
   // Fixed price from platform config
   const modelPricing = getModelPricing(localDraft?.base_model_id ?? null)
@@ -76,8 +75,9 @@ export default function PublishFlowModal({
       .then((data) => {
         const tier = data?.userAccount?.subscription_tier
         if (typeof tier === 'string' && CREATOR_TIERS[tier]) setCreatorTier(tier)
+        setTierLoaded(true)
       })
-      .catch(() => {})
+      .catch(() => { setTierLoaded(true) })
   }, [open])
 
   // Pre-fill product name when editing an already-published product.
@@ -111,10 +111,33 @@ export default function PublishFlowModal({
   const effectiveBuyVariantId = selectedBuyVariantId ?? printfulVariantId
   const hasVariant = productId !== null && effectiveBuyVariantId != null
 
-  // Earnings calculations for publish step
+  // Shared margin pool (used by both buy and publish steps)
   const margin = modelPricing
     ? Math.max(0, modelPricing.fixedPrice * (1 - STRIPE_RATE - PLATFORM_BUFFER_RATE) - modelPricing.baseCosts)
     : 0
+
+  // Buy step: tier-discounted self-purchase price
+  const buyShareRate = creatorTier === 'free' ? 0 : (CREATOR_TIERS[creatorTier]?.shareRate ?? 0)
+  const buyDiscount = Math.round(margin * buyShareRate * 100) / 100
+  const buyPrice = modelPricing
+    ? Math.round((modelPricing.fixedPrice - buyDiscount) * 100) / 100
+    : null
+  const freeBuyPrice = modelPricing ? modelPricing.fixedPrice : null
+  const buyNextTier = NEXT_TIER[creatorTier] ?? null
+  const buyNextTierDiscount = buyNextTier ? Math.round(margin * buyNextTier.shareRate * 100) / 100 : null
+  const buyNextTierPrice = (freeBuyPrice !== null && buyNextTierDiscount !== null)
+    ? Math.round((freeBuyPrice - buyNextTierDiscount) * 100) / 100
+    : null
+  // Savings shown in the nudge: vs what the user currently pays (not vs free price)
+  const buyNudgeSavings = (buyPrice !== null && buyNextTierPrice !== null)
+    ? Math.round((buyPrice - buyNextTierPrice) * 100) / 100
+    : null
+  const buyNudgeSavingsPct = (buyPrice !== null && buyNudgeSavings !== null && buyPrice > 0)
+    ? Math.round((buyNudgeSavings / buyPrice) * 100)
+    : null
+  const buySavingsVsFree = buyDiscount > 0 ? buyDiscount : null
+
+  // Publish step: creator earnings
   const currentShareRate = CREATOR_TIERS[creatorTier]?.shareRate ?? 0.15
   const currentEarnings = Math.round(margin * currentShareRate * 100) / 100
   const nextTier = NEXT_TIER[creatorTier] ?? null
@@ -174,6 +197,7 @@ export default function PublishFlowModal({
         const okProduct = await updateProduct(existingProductId, {
           name: trimmedName,
           price: modelPricing.fixedPrice,
+          base_cost: modelPricing.baseCosts,
           design_data: { source: 'design_draft' },
         })
         if (!okProduct) { setCreateError('Failed to update product. Please try again.'); return }
@@ -260,7 +284,7 @@ export default function PublishFlowModal({
           <div className="pf-modal-body">
             <h3 className="pf-modal-title">Want a pair for yourself?</h3>
             <p className="pf-modal-desc">
-              Order the exact shoes you just designed, shipped directly to you — no markup.
+              Order the exact shoes you just designed, shipped directly to you.
             </p>
 
             {hasSizeOptions && (
@@ -276,10 +300,7 @@ export default function PublishFlowModal({
                       key={v.id}
                       type="button"
                       className={`pf-modal-size-btn${effectiveBuyVariantId === v.id ? ' pf-modal-size-btn--active' : ''}`}
-                      onClick={() => {
-                        setSelectedBuyVariantId(v.id)
-                        setBuyEstimate(null)
-                      }}
+                      onClick={() => setSelectedBuyVariantId(v.id)}
                     >
                       {v.size}
                     </button>
@@ -289,26 +310,32 @@ export default function PublishFlowModal({
               </div>
             )}
 
-            {buyEstimate && (
+            {tierLoaded && buyPrice !== null && (
               <div className="pf-modal-price-callout">
                 <span className="pf-modal-price-label">Your price</span>
                 <span className="pf-modal-price-value">
-                  {formatPricingMoney(buyEstimate.minimumViablePrice, buyEstimate.currency)}
+                  {formatPricingMoney(buyPrice, 'USD')}
                 </span>
                 <span className="pf-modal-price-note">Free shipping!</span>
               </div>
             )}
 
-            {/* Hidden — only used to fetch the estimate for the price callout above. */}
-            {hasVariant && (
-              <div hidden>
-                <PricingEstimatePanel
-                  productId={productId!}
-                  variantId={effectiveBuyVariantId!}
-                  quantity={1}
-                  onEstimate={setBuyEstimate}
-                />
-              </div>
+            {/* Pro member: "you saved" badge */}
+            {tierLoaded && buySavingsVsFree !== null && creatorTier === 'pro' && freeBuyPrice !== null && (
+              <p className="pf-modal-buy-saved">
+                You saved {formatPricingMoney(buySavingsVsFree, 'USD')} on this pair as a Pro member
+              </p>
+            )}
+
+            {/* Next-tier upgrade nudge */}
+            {tierLoaded && buyNextTier && buyNextTierPrice !== null && buyNudgeSavings !== null && buyNudgeSavingsPct !== null && buyPrice !== null && (
+              <a
+                href={`/become-creator?return=${encodeURIComponent(`/design-tool/${draftId}`)}`}
+                className="pf-modal-buy-upgrade-nudge"
+              >
+                Upgrade to {buyNextTier.name} and pay {formatPricingMoney(buyNextTierPrice, 'USD')} instead
+                {' '}— save {formatPricingMoney(buyNudgeSavings, 'USD')} ({buyNudgeSavingsPct}%) →
+              </a>
             )}
 
             {buyError && (
@@ -320,13 +347,15 @@ export default function PublishFlowModal({
                 type="button"
                 className="pf-modal-btn-primary"
                 onClick={handleBuyClick}
-                disabled={buyLoading || !buyEstimate || !effectiveBuyVariantId}
+                disabled={buyLoading || !tierLoaded || !buyPrice || !effectiveBuyVariantId}
               >
                 {buyLoading
                   ? 'Starting checkout…'
-                  : buyEstimate
-                    ? `Buy my pair — ${formatPricingMoney(buyEstimate.minimumViablePrice, buyEstimate.currency)}`
-                    : 'Loading price…'}
+                  : !tierLoaded
+                    ? 'Loading…'
+                    : buyPrice
+                      ? `Buy my pair — ${formatPricingMoney(buyPrice, 'USD')}`
+                      : 'Loading price…'}
               </button>
               <button
                 type="button"
@@ -409,6 +438,12 @@ export default function PublishFlowModal({
 
             {createError && (
               <p className="design-tool-form-error" role="alert">{createError}</p>
+            )}
+
+            {!modelPricing && (
+              <p className="design-tool-form-error">
+                This shoe model isn't supported yet. Please contact support.
+              </p>
             )}
 
             <div className="pf-modal-actions">
