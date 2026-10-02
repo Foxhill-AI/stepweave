@@ -1,5 +1,4 @@
 import type { ProductListingRow } from '@/lib/supabaseClient'
-import { shoeAudienceFromListing } from '@/lib/shoeAudience'
 
 /** Item shape for ContentSection / ItemCard (id links to /item/[id]) */
 export interface HomeItem {
@@ -17,8 +16,6 @@ export interface HomeItem {
   price?: string
   rating?: number
   badge?: string
-  /** e.g. "Women's sizing" / "Men's sizing" from Printful model name. */
-  sizingLabel?: string
   /** ISO `product.created_at` (display / legacy sort). */
   createdAt?: string
   /** ISO `product.updated_at` when present — listing changes after create. */
@@ -138,9 +135,6 @@ export function productToHomeItem(row: ProductListingRow): HomeItem {
   const categoryLabel = category?.name ?? category?.slug ?? ''
   const designData = row.design_data as { imageUrl?: string; source?: string } | null
   const isNew = isListingNewWithinDays(row, 7)
-  const audience = shoeAudienceFromListing(row)
-  const sizingLabel =
-    audience === 'women' ? "Women's sizing" : audience === 'men' ? "Men's sizing" : undefined
   return {
     id: String(row.id),
     productId: row.id as number,
@@ -161,7 +155,6 @@ export function productToHomeItem(row: ProductListingRow): HomeItem {
     price: `$${Number(row.price).toFixed(2)}`,
     rating: 0,
     badge: isNew ? 'New' : undefined,
-    sizingLabel,
     createdAt: row.created_at ?? undefined,
     updatedAt: row.updated_at ?? undefined,
   }

@@ -6,11 +6,6 @@ import {
   homeItemsFromProductRows,
   productToHomeItem,
 } from '@/lib/productsForHome'
-import {
-  filterListingsByShoeAudience,
-  SHOE_AUDIENCE_FILTER_OPTIONS,
-  type ShoeAudienceFilter,
-} from '@/lib/shoeAudience'
 import type { ProductListingRow } from '@/lib/supabaseClient'
 
 /**
@@ -23,7 +18,6 @@ export default function Marketplace() {
   const [brandNewRows, setBrandNewRows] = useState<ProductListingRow[]>([])
   const [popularEngagement, setPopularEngagement] = useState<Record<string, number>>({})
   const [viewsByProductId, setViewsByProductId] = useState<Record<string, number>>({})
-  const [shoeFilter, setShoeFilter] = useState<ShoeAudienceFilter>('all')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -62,69 +56,31 @@ export default function Marketplace() {
     }
   }, [])
 
-  const filteredProductRows = useMemo(
-    () => filterListingsByShoeAudience(productRows, shoeFilter),
-    [productRows, shoeFilter]
-  )
-  const filteredPopularRows = useMemo(
-    () => filterListingsByShoeAudience(popularRows, shoeFilter),
-    [popularRows, shoeFilter]
-  )
-  const filteredBrandNewRows = useMemo(
-    () => filterListingsByShoeAudience(brandNewRows, shoeFilter),
-    [brandNewRows, shoeFilter]
-  )
-
   const products = useMemo(
-    () => homeItemsFromProductRows(filteredProductRows, viewsByProductId),
-    [filteredProductRows, viewsByProductId]
+    () => homeItemsFromProductRows(productRows, viewsByProductId),
+    [productRows, viewsByProductId]
   )
   const popularItems = useMemo(
     () =>
-      filteredPopularRows.map((row) => {
+      popularRows.map((row) => {
         const base = productToHomeItem(row)
         const key = String(row.id)
         const n = popularEngagement[key]
         const likes = typeof n === 'number' && n >= 0 ? n : base.likes
         return { ...base, likes }
       }),
-    [filteredPopularRows, popularEngagement]
+    [popularRows, popularEngagement]
   )
   const brandNewItems = useMemo(
-    () => homeItemsFromProductRows(filteredBrandNewRows, viewsByProductId),
-    [filteredBrandNewRows, viewsByProductId]
+    () => homeItemsFromProductRows(brandNewRows, viewsByProductId),
+    [brandNewRows, viewsByProductId]
   )
 
   const trendingItems = products
   const hasAnyProducts = productRows.length > 0
-  const hasFilteredProducts =
-    filteredProductRows.length > 0 ||
-    filteredPopularRows.length > 0 ||
-    filteredBrandNewRows.length > 0
-
-  const emptyFilterLabel =
-    SHOE_AUDIENCE_FILTER_OPTIONS.find((o) => o.value === shoeFilter)?.label ?? 'this filter'
 
   return (
     <>
-      <div className="marketplace-shoe-filter-wrap">
-        <div className="marketplace-shoe-filter" role="group" aria-label="Shoe type">
-          {SHOE_AUDIENCE_FILTER_OPTIONS.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              className={`marketplace-shoe-filter-btn${
-                shoeFilter === value ? ' marketplace-shoe-filter-btn-active' : ''
-              }`}
-              aria-pressed={shoeFilter === value}
-              onClick={() => setShoeFilter(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {loading && (
         <p className="homepage-loading" aria-live="polite">
           Loading products…
@@ -133,11 +89,6 @@ export default function Marketplace() {
       {!loading && !hasAnyProducts && (
         <p className="homepage-empty" aria-live="polite">
           No products yet. Check back later.
-        </p>
-      )}
-      {!loading && hasAnyProducts && !hasFilteredProducts && (
-        <p className="homepage-empty" aria-live="polite">
-          No products match {emptyFilterLabel.toLowerCase()}. Try another filter.
         </p>
       )}
       {!loading && trendingItems.length > 0 && (
