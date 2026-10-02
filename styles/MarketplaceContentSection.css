@@ -44,7 +44,7 @@
 }
 
 /* ── Mobile: 2-column grid instead of horizontal scroll ───────────────── */
-@media (max-width: 639px) {
+@media (max-width: 767px) {
   .marketplace-content-section .carousel-container {
     flex-wrap: wrap;
     overflow-x: hidden;
@@ -54,9 +54,9 @@
   }
 
   .marketplace-content-section .carousel-container > * {
+    flex: 0 0 calc(50% - 5px);
     min-width: calc(50% - 5px);
     max-width: calc(50% - 5px);
     width: calc(50% - 5px);
-    flex-shrink: 0;
   }
 }
