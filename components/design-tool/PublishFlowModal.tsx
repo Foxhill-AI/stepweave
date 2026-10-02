@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PricingEstimatePanel, { formatPricingMoney } from './PricingEstimatePanel'
 import type { PricingEstimateOk } from '@/lib/printful/pricingEstimate'
+import { STRIPE_RATE, PLATFORM_BUFFER_RATE } from '@/lib/printful/pricingEstimate'
 import { getModelPricing } from '@/lib/printful/modelPricing'
 import type { DesignDraftRow } from '@/lib/supabaseClient'
 import { updateDesignDraft, updateProduct, getProductById } from '@/lib/supabaseClient'
@@ -11,6 +12,17 @@ import { updateDesignDraft, updateProduct, getProductById } from '@/lib/supabase
 type FlowStep = 'buy' | 'publish' | 'both-skipped'
 
 type VariantOption = { id: number; color: string; size: string; image: string }
+
+const CREATOR_TIERS: Record<string, { shareRate: number }> = {
+  free:    { shareRate: 0.15 },
+  starter: { shareRate: 0.50 },
+  pro:     { shareRate: 0.90 },
+}
+
+const NEXT_TIER: Record<string, { name: string; shareRate: number; price: string }> = {
+  free:    { name: 'Starter', shareRate: 0.50, price: '$9/mo' },
+  starter: { name: 'Pro',     shareRate: 0.90, price: '$29/mo' },
+}
 
 interface PublishFlowModalProps {
   open: boolean
@@ -39,19 +51,34 @@ export default function PublishFlowModal({
   const router = useRouter()
   const [step, setStep] = useState<FlowStep>(initialStep ?? 'buy')
 
-  // Buy step state — selectedBuyVariantId defaults to the draft's current variant (color auto-selected)
+  // Buy step state
   const [selectedBuyVariantId, setSelectedBuyVariantId] = useState<number | null>(printfulVariantId)
   const [buyLoading, setBuyLoading] = useState(false)
   const [buyError, setBuyError] = useState<string | null>(null)
   const [buyEstimate, setBuyEstimate] = useState<PricingEstimateOk | null>(null)
+  const [showSizeConfirm, setShowSizeConfirm] = useState(false)
 
   // Publish step state
   const [name, setName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
   const [createLoading, setCreateLoading] = useState(false)
 
+  // Creator tier (fetched once on open)
+  const [creatorTier, setCreatorTier] = useState<string>('free')
+
   // Fixed price from platform config
   const modelPricing = getModelPricing(localDraft?.base_model_id ?? null)
+
+  useEffect(() => {
+    if (!open) return
+    fetch('/api/me/account')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        const tier = data?.userAccount?.subscription_tier
+        if (typeof tier === 'string' && CREATOR_TIERS[tier]) setCreatorTier(tier)
+      })
+      .catch(() => {})
+  }, [open])
 
   // Pre-fill product name when editing an already-published product.
   useEffect(() => {
@@ -81,15 +108,29 @@ export default function PublishFlowModal({
     : variantOptions
   const hasSizeOptions = sameColorVariants.length > 1
 
-  // The variant actually used for the pricing estimate and buy button.
   const effectiveBuyVariantId = selectedBuyVariantId ?? printfulVariantId
   const hasVariant = productId !== null && effectiveBuyVariantId != null
 
-  const handleBuy = async () => {
+  // Earnings calculations for publish step
+  const margin = modelPricing
+    ? Math.max(0, modelPricing.fixedPrice * (1 - STRIPE_RATE - PLATFORM_BUFFER_RATE) - modelPricing.baseCosts)
+    : 0
+  const currentShareRate = CREATOR_TIERS[creatorTier]?.shareRate ?? 0.15
+  const currentEarnings = Math.round(margin * currentShareRate * 100) / 100
+  const nextTier = NEXT_TIER[creatorTier] ?? null
+  const nextTierEarnings = nextTier ? Math.round(margin * nextTier.shareRate * 100) / 100 : null
+  const upgradeHref = `/become-creator?return=${encodeURIComponent(`/design-tool/${draftId}`)}`
+
+  const handleBuyClick = () => {
     if (!effectiveBuyVariantId) {
       setBuyError('Please select a size.')
       return
     }
+    setShowSizeConfirm(true)
+  }
+
+  const handleBuy = async () => {
+    setShowSizeConfirm(false)
     setBuyLoading(true)
     setBuyError(null)
     try {
@@ -172,7 +213,7 @@ export default function PublishFlowModal({
         </button>
 
         {/* Step indicator */}
-        {step !== 'both-skipped' && (
+        {step !== 'both-skipped' && !showSizeConfirm && (
           <div className="pf-modal-steps" aria-label="Steps">
             <span className={`pf-modal-step${step === 'buy' ? ' pf-modal-step--active' : ''}`}>
               Buy your pair
@@ -184,8 +225,38 @@ export default function PublishFlowModal({
           </div>
         )}
 
+        {/* ── SIZE CONFIRMATION (buy step intercept) ──────────────────────── */}
+        {showSizeConfirm && (
+          <div className="pf-modal-body">
+            <h3 className="pf-modal-title">Double-check your size</h3>
+            <p className="pf-modal-desc">
+              These shoes tend to run a little small.
+            </p>
+            <p className="pf-modal-desc">
+              We recommend sizing up one full size above your typical size. Are you confident in your selection?
+            </p>
+            <div className="pf-modal-actions">
+              <button
+                type="button"
+                className="pf-modal-btn-primary"
+                onClick={handleBuy}
+                disabled={buyLoading}
+              >
+                {buyLoading ? 'Starting checkout…' : 'Yes, this is my size'}
+              </button>
+              <button
+                type="button"
+                className="pf-modal-btn-ghost"
+                onClick={() => setShowSizeConfirm(false)}
+              >
+                Let me double-check
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── STEP 1: BUY ─────────────────────────────────────────────────── */}
-        {step === 'buy' && (
+        {step === 'buy' && !showSizeConfirm && (
           <div className="pf-modal-body">
             <h3 className="pf-modal-title">Want a pair for yourself?</h3>
             <p className="pf-modal-desc">
@@ -248,7 +319,7 @@ export default function PublishFlowModal({
               <button
                 type="button"
                 className="pf-modal-btn-primary"
-                onClick={handleBuy}
+                onClick={handleBuyClick}
                 disabled={buyLoading || !buyEstimate || !effectiveBuyVariantId}
               >
                 {buyLoading
@@ -298,6 +369,43 @@ export default function PublishFlowModal({
                 {modelPricing ? formatPricingMoney(modelPricing.fixedPrice, 'USD') : '—'}
               </span>
             </div>
+
+            {/* Earnings breakdown */}
+            {modelPricing && !isEditingPublishedProduct && (
+              <div className="pf-modal-earnings">
+                <div className="pf-modal-earnings-row">
+                  <span className="pf-modal-earnings-label">
+                    You earn per sale
+                    <span className="pf-modal-earnings-detail">
+                      {Math.round(currentShareRate * 100)}% of margin · {creatorTier} plan
+                    </span>
+                  </span>
+                  <span className="pf-modal-earnings-amount">
+                    {formatPricingMoney(currentEarnings, 'USD')}
+                  </span>
+                </div>
+
+                {nextTier && nextTierEarnings !== null && (
+                  <div className="pf-modal-earnings-row pf-modal-earnings-row--upgrade">
+                    <span className="pf-modal-earnings-label">
+                      On {nextTier.name} ({nextTier.price})
+                      <span className="pf-modal-earnings-detail">
+                        {Math.round(nextTier.shareRate * 100)}% of margin
+                      </span>
+                    </span>
+                    <span className="pf-modal-earnings-amount pf-modal-earnings-amount--upgrade">
+                      {formatPricingMoney(nextTierEarnings, 'USD')}
+                    </span>
+                  </div>
+                )}
+
+                {nextTier && nextTierEarnings !== null && (
+                  <a href={upgradeHref} className="pf-modal-upgrade-btn">
+                    Upgrade to {nextTier.name} and earn {formatPricingMoney(nextTierEarnings, 'USD')} per sale →
+                  </a>
+                )}
+              </div>
+            )}
 
             {createError && (
               <p className="design-tool-form-error" role="alert">{createError}</p>

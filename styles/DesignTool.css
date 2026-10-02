@@ -4051,6 +4051,75 @@
   color: #15803d;
 }
 
+/* Earnings breakdown (publish step) */
+.pf-modal-earnings {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 0 0 1.25rem;
+}
+
+.pf-modal-earnings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.pf-modal-earnings-row:last-child {
+  border-bottom: none;
+}
+
+.pf-modal-earnings-row--upgrade {
+  background: #f8faff;
+}
+
+.pf-modal-earnings-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text, #111);
+}
+
+.pf-modal-earnings-detail {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-light, #888);
+}
+
+.pf-modal-earnings-amount {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--color-text, #111);
+  white-space: nowrap;
+}
+
+.pf-modal-earnings-amount--upgrade {
+  color: #2563eb;
+}
+
+.pf-modal-upgrade-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 0.75rem 1rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  margin-bottom: 1rem;
+  transition: background 0.15s;
+}
+
+.pf-modal-upgrade-btn:hover {
+  background: #1d4ed8;
+}
+
 /* Estimate wrapper spacing */
 .pf-modal-estimate {
   margin-top: 0.25rem;
