@@ -204,7 +204,8 @@ function mapProductToProps(
     model_name?: string
   } | null
 
-  // Infer gender from Printful model name (e.g. "Men's Athletic Shoes" → "Men's").
+  // sizeGender: still inferred for legacy products that have a gendered model_name.
+  // New products use the gender toggle instead, so this will be undefined for them.
   const modelName = designData?.model_name ?? ''
   const sizeGender = /\bwomen/i.test(modelName) ? "Women" : /\bmen/i.test(modelName) ? "Men" : undefined
   const basePrice = Number(p.price)
@@ -259,6 +260,8 @@ export default function ProductPage() {
   const [relatedItems, setRelatedItems] = useState<ReturnType<typeof productToHomeItem>[]>([])
   const [resolvedDesignImageUrl, setResolvedDesignImageUrl] = useState<string | null>(null)
   const [mockupImages, setMockupImages] = useState<Array<{ url: string; alt: string }> | null>(null)
+  const [selectedGender, setSelectedGender] = useState<'mens' | 'womens'>('mens')
+  const [womensAvailable, setWomensAvailable] = useState(false)
   const [loading, setLoading] = useState(true)
   const [addToCartError, setAddToCartError] = useState<string | null>(null)
   const [isLiked, setIsLiked] = useState(false)
@@ -325,26 +328,14 @@ export default function ProductPage() {
     return () => { cancelled = true }
   }, [userAccount?.id, product?.id])
 
+  // Fetch raw design image as single-image fallback (only when product changes)
   useEffect(() => {
     const designData = product?.design_data as { source?: string } | null
     if (!product?.id || designData?.source !== 'design_draft') {
       setResolvedDesignImageUrl(null)
-      setMockupImages(null)
       return
     }
     let cancelled = false
-
-    // Fetch all mockup images for gallery
-    fetch(`/api/products/${product.id}/mockups`)
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
-      .then((body: { images?: Array<{ url: string; alt: string }> }) => {
-        if (!cancelled) setMockupImages(body.images?.length ? body.images : null)
-      })
-      .catch(() => {
-        if (!cancelled) setMockupImages(null)
-      })
-
-    // Fetch raw design image as single-image fallback
     fetch(`/api/products/${product.id}/design-image`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Not found'))))
       .then((body: { url?: string }) => {
@@ -354,9 +345,32 @@ export default function ProductPage() {
       .catch(() => {
         if (!cancelled) setResolvedDesignImageUrl(null)
       })
-
     return () => { cancelled = true }
   }, [product?.id, (product?.design_data as { source?: string } | null)?.source])
+
+  // Fetch mockup gallery — re-runs when product or selected gender changes
+  useEffect(() => {
+    const designData = product?.design_data as { source?: string } | null
+    if (!product?.id || designData?.source !== 'design_draft') {
+      setMockupImages(null)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/products/${product.id}/mockups?gender=${selectedGender}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((body: { images?: Array<{ url: string; alt: string }>; womens_mockups_available?: boolean }) => {
+        if (!cancelled) {
+          setMockupImages(body.images?.length ? body.images : null)
+          if (typeof body.womens_mockups_available === 'boolean') {
+            setWomensAvailable(body.womens_mockups_available)
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setMockupImages(null)
+      })
+    return () => { cancelled = true }
+  }, [product?.id, (product?.design_data as { source?: string } | null)?.source, selectedGender])
 
   const handleLikeToggle = async () => {
     if (!userAccount?.id || !product?.id) return
@@ -414,6 +428,9 @@ export default function ProductPage() {
           <Product
             {...mapProductToProps(product, stats, relatedItems, resolvedDesignImageUrl, mockupImages)}
             productNumericId={product.id}
+            selectedGender={selectedGender}
+            womensAvailable={womensAvailable}
+            onGenderChange={setSelectedGender}
             isLiked={isLiked}
             onLikeToggle={userAccount?.id ? handleLikeToggle : undefined}
             isSaved={isSaved}

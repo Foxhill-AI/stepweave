@@ -137,6 +137,12 @@ interface ProductProps {
   productNumericId?: number
   /** Gender context for sizing (e.g. "Men's" or "Women's"), shown next to the Size label. */
   sizeGender?: string
+  /** Currently selected gender for mockup display ('mens' | 'womens'). Controlled by parent. */
+  selectedGender?: 'mens' | 'womens'
+  /** Whether womens mockups have been generated and are available. */
+  womensAvailable?: boolean
+  /** Called when user toggles gender. Parent re-fetches mockups. */
+  onGenderChange?: (gender: 'mens' | 'womens') => void
 }
 
 function findVariantIdFromSelection(
@@ -226,6 +232,9 @@ export default function Product({
   creatorUserAccountId,
   productNumericId,
   sizeGender,
+  selectedGender = 'mens',
+  womensAvailable = false,
+  onGenderChange,
 }: ProductProps) {
   const { userAccount } = useAuth()
   const pathname = usePathname()
@@ -329,6 +338,52 @@ export default function Product({
   const [selectedOptionByAttribute, setSelectedOptionByAttribute] = useState<Record<number, number>>({})
   /** Flashes an inline error when user tries to add to cart without selecting a size. */
   const [sizeError, setSizeError] = useState(false)
+
+  // ── Gender attribute detection ──────────────────────────────────────────
+  const genderAttr = useMemo(
+    () => attributes.find((a) => a.options.some((o) => o.label === "Men's" || o.label === "Women's")) ?? null,
+    [attributes]
+  )
+
+  // Auto-initialize Men's selection when gender attribute first appears.
+  useEffect(() => {
+    if (!genderAttr) return
+    const mensOpt = genderAttr.options.find((o) => o.label === "Men's")
+    if (mensOpt && selectedOptionByAttribute[genderAttr.id] == null) {
+      setSelectedOptionByAttribute((prev) => ({ ...prev, [genderAttr.id]: mensOpt.id }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [genderAttr?.id])
+
+  // Reset image index when images prop changes (e.g. gender toggle swaps gallery).
+  useEffect(() => {
+    setSelectedImageIndex(0)
+  }, [JSON.stringify(images)])
+
+  // Gender toggle handler — updates selection, clears size, notifies parent.
+  const handleGenderToggle = useCallback((label: "Men's" | "Women's") => {
+    if (!genderAttr) return
+    const opt = genderAttr.options.find((o) => o.label === label)
+    if (!opt) return
+    setSelectedOptionByAttribute((prev) => {
+      const sizeAttr = attributes.find((a) => a.name.toLowerCase() === 'size')
+      const next = { ...prev, [genderAttr.id]: opt.id }
+      if (sizeAttr) delete next[sizeAttr.id]
+      return next
+    })
+    setSizeError(false)
+    onVariantSelectionChange?.()
+    onGenderChange?.(label === "Women's" ? 'womens' : 'mens')
+  }, [genderAttr, attributes, onVariantSelectionChange, onGenderChange])
+
+  // Size options valid for the currently selected gender.
+  const validSizeOptionIds = useMemo(() => {
+    if (!genderAttr) return null
+    const selectedGenderOptId = selectedOptionByAttribute[genderAttr.id]
+    if (selectedGenderOptId == null) return null
+    const genderVariants = variants.filter((v) => v.optionIds.includes(selectedGenderOptId))
+    return new Set(genderVariants.flatMap((v) => v.optionIds).filter((id) => id !== selectedGenderOptId))
+  }, [genderAttr, selectedOptionByAttribute, variants])
   /** String state so manual typing (e.g. clearing the field, entering "12") works; clamp on blur / submit. */
   const [quantityInput, setQuantityInput] = useState('1')
   const [shareFallbackOpen, setShareFallbackOpen] = useState(false)
@@ -743,26 +798,60 @@ export default function Product({
             {/* Variant attributes (Color, Size, etc.) - below creator, above price */}
             {attributes.length > 0 && (
               <div className="product-attributes">
+                {/* Gender toggle — replaces the gender attribute row */}
+                {genderAttr && (
+                  <div className="product-attribute-group">
+                    <div className="product-attribute-label-row">
+                      <span className="product-attribute-label">Gender</span>
+                    </div>
+                    <div className="product-gender-toggle">
+                      <button
+                        type="button"
+                        className={`product-gender-btn ${selectedGender === 'mens' ? 'active' : ''}`}
+                        onClick={() => handleGenderToggle("Men's")}
+                      >
+                        Men&apos;s
+                      </button>
+                      <button
+                        type="button"
+                        className={`product-gender-btn ${selectedGender === 'womens' ? 'active' : ''} ${!womensAvailable ? 'loading' : ''}`}
+                        onClick={() => handleGenderToggle("Women's")}
+                        title={!womensAvailable ? 'Women\'s mockups are being generated…' : undefined}
+                      >
+                        Women&apos;s
+                        {!womensAvailable && <span className="product-gender-btn-pending" aria-label="generating" />}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {attributes.map((attr) => {
+                  // Gender attribute is rendered as the toggle above — skip it here.
+                  if (attr === genderAttr) return null
                   const isColor = attr.name.toLowerCase() === 'color'
                   const isSize = attr.name.toLowerCase() === 'size'
+                  // Filter size options to those valid for the selected gender.
+                  const displayOptions = isSize && validSizeOptionIds != null
+                    ? attr.options.filter((o) => validSizeOptionIds.has(o.id))
+                    : attr.options
                   return (
                     <div key={attr.id} className="product-attribute-group">
                       <div className="product-attribute-label-row">
                         <span className="product-attribute-label">{attr.name}</span>
-                        {isSize && sizeGender && (
-                          <span className="product-attribute-gender-note">{sizeGender}&apos;s sizing</span>
+                        {isSize && (
+                          <span className="product-attribute-gender-note">
+                            {selectedGender === 'womens' ? "Women" : "Men"}&apos;s sizing
+                          </span>
                         )}
                       </div>
                       <div className="product-attribute-options">
                         {(isSize
-                          ? [...attr.options].sort((a, b) => {
+                          ? [...displayOptions].sort((a, b) => {
                               const n = (s: string) => parseFloat(s.replace(/[^\d.]/g, ''))
                               const na = n(a.label), nb = n(b.label)
                               if (!isNaN(na) && !isNaN(nb)) return na - nb
                               return a.label.localeCompare(b.label)
                             })
-                          : attr.options
+                          : displayOptions
                         ).map((opt) => {
                           const swatchHex = isColor ? labelToColorHex(opt.label) : null
                           return (

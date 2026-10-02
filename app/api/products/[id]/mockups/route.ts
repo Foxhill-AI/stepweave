@@ -13,14 +13,18 @@ export type MockupImageEntry = {
 }
 
 /**
- * GET /api/products/[id]/mockups
- * Returns the standardized mockup gallery for a product: one image per canonical
- * camera view, ordered Left → Right → Back → Top. Branding shots and duplicate
- * angles are excluded.
+ * GET /api/products/[id]/mockups[?gender=womens]
+ * Returns the standardized mockup gallery for a product.
+ *
+ * Optional ?gender=womens query param returns the womens gallery.
+ * If womens mockups have not been generated yet, falls back to mens silently.
+ * Response includes `womens_mockups_available: boolean` so the client knows
+ * whether womens images actually exist.
+ *
  * Public for active products; owner-only for drafts.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
@@ -28,6 +32,8 @@ export async function GET(
   if (Number.isNaN(productId)) {
     return NextResponse.json({ error: 'Invalid product id' }, { status: 400 })
   }
+
+  const requestedGender = request.nextUrl.searchParams.get('gender') === 'womens' ? 'womens' : 'mens'
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -68,8 +74,22 @@ export async function GET(
     .eq('final_product_id', productId)
     .maybeSingle()
 
-  const rawPlacements = (draft?.mockup_urls ?? []) as StoredMockupPlacement[]
+  const allPlacements = (draft?.mockup_urls ?? []) as StoredMockupPlacement[]
   const productName = (product as { name: string }).name
+
+  // Determine which placements to serve.
+  // Legacy entries (no gender field) are treated as mens.
+  const mensPlacements = allPlacements.filter((p) => !p.gender || p.gender === 'mens')
+  const womensPlacements = allPlacements.filter((p) => p.gender === 'womens')
+  const womensAvailable = womensPlacements.length > 0
+
+  let rawPlacements: StoredMockupPlacement[]
+  if (requestedGender === 'womens' && womensAvailable) {
+    rawPlacements = womensPlacements
+  } else {
+    // Default or fallback: use mens.
+    rawPlacements = mensPlacements.length > 0 ? mensPlacements : allPlacements
+  }
 
   const resolvedPlacements = await resolveMockupPlacementsForDisplay(admin, rawPlacements)
 
@@ -77,5 +97,5 @@ export async function GET(
     (img) => ({ url: img.url, alt: `${productName} — ${img.label}` })
   )
 
-  return NextResponse.json({ images })
+  return NextResponse.json({ images, womens_mockups_available: womensAvailable })
 }

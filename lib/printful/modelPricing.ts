@@ -43,3 +43,44 @@ export function getModelPricing(productId: string | null | undefined): ModelPric
   if (!productId) return null
   return _byId.get(String(productId).trim()) ?? null
 }
+
+// ── Unified model pricing (mens + womens paired) ────────────────────────────
+// base_model_id on design_draft is always the mens product ID.
+// Womens partner is derived from here at publish / mockup-generation time.
+
+export type UnifiedModelPricing = {
+  productIdMens: string
+  productIdWomens: string
+  /** Display name without gender prefix, e.g. "Athletic Shoes" */
+  name: string
+  fixedPrice: number
+  baseCosts: number
+  minimumViablePrice: number
+}
+
+export const UNIFIED_MODEL_PRICING: UnifiedModelPricing[] = [
+  { productIdMens: '657', productIdWomens: '658', name: 'Athletic Shoes',        fixedPrice: 70.99, baseCosts: 52.13, minimumViablePrice: 56.93 },
+  { productIdMens: '513', productIdWomens: '525', name: 'High Top Canvas Shoes', fixedPrice: 72.99, baseCosts: 53.15, minimumViablePrice: 58.04 },
+  { productIdMens: '578', productIdWomens: '579', name: 'Lace-Up Canvas Shoes',  fixedPrice: 70.99, baseCosts: 52.13, minimumViablePrice: 56.93 },
+  { productIdMens: '574', productIdWomens: '575', name: 'Slip-On Canvas Shoes',  fixedPrice: 58.99, baseCosts: 51.11, minimumViablePrice: 55.82 },
+  { productIdMens: '597', productIdWomens: '598', name: 'Slides',                fixedPrice: 58.99, baseCosts: 42.44, minimumViablePrice: 46.41 },
+]
+
+const _unifiedByMensId = new Map(UNIFIED_MODEL_PRICING.map((m) => [m.productIdMens, m]))
+const _unifiedByWomensId = new Map(UNIFIED_MODEL_PRICING.map((m) => [m.productIdWomens, m]))
+
+export function getUnifiedModelPricingByMensId(id: string | null | undefined): UnifiedModelPricing | null {
+  if (!id) return null
+  return _unifiedByMensId.get(String(id).trim()) ?? null
+}
+
+export function getUnifiedModelPricingByWomensId(id: string | null | undefined): UnifiedModelPricing | null {
+  if (!id) return null
+  return _unifiedByWomensId.get(String(id).trim()) ?? null
+}
+
+export function getUnifiedModelPricingByEitherId(id: string | null | undefined): UnifiedModelPricing | null {
+  if (!id) return null
+  const s = String(id).trim()
+  return _unifiedByMensId.get(s) ?? _unifiedByWomensId.get(s) ?? null
+}

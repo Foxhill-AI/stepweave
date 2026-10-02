@@ -675,6 +675,55 @@
   margin: 0;
 }
 
+/* Gender toggle (Men's / Women's) */
+.product-gender-toggle {
+  display: flex;
+  gap: 0;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  border: 2px solid var(--color-border);
+  width: fit-content;
+}
+.product-gender-btn {
+  position: relative;
+  padding: 0.45rem 1.1rem;
+  background: var(--color-background-light);
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.product-gender-btn:not(:last-child) {
+  border-right: 2px solid var(--color-border);
+}
+.product-gender-btn:hover {
+  background: var(--color-background);
+  color: var(--color-primary);
+}
+.product-gender-btn.active {
+  background: var(--color-primary);
+  color: white;
+}
+/* Subtle spinner dot when womens mockups are still generating */
+.product-gender-btn-pending {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+  animation: product-gender-pulse 1.2s ease-in-out infinite;
+}
+@keyframes product-gender-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50%       { opacity: 0.8; transform: scale(1.1); }
+}
+
 /* Add to cart */
 .product-add-to-cart {
   display: flex;
