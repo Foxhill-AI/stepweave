@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { UNIFIED_MODEL_PRICING } from '@/lib/printful/modelPricing'
 
 const PRINTFUL_BASE = 'https://api.printful.com'
 
@@ -150,13 +151,21 @@ export async function GET() {
       products = products.filter(isShoeProduct)
     }
 
-    const normalized: PrintfulShoeProduct[] = products.map((p) => ({
-      id: String(p.id),
-      name: p.title || p.model || `Product ${p.id}`,
-      image: p.image || '',
-      brand: p.brand || '',
-      type_name: p.type_name || p.type || '',
-    }))
+    // Build lookup sets for unified gender pairs.
+    const womensOnlyIds = new Set(UNIFIED_MODEL_PRICING.map((m) => m.productIdWomens))
+    const unifiedNameByMensId = new Map(UNIFIED_MODEL_PRICING.map((m) => [m.productIdMens, m.name]))
+
+    // Filter out womens-only IDs (they're covered by the mens entry).
+    // Use the unified display name for mens entries that have a pair.
+    const normalized: PrintfulShoeProduct[] = products
+      .filter((p) => !womensOnlyIds.has(String(p.id)))
+      .map((p) => ({
+        id: String(p.id),
+        name: unifiedNameByMensId.get(String(p.id)) ?? p.title ?? p.model ?? `Product ${p.id}`,
+        image: p.image || '',
+        brand: p.brand || '',
+        type_name: p.type_name || p.type || '',
+      }))
 
     return NextResponse.json({ products: normalized })
   } catch (e) {
