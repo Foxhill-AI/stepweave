@@ -248,6 +248,76 @@ export async function sendAdminAlert(params: {
   }
 }
 
+/**
+ * Send a weekly admin summary report.
+ * No-op if RESEND_API_KEY or ADMIN_ALERT_EMAIL is not set.
+ */
+export async function sendWeeklyAdminReport(params: {
+  weekLabel: string
+  newUsers: number
+  newProducts: number
+  newOrders: number
+  totalRevenue: number
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!resend) return { ok: true }
+  const adminEmailRaw = process.env.ADMIN_ALERT_EMAIL?.trim()
+  if (!adminEmailRaw) return { ok: true }
+  const adminEmail = adminEmailRaw.split(',').map((e) => e.trim()).filter(Boolean)
+  if (adminEmail.length === 0) return { ok: true }
+
+  const { weekLabel, newUsers, newProducts, newOrders, totalRevenue } = params
+  const formattedRevenue = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(totalRevenue)
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111;">
+  <h1 style="font-size:1.25rem;margin:0 0 4px;">Step Weave — Weekly Report</h1>
+  <p style="color:#888;font-size:0.875rem;margin:0 0 24px;">${escapeHtml(weekLabel)}</p>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+    <tr>
+      <td style="padding:12px 0;color:#555;border-bottom:1px solid #eee;">New signups</td>
+      <td style="padding:12px 0;text-align:right;font-weight:700;border-bottom:1px solid #eee;">${newUsers.toLocaleString()}</td>
+    </tr>
+    <tr>
+      <td style="padding:12px 0;color:#555;border-bottom:1px solid #eee;">Products published</td>
+      <td style="padding:12px 0;text-align:right;font-weight:700;border-bottom:1px solid #eee;">${newProducts.toLocaleString()}</td>
+    </tr>
+    <tr>
+      <td style="padding:12px 0;color:#555;border-bottom:1px solid #eee;">Orders placed</td>
+      <td style="padding:12px 0;text-align:right;font-weight:700;border-bottom:1px solid #eee;">${newOrders.toLocaleString()}</td>
+    </tr>
+    <tr>
+      <td style="padding:12px 0;color:#555;font-weight:600;">Revenue generated</td>
+      <td style="padding:12px 0;text-align:right;font-weight:700;font-size:1.125rem;color:#0066cc;">${formattedRevenue}</td>
+    </tr>
+  </table>
+</body>
+</html>`.trim()
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: adminEmail,
+      subject: `[Step Weave] Weekly report — ${weekLabel}`,
+      html,
+    })
+    if (error) {
+      console.error('Resend sendWeeklyAdminReport:', error)
+      return { ok: false, error: error.message }
+    }
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Resend sendWeeklyAdminReport exception:', message)
+    return { ok: false, error: message }
+  }
+}
+
 /** Convenience wrapper for fulfillment failures — keeps existing call sites simple. */
 export function sendFulfillmentFailureAlert(params: {
   orderId: number
