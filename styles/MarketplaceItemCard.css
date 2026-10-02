@@ -253,7 +253,7 @@
 }
 
 /* ── Mobile 2-column compact layout ───────────────────────────────────── */
-@media (max-width: 639px) {
+@media (max-width: 767px) {
   .marketplace-content-section .marketplace-item-card {
     height: auto;
   }
