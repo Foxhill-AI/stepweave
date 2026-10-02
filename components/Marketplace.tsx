@@ -147,8 +147,6 @@ export default function Marketplace() {
           pagedGrid
           sectionSlug="trending-now"
           gridLayout="responsive-trending"
-          initialVisibleCount={3}
-          loadMoreCount={6}
         />
       )}
       {!loading && popularItems.length > 0 && (
@@ -157,8 +155,6 @@ export default function Marketplace() {
           items={popularItems}
           pagedGrid
           sectionSlug="most-popular"
-          initialVisibleCount={3}
-          loadMoreCount={6}
         />
       )}
       {!loading && brandNewItems.length > 0 && (
@@ -167,8 +163,6 @@ export default function Marketplace() {
           items={brandNewItems}
           pagedGrid
           sectionSlug="brand-new"
-          initialVisibleCount={3}
-          loadMoreCount={6}
         />
       )}
     </>
