@@ -169,6 +169,35 @@
   flex-shrink: 0;
 }
 
+/* ── 2-column grid compact layout on mobile ────────────────────────────── */
+@media (max-width: 640px) {
+  .content-section-grid .item-card-content {
+    padding: 8px;
+    gap: 2px;
+  }
+
+  .content-section-grid .item-card-title {
+    font-size: 0.75rem;
+    -webkit-line-clamp: 1;
+  }
+
+  .content-section-grid .item-card-subline {
+    font-size: 0.6875rem;
+  }
+
+  .content-section-grid .item-card-meta {
+    display: none;
+  }
+
+  .content-section-grid .item-card-price {
+    font-size: 0.8125rem;
+  }
+
+  .content-section-grid .item-card-footer {
+    padding-top: 4px;
+  }
+}
+
 /* List layout: keep horizontal rhythm; image stays square within row height. */
 .item-card-list .item-card-image-wrapper {
   width: 200px;

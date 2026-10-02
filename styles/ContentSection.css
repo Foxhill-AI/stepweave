@@ -141,8 +141,8 @@ a.content-section-load-more-as-link {
 
 @media (max-width: 640px) {
   .content-section-grid {
-    grid-template-columns: 1fr;
-    gap: var(--spacing-md);
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
   }
 }
 
