@@ -136,7 +136,11 @@ export default function PublishFlowModal({
   const displayVariants = sameColorVariants.length > 0 ? sameColorVariants : activeVariantPool
   const hasSizeOptions = activeVariantPool.length > 0
 
-  const effectiveBuyVariantId = selectedBuyVariantId ?? printfulVariantId
+  // When in womens mode, only use an explicitly selected womens variant — don't fall back to
+  // the draft's printfulVariantId (which is always a mens variant).
+  const effectiveBuyVariantId = buyGender === 'womens'
+    ? selectedBuyVariantId
+    : (selectedBuyVariantId ?? printfulVariantId)
   const hasVariant = productId !== null && effectiveBuyVariantId != null
 
   // Shared margin pool (used by both buy and publish steps)
@@ -188,7 +192,7 @@ export default function PublishFlowModal({
       const res = await fetch(`/api/design-drafts/${draftId}/self-purchase`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ variantId: effectiveBuyVariantId }),
+        body: JSON.stringify({ variantId: effectiveBuyVariantId, gender: buyGender }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {

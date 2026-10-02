@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { getModelPricing } from '@/lib/printful/modelPricing'
+import { getModelPricing, getUnifiedModelPricingByMensId } from '@/lib/printful/modelPricing'
 import { getCreatorShareRate } from '@/lib/platformFee'
 import { STRIPE_RATE, PLATFORM_BUFFER_RATE } from '@/lib/printful/pricingEstimate'
 
@@ -55,13 +55,15 @@ export async function POST(
     return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
   }
 
-  // Accept optional variantId override (e.g. buyer selected a different size in the buy modal).
+  // Accept optional variantId override and gender (e.g. buyer selected womens in the buy modal).
   let bodyVariantId: number | null = null
+  let bodyGender: 'mens' | 'womens' = 'mens'
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const bv = body.variantId
     if (typeof bv === 'number') bodyVariantId = bv
     else if (typeof bv === 'string' && /^\d+$/.test(bv)) bodyVariantId = parseInt(bv, 10)
+    if (body.gender === 'womens') bodyGender = 'womens'
   } catch { /* no body */ }
 
   const designState = (draft.design_state ?? {}) as Record<string, unknown>
@@ -167,9 +169,13 @@ export async function POST(
     process.env.NEXT_PUBLIC_APP_URL ||
     'http://localhost:3000'
 
+  const unifiedPricing = getUnifiedModelPricingByMensId(productId)
+  const baseName = unifiedPricing
+    ? `${bodyGender === 'womens' ? "Women's" : "Men's"} ${unifiedPricing.name}`
+    : modelPricing.name
   const lineItemName = discount > 0
-    ? `${modelPricing.name} — Your Pair (${tier} member price)`
-    : `${modelPricing.name} — Your Pair`
+    ? `${baseName} — Your Pair (${tier} member price)`
+    : `${baseName} — Your Pair`
 
   let session: Stripe.Checkout.Session
   try {

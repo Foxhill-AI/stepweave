@@ -420,7 +420,7 @@ export async function POST(
     .maybeSingle()
 
   const latestMockups = (Array.isArray(latestDraft?.mockup_urls)
-    ? latestDraft!.mockup_urls
+    ? (latestDraft?.mockup_urls ?? [])
     : []) as StoredMockupPlacement[]
 
   // Keep any existing entries (mens + anything else), append womens.
