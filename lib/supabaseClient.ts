@@ -1679,12 +1679,23 @@ export const supabase =
     }
   }
 
-  /** Record a view for this product (optional user). Idempotent: uses upsert+ignoreDuplicates to avoid 409 when view already exists. */
+  /** Record a view for this product.
+   * Logged-in users: idempotent (upsert with ignoreDuplicates — one view per user per product).
+   * Anonymous users: plain insert (no deduplication; counts every page load).
+   */
   export async function recordProductView(
     productId: number,
     userAccountId?: number
   ): Promise<void> {
-    if (userAccountId == null) return
+    if (userAccountId == null) {
+      // Anonymous view — just insert, no dedup
+      await supabase.from('product_interaction').insert({
+        user_account_id: null,
+        product_id: productId,
+        interaction_type: 'view',
+      })
+      return
+    }
     const row = {
       user_account_id: userAccountId,
       product_id: productId,

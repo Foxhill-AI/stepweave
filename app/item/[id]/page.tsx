@@ -7,6 +7,7 @@ import Subnavbar from '@/components/Subnavbar'
 import Footer from '@/components/Footer'
 import Product from '@/components/Product'
 import Modal from '@/components/ui/Modal'
+import AuthModal from '@/components/AuthModal'
 import { useAuth } from '@/components/AuthProvider'
 import { showCartToast } from '@/components/ui/Toast'
 import {
@@ -266,6 +267,7 @@ export default function ProductPage() {
   const [addToCartError, setAddToCartError] = useState<string | null>(null)
   const [isLiked, setIsLiked] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [authModalOpen, setAuthModalOpen] = useState(false)
   const [sizeConfirmOpen, setSizeConfirmOpen] = useState(false)
   const [pendingCartArgs, setPendingCartArgs] = useState<{
     variantId: number
@@ -432,9 +434,9 @@ export default function ProductPage() {
             womensAvailable={womensAvailable}
             onGenderChange={setSelectedGender}
             isLiked={isLiked}
-            onLikeToggle={userAccount?.id ? handleLikeToggle : undefined}
+            onLikeToggle={userAccount?.id ? handleLikeToggle : () => setAuthModalOpen(true)}
             isSaved={isSaved}
-            onSaveToggle={userAccount?.id ? handleSaveToggle : undefined}
+            onSaveToggle={userAccount?.id ? handleSaveToggle : () => setAuthModalOpen(true)}
             onVariantRequired={(missingAttributeNames) => {
               const message =
                 missingAttributeNames.length > 0
@@ -502,6 +504,7 @@ export default function ProductPage() {
           </button>
         </div>
       </Modal>
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} initialView="login" />
     </div>
   )
 }
