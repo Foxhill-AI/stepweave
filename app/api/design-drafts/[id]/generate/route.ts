@@ -172,7 +172,7 @@ export async function POST(
 
   let interpreted: Awaited<ReturnType<typeof interpretDesignPrompt>>
   try {
-    interpreted = await interpretDesignPrompt(prompt, history)
+    interpreted = await interpretDesignPrompt(prompt, history, referenceSignedUrl ?? undefined)
   } catch (e) {
     console.error('[generate] interpretDesignPrompt', e)
     interpreted = {
@@ -192,6 +192,7 @@ export async function POST(
         imageUrl: referenceSignedUrl,
         prompts: promptsToUse,
         negativePrompt: interpreted.negative_prompt,
+        strength: interpreted.reference_strength,
       })
     } else {
       batch = await generateTextToImageBatch({

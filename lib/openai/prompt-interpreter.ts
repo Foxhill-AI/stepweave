@@ -5,6 +5,11 @@ export type InterpretedPrompt = {
   prompts: string[]
   negative_prompt: string
   style_summary: string
+  /**
+   * How closely image-to-image generation should follow the reference image (0.35–0.65).
+   * Only meaningful when a reference image was provided; undefined otherwise.
+   */
+  reference_strength?: number
 }
 
 /** One prior generation turn passed for conversational context. */
@@ -52,6 +57,7 @@ Return ONLY a JSON object with exactly these keys:
 - "prompt_c": detailed English prompt for variation C
 - "negative_prompt": shared things to avoid (e.g. blurry, watermark, text unless requested — do NOT include the user's requested style here)
 - "style_summary": one short line (≤12 words) summarising the overall design direction
+- "reference_strength": a number between 0.35 and 0.65. When a reference image is provided, this controls how closely the output follows it. Read the user's intent: "like this", "similar to", "based on", or no instruction → 0.35–0.4 (stay close); "inspired by", "in the style of" → 0.45–0.5 (balanced); "abstract version", "different", "more creative", "wilder" → 0.6–0.65 (loose). Default to 0.45 when there is no reference image or no clear signal.
 
 Each prompt should be 40–120 words describing: subject/motif, colors, composition, artistic style, and quality.
 Do not include markdown, code fences, or extra keys.`
@@ -59,17 +65,24 @@ Do not include markdown, code fences, or extra keys.`
 /**
  * Expands the user's short idea into 3 varied prompts for Fal / SDXL.
  * @param history Up to the last 4 prior turns for conversational context.
+ * @param referenceImageUrl Signed URL of a reference image. When provided, gpt-4o is used
+ *   (vision-capable) and the image is passed directly so the LLM can describe its actual
+ *   colors, patterns, and style. Also causes the LLM to return a calibrated reference_strength.
  */
 export async function interpretDesignPrompt(
   userPrompt: string,
-  history: ConversationHistoryTurn[] = []
+  history: ConversationHistoryTurn[] = [],
+  referenceImageUrl?: string
 ): Promise<InterpretedPrompt> {
   const apiKey = process.env.OPENAI_API_KEY?.trim()
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY is not set')
   }
 
-  const model = process.env.OPENAI_CHAT_MODEL?.trim() || 'gpt-4o-mini'
+  // Use gpt-4o (vision) when a reference image is provided; mini otherwise
+  const model = referenceImageUrl
+    ? 'gpt-4o'
+    : (process.env.OPENAI_CHAT_MODEL?.trim() || 'gpt-4o-mini')
   const openai = new OpenAI({ apiKey })
 
   // Build prior turns as alternating user/assistant messages so GPT understands
@@ -90,12 +103,24 @@ export async function interpretDesignPrompt(
     })
   }
 
+  // When a reference image is provided, include it in the user message so the
+  // vision-capable model can read the actual colors, patterns, and composition.
+  type UserContent =
+    | string
+    | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
+  const userContent: UserContent = referenceImageUrl
+    ? [
+        { type: 'image_url', image_url: { url: referenceImageUrl } },
+        { type: 'text', text: `User request:\n${userPrompt.trim()}` },
+      ]
+    : `User request:\n${userPrompt.trim()}`
+
   const completion = await openai.chat.completions.create({
     model,
     messages: [
       { role: 'system', content: SYSTEM },
       ...historyMessages,
-      { role: 'user', content: `User request:\n${userPrompt.trim()}` },
+      { role: 'user', content: userContent as OpenAI.Chat.ChatCompletionUserMessageParam['content'] },
     ],
     response_format: { type: 'json_object' },
     temperature: 0.9,
@@ -126,9 +151,17 @@ export async function interpretDesignPrompt(
     throw new Error('Interpreter returned no prompts')
   }
 
+  // Parse reference_strength only when a reference image was provided; clamp to [0.35, 0.65]
+  const rawStrength = Number(o.reference_strength)
+  const reference_strength =
+    referenceImageUrl && Number.isFinite(rawStrength)
+      ? Math.min(0.65, Math.max(0.35, rawStrength))
+      : undefined
+
   return {
     prompts,
     negative_prompt,
     style_summary,
+    reference_strength,
   }
 }
