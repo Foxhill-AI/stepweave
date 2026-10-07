@@ -77,7 +77,7 @@ export async function generateImageToImageBatch(params: {
         input: {
           prompt,
           image_url: params.imageUrl,
-          strength: params.strength ?? 0.75,
+          strength: params.strength ?? 0.45,
           negative_prompt: params.negativePrompt ?? '',
           num_images: 1,
           image_size: 'square_hd',
