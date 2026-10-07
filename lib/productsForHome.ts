@@ -56,12 +56,12 @@ export function listingCreatedMs(
   return Number.isFinite(t) ? t : 0
 }
 
-/** True if newest of `created_at` / `updated_at` is within the last `days` (“New” badge). */
+/** True if `created_at` is within the last `days` (“New” badge). Uses created_at only — updated_at would incorrectly re-badge old products after edits or migrations. */
 export function isListingNewWithinDays(
-  row: Pick<ProductListingRow, 'created_at'> & { updated_at?: string | null },
+  row: Pick<ProductListingRow, 'created_at'>,
   days = 7
 ): boolean {
-  const t = listingRecencyMs(row)
+  const t = listingCreatedMs(row)
   if (t <= 0) return false
   return (Date.now() - t) / 86_400_000 <= days
 }
