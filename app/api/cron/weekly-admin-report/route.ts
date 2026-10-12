@@ -66,23 +66,59 @@ async function handler(request: NextRequest) {
     .eq('status', 'active')
     .gte('created_at', since)
 
-  // Orders placed
+  // Orders placed (paid only — excludes abandoned/unpaid rows)
   const { count: newOrders } = await admin
     .from('user_order')
     .select('id', { count: 'exact', head: true })
-    .gte('created_at', since)
-
-  // Revenue from paid orders (status = paid, fulfilled, or shipped)
-  const { data: revenueRows } = await admin
-    .from('user_order')
-    .select('total_amount')
     .in('status', ['paid', 'fulfilled', 'shipped', 'delivered'])
     .gte('paid_at', since)
+
+  // Revenue + order details (buyer, products, amount)
+  const { data: revenueRows } = await admin
+    .from('user_order')
+    .select(`
+      id,
+      total_amount,
+      paid_at,
+      user_account:user_account_id ( username, email ),
+      user_order_item ( quantity, unit_price, product:product_id ( name ) )
+    `)
+    .in('status', ['paid', 'fulfilled', 'shipped', 'delivered'])
+    .gte('paid_at', since)
+    .order('paid_at', { ascending: false })
 
   const totalRevenue = (revenueRows ?? []).reduce(
     (sum, row) => sum + Number(row.total_amount ?? 0),
     0
   )
+
+  type OrderDetail = {
+    id: number
+    buyer: string
+    items: string
+    amount: number
+    paidAt: string
+  }
+  const orderDetails: OrderDetail[] = (revenueRows ?? []).map((row) => {
+    const r = row as {
+      id: number
+      total_amount: number | null
+      paid_at: string | null
+      user_account: { username?: string; email?: string } | null
+      user_order_item: Array<{ quantity: number; unit_price: number; product: { name: string } | null }> | null
+    }
+    const buyer = r.user_account?.username ?? r.user_account?.email ?? 'Unknown'
+    const items = (r.user_order_item ?? [])
+      .map((i) => `${i.product?.name ?? 'Unknown product'}${i.quantity > 1 ? ` ×${i.quantity}` : ''}`)
+      .join(', ') || 'No items'
+    return {
+      id: r.id,
+      buyer,
+      items,
+      amount: Number(r.total_amount ?? 0),
+      paidAt: r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—',
+    }
+  })
 
   const weekStart = sevenDaysAgo.toLocaleDateString('en-US', {
     month: 'short',
@@ -101,6 +137,7 @@ async function handler(request: NextRequest) {
     newProducts: newProducts ?? 0,
     newOrders: newOrders ?? 0,
     totalRevenue,
+    orderDetails,
   })
 
   if (!result.ok) {

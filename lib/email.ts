@@ -258,6 +258,7 @@ export async function sendWeeklyAdminReport(params: {
   newProducts: number
   newOrders: number
   totalRevenue: number
+  orderDetails?: Array<{ id: number; buyer: string; items: string; amount: number; paidAt: string }>
 }): Promise<{ ok: boolean; error?: string }> {
   if (!resend) return { ok: true }
   const adminEmailRaw = process.env.ADMIN_ALERT_EMAIL?.trim()
@@ -265,20 +266,47 @@ export async function sendWeeklyAdminReport(params: {
   const adminEmail = adminEmailRaw.split(',').map((e) => e.trim()).filter(Boolean)
   if (adminEmail.length === 0) return { ok: true }
 
-  const { weekLabel, newUsers, newProducts, newOrders, totalRevenue } = params
+  const { weekLabel, newUsers, newProducts, newOrders, totalRevenue, orderDetails } = params
   const formattedRevenue = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
   }).format(totalRevenue)
 
+  const ordersTable =
+    orderDetails && orderDetails.length > 0
+      ? `
+  <h2 style="font-size:1rem;margin:28px 0 12px;color:#111;">Orders this week</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:0.875rem;">
+    <thead>
+      <tr style="background:#f5f5f5;">
+        <th style="padding:8px 10px;text-align:left;font-weight:600;color:#555;border-bottom:2px solid #e0e0e0;">#</th>
+        <th style="padding:8px 10px;text-align:left;font-weight:600;color:#555;border-bottom:2px solid #e0e0e0;">Buyer</th>
+        <th style="padding:8px 10px;text-align:left;font-weight:600;color:#555;border-bottom:2px solid #e0e0e0;">Items</th>
+        <th style="padding:8px 10px;text-align:left;font-weight:600;color:#555;border-bottom:2px solid #e0e0e0;">Date</th>
+        <th style="padding:8px 10px;text-align:right;font-weight:600;color:#555;border-bottom:2px solid #e0e0e0;">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${orderDetails.map((o) => `
+      <tr>
+        <td style="padding:8px 10px;color:#888;border-bottom:1px solid #eee;">${o.id}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;">${escapeHtml(o.buyer)}</td>
+        <td style="padding:8px 10px;color:#555;border-bottom:1px solid #eee;">${escapeHtml(o.items)}</td>
+        <td style="padding:8px 10px;color:#888;border-bottom:1px solid #eee;">${escapeHtml(o.paidAt)}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:600;border-bottom:1px solid #eee;">${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(o.amount)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`
+      : ''
+
   const html = `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111;">
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;">
   <h1 style="font-size:1.25rem;margin:0 0 4px;">Step Weave — Weekly Report</h1>
   <p style="color:#888;font-size:0.875rem;margin:0 0 24px;">${escapeHtml(weekLabel)}</p>
-  <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+  <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
     <tr>
       <td style="padding:12px 0;color:#555;border-bottom:1px solid #eee;">New signups</td>
       <td style="padding:12px 0;text-align:right;font-weight:700;border-bottom:1px solid #eee;">${newUsers.toLocaleString()}</td>
@@ -296,6 +324,7 @@ export async function sendWeeklyAdminReport(params: {
       <td style="padding:12px 0;text-align:right;font-weight:700;font-size:1.125rem;color:#0066cc;">${formattedRevenue}</td>
     </tr>
   </table>
+  ${ordersTable}
 </body>
 </html>`.trim()
 
