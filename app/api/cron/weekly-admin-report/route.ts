@@ -100,7 +100,7 @@ async function handler(request: NextRequest) {
     paidAt: string
   }
   const orderDetails: OrderDetail[] = (revenueRows ?? []).map((row) => {
-    const r = row as {
+    const r = row as unknown as {
       id: number
       total_amount: number | null
       paid_at: string | null
