@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 import { sendPendingPayoutEmail, sendAdminAlert } from '@/lib/email'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/cron/retry-creator-payouts
  *

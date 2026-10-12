@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { fulfillOrderAfterPayment } from '@/lib/fulfillment/fulfillOrderAfterPayment'
 import { sendAdminAlert } from '@/lib/email'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/cron/retry-fulfillment
  *

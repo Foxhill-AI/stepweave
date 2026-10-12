@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendAdminAlert, sendWeeklyAdminReport } from '@/lib/email'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/cron/weekly-admin-report
  *

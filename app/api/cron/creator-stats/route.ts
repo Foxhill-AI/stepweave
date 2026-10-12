@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendCreatorStatsEmail, sendAdminAlert } from '@/lib/email'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/cron/creator-stats
  *
