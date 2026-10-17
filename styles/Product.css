@@ -583,6 +583,22 @@
   font-weight: 700;
   color: var(--color-text);
 }
+.product-price-value--struck {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--color-text-light);
+  text-decoration: line-through;
+}
+.product-price-creator-label {
+  font-size: 0.9375rem;
+  color: var(--color-text-light);
+  margin-left: var(--spacing-sm);
+}
+.product-price-creator-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
 
 /* Variant attributes (Color, Size, etc.) */
 .product-attributes {

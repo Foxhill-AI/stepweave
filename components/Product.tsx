@@ -143,6 +143,8 @@ interface ProductProps {
   womensAvailable?: boolean
   /** Called when user toggles gender. Parent re-fetches mockups. */
   onGenderChange?: (gender: 'mens' | 'womens') => void
+  /** Discounted price for the creator viewing their own product. When set, shown alongside the regular price. */
+  creatorPrice?: number
 }
 
 function findVariantIdFromSelection(
@@ -235,6 +237,7 @@ export default function Product({
   selectedGender = 'mens',
   womensAvailable = false,
   onGenderChange,
+  creatorPrice,
 }: ProductProps) {
   const { userAccount } = useAuth()
   const pathname = usePathname()
@@ -892,8 +895,19 @@ export default function Product({
 
             {/* Price */}
             <div className="product-price-block">
-              <span className="product-price-label">Price</span>
-              <span className="product-price-value">{displayPriceStr}</span>
+              {creatorPrice != null ? (
+                <>
+                  <span className="product-price-label">Price</span>
+                  <span className="product-price-value product-price-value--struck">{displayPriceStr}</span>
+                  <span className="product-price-creator-label">Your price</span>
+                  <span className="product-price-creator-value">${creatorPrice.toFixed(2)}</span>
+                </>
+              ) : (
+                <>
+                  <span className="product-price-label">Price</span>
+                  <span className="product-price-value">{displayPriceStr}</span>
+                </>
+              )}
             </div>
 
             {/* Quantity + Add to cart (when onAddToCart provided) */}

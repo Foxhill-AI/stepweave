@@ -27,6 +27,9 @@ import {
   type ProductDetailRow,
 } from '@/lib/supabaseClient'
 import { productToHomeItem } from '@/lib/productsForHome'
+import { getUnifiedModelPricingByEitherId } from '@/lib/printful/modelPricing'
+import { getCreatorShareRate } from '@/lib/platformFee'
+import { STRIPE_RATE, PLATFORM_BUFFER_RATE } from '@/lib/printful/pricingEstimate'
 
 type ProductAttribute = { id: number; name: string; options: { id: number; label: string }[] }
 type ProductVariantOption = { variantId: number; priceOverride: number | null; optionIds: number[] }
@@ -267,6 +270,21 @@ export default function ProductPage() {
   const [addToCartError, setAddToCartError] = useState<string | null>(null)
   const [isLiked, setIsLiked] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+
+  // Creator self-purchase discount: only shown when the viewer is the creator
+  const isCreator = userAccount?.id != null && product?.user_account_id === userAccount.id
+  const creatorPrice = (() => {
+    if (!isCreator || !product) return undefined
+    const dd = product.design_data as { base_model_id?: string } | null
+    const modelPricing = getUnifiedModelPricingByEitherId(dd?.base_model_id)
+    if (!modelPricing) return undefined
+    const tier = String(userAccount?.subscription_tier ?? 'free')
+    const shareRate = tier === 'free' ? 0 : getCreatorShareRate(tier)
+    if (shareRate === 0) return undefined
+    const margin = Math.max(0, modelPricing.fixedPrice * (1 - STRIPE_RATE - PLATFORM_BUFFER_RATE) - modelPricing.baseCosts)
+    const discount = Math.round(margin * shareRate * 100) / 100
+    return Math.round((modelPricing.fixedPrice - discount) * 100) / 100
+  })()
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [sizeConfirmOpen, setSizeConfirmOpen] = useState(false)
   const [pendingCartArgs, setPendingCartArgs] = useState<{
@@ -433,6 +451,7 @@ export default function ProductPage() {
             selectedGender={selectedGender}
             womensAvailable={womensAvailable}
             onGenderChange={setSelectedGender}
+            creatorPrice={creatorPrice}
             isLiked={isLiked}
             onLikeToggle={userAccount?.id ? handleLikeToggle : () => setAuthModalOpen(true)}
             isSaved={isSaved}
