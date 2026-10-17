@@ -463,9 +463,6 @@ export default function PublishFlowModal({
                 <div className="pf-modal-earnings-row">
                   <span className="pf-modal-earnings-label">
                     You earn per sale
-                    <span className="pf-modal-earnings-detail">
-                      {Math.round(currentShareRate * 100)}% of margin · {creatorTier} plan
-                    </span>
                   </span>
                   <span className="pf-modal-earnings-amount">
                     {formatPricingMoney(currentEarnings, 'USD')}
@@ -475,10 +472,7 @@ export default function PublishFlowModal({
                 {nextTier && nextTierEarnings !== null && (
                   <div className="pf-modal-earnings-row pf-modal-earnings-row--upgrade">
                     <span className="pf-modal-earnings-label">
-                      On {nextTier.name} ({nextTier.price})
-                      <span className="pf-modal-earnings-detail">
-                        {Math.round(nextTier.shareRate * 100)}% of margin
-                      </span>
+                      On {nextTier.name} ({nextTier.price}) you'd make
                     </span>
                     <span className="pf-modal-earnings-amount pf-modal-earnings-amount--upgrade">
                       {formatPricingMoney(nextTierEarnings, 'USD')}
