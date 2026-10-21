@@ -9,7 +9,7 @@ import {
   isStripeWebhookEventFullyProcessed,
   type ShippingAddressRow,
 } from '@/lib/supabaseClient'
-import { sendOrderConfirmationEmail, sendSubscriptionEndedEmail, sendAdminAlert } from '@/lib/email'
+import { sendOrderConfirmationEmail, sendSubscriptionEndedEmail, sendAdminAlert, sendAdminOrderAlert } from '@/lib/email'
 import { fulfillOrderAfterPayment } from '@/lib/fulfillment/fulfillOrderAfterPayment'
 import { settleConnectTransfersForOrder } from '@/lib/stripe/settleConnectTransfersForOrder'
 
@@ -425,8 +425,9 @@ export async function POST(request: NextRequest) {
 
   const customerEmail =
     session.customer_details?.email ?? (session as { customer_email?: string }).customer_email ?? null
+  let order = null
   if (!wasAlreadyPaid && customerEmail && customerEmail.trim()) {
-    const order = await getOrderById(orderId, client)
+    order = await getOrderById(orderId, client)
     if (order) {
       const result = await sendOrderConfirmationEmail({
         to: customerEmail,
@@ -436,6 +437,34 @@ export async function POST(request: NextRequest) {
       if (!result.ok) {
         console.error('Stripe webhook: order confirmation email failed', result.error)
       }
+    }
+  }
+
+  // Admin order notification (fire-and-forget)
+  if (!wasAlreadyPaid) {
+    if (!order) order = await getOrderById(orderId, client)
+    if (order) {
+      let buyerUsername = 'unknown'
+      if (order.user_account_id != null) {
+        const { data: accountRow } = await client
+          .from('user_account')
+          .select('username')
+          .eq('id', order.user_account_id)
+          .maybeSingle()
+        if (accountRow?.username) buyerUsername = accountRow.username
+      }
+      const items = (order.order_item ?? []).map((i: { product_name: string; quantity: number; unit_price: number }) => ({
+        name: i.product_name,
+        quantity: i.quantity,
+        unitPrice: i.unit_price,
+      }))
+      sendAdminOrderAlert({
+        orderId,
+        buyer: buyerUsername,
+        items,
+        total: order.total_amount ?? 0,
+        currency: order.currency ?? 'usd',
+      }).catch(() => {})
     }
   }
 

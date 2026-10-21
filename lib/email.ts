@@ -195,6 +195,73 @@ export async function sendOrderConfirmationEmail(
 }
 
 /**
+ * Send an admin notification when a new order is placed.
+ * No-op if RESEND_API_KEY or ADMIN_ALERT_EMAIL is not set.
+ */
+export async function sendAdminOrderAlert(params: {
+  orderId: number
+  buyer: string
+  items: Array<{ name: string; quantity: number; unitPrice: number }>
+  total: number
+  currency: string
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!resend) return { ok: true }
+  const adminEmailRaw = process.env.ADMIN_ALERT_EMAIL?.trim()
+  if (!adminEmailRaw) return { ok: true }
+  const adminEmail = adminEmailRaw.split(',').map((e) => e.trim()).filter(Boolean)
+  if (adminEmail.length === 0) return { ok: true }
+
+  const { orderId, buyer, items, total, currency } = params
+  const formattedTotal = new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(total)
+
+  const itemRows = items.map((i) => `
+      <tr>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;">${escapeHtml(i.name)}</td>
+        <td style="padding:8px 10px;text-align:center;border-bottom:1px solid #eee;">${i.quantity}</td>
+        <td style="padding:8px 10px;text-align:right;border-bottom:1px solid #eee;">${new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(i.unitPrice)}</td>
+      </tr>`).join('')
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111;">
+  <h1 style="font-size:1.25rem;margin:0 0 4px;color:#111;">New Order #${orderId}</h1>
+  <p style="color:#888;font-size:0.875rem;margin:0 0 20px;">${escapeHtml(buyer)}</p>
+  <table style="width:100%;border-collapse:collapse;font-size:0.875rem;margin-bottom:16px;">
+    <thead>
+      <tr style="background:#f5f5f5;">
+        <th style="padding:8px 10px;text-align:left;font-weight:600;color:#555;border-bottom:2px solid #e0e0e0;">Item</th>
+        <th style="padding:8px 10px;text-align:center;font-weight:600;color:#555;border-bottom:2px solid #e0e0e0;">Qty</th>
+        <th style="padding:8px 10px;text-align:right;font-weight:600;color:#555;border-bottom:2px solid #e0e0e0;">Price</th>
+      </tr>
+    </thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+  <p style="text-align:right;font-size:1.125rem;font-weight:700;margin:0;">Total: ${formattedTotal}</p>
+</body>
+</html>`.trim()
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: adminEmail,
+      subject: `[Step Weave] New order #${orderId} — ${formattedTotal} — ${escapeHtml(buyer)}`,
+      html,
+    })
+    if (error) {
+      console.error('Resend sendAdminOrderAlert:', error)
+      return { ok: false, error: error.message }
+    }
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Resend sendAdminOrderAlert exception:', message)
+    return { ok: false, error: message }
+  }
+}
+
+/**
  * Send a generic alert to all admin emails (ADMIN_ALERT_EMAIL, comma-separated).
  * No-op if RESEND_API_KEY or ADMIN_ALERT_EMAIL is not set.
  */
